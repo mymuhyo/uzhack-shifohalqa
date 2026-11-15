@@ -1,0 +1,35 @@
+# Personal AI chat logs (raw prompts/transcripts with personal names)
+archive/ai_chat_claude.md
+archive/draft-plan.md
+
+# Secrets & environment
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Dependencies / build outputs
+node_modules/
+.next/
+out/
+dist/
+build/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# OS / editor / temp
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Local notes / large recordings
+slides/
+recordings/
+*.log

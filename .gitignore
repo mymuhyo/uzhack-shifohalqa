@@ -5,6 +5,7 @@ archive/draft-plan.md
 # Secrets & environment
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.crt

@@ -20,6 +20,11 @@ venv/
 __pycache__/
 *.py[cod]
 
+# Vercel / Claude local
+.vercel/
+.claude/settings.local.json
+.claude/worktrees/
+
 # OS / editor / temp
 .DS_Store
 Thumbs.db

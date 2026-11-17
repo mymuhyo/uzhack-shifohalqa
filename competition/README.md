@@ -1,15 +1,15 @@
-# Parallel build competition
+# competition/ — baholash va sifat
 
-UzHack 2026 / ShifoHalqa MVP will be implemented in three isolated lanes before the final merge:
+> **17-nov-2026 dan:** eski "parallel lane competition" (4 agent worktree) **yakunlandi va tozalandi**.
+> Endi bitta jamoa, bitta kod bazasi, 2 agentli workflow: Claude (`main`) + Codex (`codex/dev`).
+> Eski lane natijalari va tozalash logi: `PLAN.md` §1. Kod arxivi: `~/Projects/uzhack-reference-20261117.tar.zst`.
 
-| Lane | Harness / agent | Branch | Worktree |
-|---|---|---|---|
-| OpenCode | OpenCode | `agent/opencode` | `~/Projects/uzhack-agent-opencode` |
-| Pi | Pi | `agent/pi` | `~/Projects/uzhack-agent-pi` |
-| Antigravity | Antigravity CLI | `agent/antigravity` | `~/Projects/uzhack-agent-antigravity` |
+## Joriy qoidalar
+- Yagona kontrakt: `docs/SPEC.md`; task board: `PLAN.md`; agent kontraktlari: `CLAUDE.md` / `AGENTS.md`.
+- Claude merge qiladi, Codex faqat `codex/dev` ga push qiladi; deploy faqat `main` dan.
+- Har merge oldidan: `code-review-and-quality` + `npm run verify` + E2E.
+- Halollik buzilishi (soxta dalil/AI da'vosi) — istalgan bosqichda to'xtatuvchi omil.
 
-Rules:
-- Each lane starts from the same `main` commit and the same spec.
-- Each lane owns its worktree only; do not edit `main` directly.
-- Agents may propose better implementation details in `competition/<lane>.md`, but must not silently change the product contract.
-- Final selection is based on a rubric: end-to-end workflow, spec coverage, code quality, tests, deployability, safety/honesty.
+## Baholash
+- Rasmiy: `RUBRIC.md` (Task 2 × 100 ball) + `brief/uzhack-online-stage-tasks-en.pdf`.
+- Ichki sifat darvozasi: `RUBRIC.md` §2.

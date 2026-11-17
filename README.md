@@ -1,63 +1,65 @@
 # UzHack 2026 — ShifoHalqa
 
-**Track:** 01 Smart Healthcare · **Musobaqa:** UzHack 2026 (Uzbekistan–Malaysia Tech Bridge)  
-**Project:** ShifoHalqa — shifokor bergan uy davolanish rejasini bemor telefonida kundalik vazifalarga aylantirib, dalil darajasi bilan shifokorga "ko'rinmas davr"ni ko'rsatadigan veb-platforma.
+**Track:** 01 Smart Healthcare · **Musobaqa:** UzHack 2026 (Uzbekistan–Malaysia Tech Bridge)
+**Mahsulot:** shifokor bergan uy davolanish rejasini bemor telefonida kundalik vazifalarga aylantiradi; har vazifa **dalil darajasi (L0–L4)** bilan qayd etiladi; deterministik qoidalar faqat istisnolarni shifokor paneliga chiqaradi — "ko'rinmas davr"ni yopadi.
 
-> **Status (15-nov-2026):** g'oya va arxitektura yozilgan; MVP kodi hali yo'q. Ushbu repo bir vaqtning o'zida (a) jamoa uchun yagona manba, (b) parallel agent sprint'lari uchun asos.
+> **Status (17-nov-2026):** eski 4 agent-lane tozalandi; loyiha **noldan**, bitta kod bazasida quriladi. Reja va kontraktlar tayyor — kod hali yozilmagan.
 
-## Deadline (as posted by organizers — verify on uzhack.uz / Platform)
+## Deadline (tashkilotchi kanallarida tekshiring: uzhack.uz / Platform)
 | Vazifa | MYT | UZT | Nima topshiriladi |
 |---|---|---|---|
-| **Task 1** — Video + Project information | **18-noyabr 2026, 23:59** | 20:59 | 3–5 daqiqalik video (YouTube Unlisted) + Platformadagi `Project` to'ldiriladi |
-| **Task 2** — Working MVP | **22-noyabr 2026, 23:59** | 20:59 | Brauzer havolasi + Demo loginlar + "what works / what's simulated" + AI-use note |
+| **Task 1** — Video + Project info | **18-noyabr 2026, 23:59** | 20:59 | 3–5 daqiqa video (YouTube Unlisted) + platformadagi `Project` maydonlari |
+| **Task 2** — Working MVP | **22-noyabr 2026, 23:59** | 20:59 | Brauzer havolasi + demo loginlar + "what works / what's simulated" + AI-use note |
 
-> `brief/uzhack-online-stage-tasks-en.pdf` — Brief v1.0 (eski sanalar: 12/15-nov). Saqlanadi tarixiy manba sifatida; current sanalarni rasmiy kanallardan tekshiring.
+Ball = 0.30·Task1 + 0.70·Task2; ikkalasi ham majburiy; havola Grand Finalgacha jonli turishi shart.
 
-## Read in this order
-| File | Purpose |
+## Ish muhiti (2 worktree, 2 agent)
+| Worktree | Branch | Agent | Rol |
+|---|---|---|---|
+| `~/Projects/uzhack` | `main` | **Claude Code** | Arxitektura, DB, UI, klinik halqa, integratsiya, deploy |
+| `~/Projects/uzhack-codex` | `codex/dev` | **Codex** | AI/CV/rules/anticheat dvigatellari, testlar, benchmark |
+
+- **Production:** https://shifohalqa.vercel.app (Vercel `shifohalqa`, faqat `main` dan)
+- **DB:** Neon `shifohalqa` (production branch) + `codex-dev` branch (Codex izolyatsiyasi)
+- **AI:** Hybrid — on-device MediaPipe Pose (L3) + `gemini-4-hydrogen` (OCR/extract) + `gemini-decision-1` (calibrated gate/score, Decisions API `v1beta`)
+
+## O'qish tartibi
+| Fayl | Maqsad |
 |---|---|
-| [`docs/ideas/shifohalqa-mvp.md`](docs/ideas/shifohalqa-mvp.md) | **MVP yo'nalishi (eng yangi).** Bitta workflow, 3 sirtlama (web / Telegram Mini App / Android shell), Telegram scope, risklar. |
-| [`ShifoHalqa — yakuniy reja (v1).md`](ShifoHalqa%20—%20yakuniy%20reja%20%28v1%29.md) | Jamoaning "yagona manbasi" — g'oya, rollar, UX, qisqa texnik yo'l. |
-| [`shifohalqa_to_liq_loyiha_rejasi_va_texnik_arxitekturasi.md`](shifohalqa_to_liq_loyiha_rejasi_va_texnik_arxitekturasi.md) | To'liq texnik spetsifikatsiya: DB sxema, AI promptlar, anti-cheat, halollik jadvali. |
-| [`master_plan.md`](master_plan.md) | G'oya yadrosi va arxitekturasi (qisqartirilgan 1–3 qism). |
-| [`loyiha_qo_llanmasi_3_azo_uchun.md`](loyiha_qo_llanmasi_3_azo_uchun.md) | Kod bilmaydigan jamoa a'zosi uchun qo'llanma (video/taqdimot roli). |
-| [`tasks/task-1/`](tasks/task-1/) | Task 1: video ssenariysi, runbook, cue sheet, platforma matnlari. |
-| [`tasks/task-2/README.md`](tasks/task-2/README.md) | Task 2: MVP topshirish checklist. |
-| [`competition/`](competition/) | Parallel agent sprint qoidalari va rubric. |
-| [`brief/uzhack-online-stage-tasks-en.pdf`](brief/uzhack-online-stage-tasks-en.pdf) | Rasmiy Brief v1.0 (tarixiy). |
-| [`archive/`](archive/) | Eski/xom hujjatlar — joriy emas. |
+| [`PLAN.md`](PLAN.md) | **Yagona master plan** — fazalar, task board, skill/MCP xaritasi, tozalash logi |
+| [`CLAUDE.md`](CLAUDE.md) | Claude Code kontrakti: egalik chegaralari, halollik, Gemini qoidalari |
+| [`AGENTS.md`](AGENTS.md) | Codex kontrakti: dvigatel egaligi, porting manbalari, verify gate |
+| [`docs/SPEC.md`](docs/SPEC.md) | Mahsulot + texnik kontrakt: rollar, sxema, AI pipeline, qoidalar |
+| [`competition/RUBRIC.md`](competition/RUBRIC.md) | Rasmiy Task 2 baholash × ichki sifat darvozasi |
+| [`tasks/task-1/`](tasks/task-1/) | Video ssenariysi, runbook, platforma matnlari (deadline 18-nov!) |
+| [`tasks/task-2/README.md`](tasks/task-2/README.md) | MVP topshirish checklist |
+| [`brief/uzhack-online-stage-tasks-en.pdf`](brief/uzhack-online-stage-tasks-en.pdf) | Rasmiy Brief v1.0 (tarixiy sanalar bilan) |
+| [`archive/`](archive/) | Eski reja fayllar — joriy emas |
 
-## Repository layout
-```text
-.
-├── brief/                  # rasmiy brief PDF (eski sanalar)
-├── docs/ideas/             # MVP yo'nalishi (eng yangi spec)
-├── tasks/task-1/           # video + Project information
-├── tasks/task-2/           # MVP submission checklist
-├── competition/            # parallel agent sprint rules + rubric
-├── archive/                # deprecated material (kept for history)
-└── *.md                    # asosiy reja / texnik spetsifikatsiya
+Eski 4 lane kodi arxivi: `~/Projects/uzhack-reference-20261117.tar.zst` (porting uchun; `AGENTS.md` da yo'llar).
+
+## Boshlash (Faza 0 — Claude)
+```bash
+cd ~/Projects/uzhack
+# scaffold + DB (PLAN.md T0.1–T0.2):
+npm install
+npm run db:setup && npm run db:seed   # Neon shifohalqa, sintetik demo data
+npm run dev
+# sifat darvozasi:
+npm run verify                        # typecheck + lint + test + build
+npm run e2e                           # Playwright
+# Codex lane:
+cd ~/Projects/uzhack-codex && codex   # AGENTS.md avtomatik o'qiladi
 ```
+Kalitlar: `.env.local` (gitignored) — `.env.example` shabloniga qarang.
 
-## Working on the MVP (parallel agents)
-Three lanes will be implemented from the same base commit, each in its own git worktree:
-
-| Lane | Branch | Worktree |
-|---|---|---|
-| OpenCode | `agent/opencode` | `../uzhack-agent-opencode` |
-| Pi | `agent/pi` | `../uzhack-agent-pi` |
-| Antigravity | `agent/antigravity` | `../uzhack-agent-antigravity` |
-
-Each lane may implement the MVP end-to-end. Final selection happens after review; differences are merged back into `main`.
+## Halollik qoidasi (muzokaraga yopiq)
+**AI o'lchaydi → kod qoidalari bayroq ko'taradi → shifokor qaror qiladi.** Hech qachon "AI isbotladi/tashxis qo'ydi" yozilmaydi; simulyatsiya qismlar ochiq belgilanadi; har submission bilan "what works / what's simulated" + AI-use note keladi.
 
 ## Status / TODO
-- [x] Idea, roles, architecture, anti-cheat, honesty rules — written
-- [x] Task 1 materials (video plan, runbook, platform text) — drafted
-- [ ] MVP code — not in repo yet
-- [ ] Slides (`slides/01.png…07.png`) + `recordings/` — not created
-- [ ] Demo link / demo logins — not deployed
-- [ ] Mini-Benchmark results — not run
-- [ ] WHO adherence source check — not done
-
-## Honesty rule (non-negotiable)
-AI o'lchaydi, kod qoidalari bayroq ko'taradi, shifokor qaror qiladi. Hech qachon "AI isbotladi" deb yozilmaydi. Brief: **what works / what's simulated** va **AI-use note** har bir submission bilan birga keladi.
+- [x] Audit + tozalash (GitHub/Vercel/Neon/worktree) — 17-nov
+- [x] PLAN.md, CLAUDE.md, AGENTS.md, docs/SPEC.md, MCP/skill sozlamalari
+- [ ] Faza 0: scaffold + schema + seed + demo sessiya
+- [ ] Faza 1: klinik halqa (reja → vazifa → dalil → bayroq → L4)
+- [ ] Faza 2: Codex dvigatellari (rules, pose, AI gate, anticheat, benchmark)
+- [ ] Faza 3–5: integratsiya, topshirish, Task 1 video

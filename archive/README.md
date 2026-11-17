@@ -7,3 +7,8 @@ Bu yerdagi fayllar **eskirgan/xom** materiallar, faqat tarix uchun saqlanadi:
 - `ai_chat_claude.md` — asl AI tahlili (RejaQadam taklifi va brief o'qilishi). **Repo ichiga kirmaydi** (`.gitignore`); lokalda qoladi.
 
 ⚠️ Bu papkadagi hech narsa "joriy" hujjat emas. Raqamlar (WHO, Nigeria 24.5%, 47% gipertoniya va h.k.) **tekshirilmagan**.
+
+## 2026-11-17 qayta qurishdan oldin ko'chirilgan fayllar
+Eski 4 agent-lane yakunlandi; joriy manba endi `PLAN.md` + `docs/SPEC.md`. Root'dagi eski reja fayllar shu yerga ko'chirildi:
+- `master_plan.md`, `ShifoHalqa — yakuniy reja (v1).md`, `shifohalqa_to_liq_loyiha_rejasi_va_texnik_arxitekturasi.md`, `loyiha_qo_llanmasi_3_azo_uchun.md`, `shifohalqa-mvp.md` (sobiq `docs/ideas/`).
+- Eski lane **kodlari** arxivi: `~/Projects/uzhack-reference-20261117.tar.zst` (repo tashqarisida; porting manbasi, `AGENTS.md` ga qarang).

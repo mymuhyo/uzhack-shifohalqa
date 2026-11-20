@@ -1,0 +1,43 @@
+import { randomBytes, randomInt } from 'node:crypto';
+import { defineConfig } from 'playwright/test';
+
+const baseURL = 'http://127.0.0.1:3419';
+const databaseUrl = process.env.SHIFO_E2E_DATABASE_URL ?? '';
+const serverScript = databaseUrl ? 'start' : 'dev';
+const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_GEMINI === '1';
+const telegramPort = 3420;
+const telegramChatId = (process.env.SHIFO_E2E_TELEGRAM_CHAT_ID ??= String(randomInt(100_000_000_000, 900_000_000_000)));
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  testMatch: databaseUrl ? '**/*.spec.ts' : '**/demo.spec.ts',
+  testIgnore: useLiveOcr ? [] : '**/dorimos-live.spec.ts',
+  use: { baseURL, trace: 'retain-on-failure' },
+  webServer: [{
+    command: `npm run ${serverScript} -- --hostname 127.0.0.1 --port 3419`,
+    url: baseURL,
+    env: {
+      DATABASE_URL: databaseUrl,
+      DEMO_MODE: 'true',
+      DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
+      ...(useLiveOcr ? {} : { GEMINI_API_KEY: '' }),
+      TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
+      NEXT_TELEMETRY_DISABLED: '1',
+      SESSION_SECRET: randomBytes(32).toString('hex'),
+    },
+  }, ...(databaseUrl ? [{
+    command: 'uv run --locked --no-sync python -m tests.e2e_server',
+    cwd: 'services/telegram_bot',
+    url: `http://127.0.0.1:${telegramPort}/healthz`,
+    env: {
+      TELEGRAM_DATABASE_URL: databaseUrl,
+      TELEGRAM_BOT_TOKEN: '123456789:shifohalqa_e2e_not_a_live_telegram_token',
+      TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
+      TELEGRAM_WEBHOOK_SECRET: 'shifohalqa-e2e-webhook-secret',
+      TELEGRAM_APP_URL: 'https://shifohalqa.example.test/',
+      TELEGRAM_HOST: '127.0.0.1',
+      TELEGRAM_PORT: String(telegramPort),
+      SHIFO_E2E_TELEGRAM_CHAT_ID: telegramChatId,
+    },
+  }] : [])],
+});

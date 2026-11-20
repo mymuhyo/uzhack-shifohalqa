@@ -1,0 +1,161 @@
+.tasks {
+  margin-block-start: 1rem;
+}
+
+.task {
+  border-block-start: 1px solid var(--line);
+  padding-block: 1rem;
+}
+
+.task:last-child {
+  padding-block-end: 0;
+}
+
+.taskHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.taskHeading h3 {
+  color: var(--ink);
+  font-size: 1.15rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.taskHeading time,
+.metadata,
+.reply time {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.controls,
+.fields {
+  display: grid;
+  align-items: start;
+  gap: 0.75rem;
+  max-inline-size: 30rem;
+}
+
+.controls,
+.fields,
+.record {
+  margin-block-start: 0.85rem;
+}
+
+.submit,
+.disclosure summary,
+.symptom,
+.field {
+  min-block-size: 3rem;
+}
+
+.submit {
+  inline-size: 100%;
+  padding: 0.6rem 1rem;
+  background: var(--action);
+  color: var(--on-action);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:hover {
+  background: var(--action-hover);
+}
+
+.disclosure summary {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.field {
+  inline-size: 100%;
+  margin-block-start: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.fields label + .field {
+  margin-block-start: 0;
+}
+
+.boxImage {
+  inline-size: 100%;
+  block-size: auto;
+  border: 1px solid var(--line);
+}
+
+.field:user-invalid {
+  border-color: var(--urgent);
+}
+
+.readings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.75rem;
+  margin-block-start: 0.6rem;
+}
+
+.symptom {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+
+.symptom input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: 0 0 auto;
+  accent-color: var(--action);
+}
+
+.disclosure summary:focus-visible,
+.field:focus-visible,
+.symptom input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.record {
+  padding: 0.75rem 1rem;
+  border-inline-start: 3px solid var(--line);
+  background: var(--panel);
+}
+
+.record .recordTitle {
+  margin-block-start: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin-block-start: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.metadata dt {
+  font-weight: 600;
+}
+
+.reply {
+  margin-block-start: 0.95rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--line);
+}
+
+.replyText {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

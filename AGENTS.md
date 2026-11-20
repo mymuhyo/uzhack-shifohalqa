@@ -1,17 +1,14 @@
-# AGENTS.md — ShifoHalqa · Codex engine lane
+# AGENTS.md — ShifoHalqa · Codex development
 
-You are **Codex — engine & verification specialist** for ShifoHalqa (UzHack 2026 · Track 01 Smart Healthcare).
-You work in `~/Projects/uzhack-codex` on branch **`codex/dev`**. Claude Code owns `main` (`~/Projects/uzhack`) and integrates your work after review.
+You are **Codex**, responsible for building, integrating, and verifying ShifoHalqa (UzHack 2026 · Track 01 Smart Healthcare) in `~/Projects/uzhack-codex` on **`codex/dev`**. Delegate independent work to Codex subagents when useful and retain responsibility for integration.
 
-Read first: `PLAN.md` (take **[CODEX]** tasks), `docs/SPEC.md` (contract), `CLAUDE.md` (shared rules), `docs/INTERFACES.md` (your public API surface).
+Read first: `PLAN.md` (use the A–I board and take the next unblocked Codex-owned task), `docs/SPEC.md` (contract), and `docs/INTERFACES.md` (public engine interfaces). Use [PLAN.md §10](PLAN.md#codex-workflow) to choose skills and MCP tools and prepare handoffs.
 
 ## Hard rules
 - **Never push to `main`, never deploy, never touch Vercel project settings.** Push `codex/dev` only.
-- Stay inside your ownership boundary:
-  `src/lib/ai/**`, `src/lib/pose/**`, `src/lib/rules/**`, `src/lib/anticheat/**`, `tests/**`, `scripts/benchmark*`, `scripts/e2e*`, `public/models/**`, `docs/INTERFACES.md`, `docs/BENCHMARK.md`.
-  Do **not** edit `src/app/**`, `src/components/**`, `schema.sql`, `src/lib/db.ts`, `src/lib/seed.ts`, middleware/sessions, or dependency versions in `package.json` — record needs as notes in `PLAN.md` for Claude.
-- Export typed, zod-validated function interfaces; document every public export in `docs/INTERFACES.md` so Claude can integrate without reading internals.
-- Honesty contract (identical to Claude's): AI measures → deterministic rules flag → doctor decides. No invented data or benchmark numbers. Label `ai_mode` (`live/manual/synthetic/none`) on every evidence path. Low confidence → explicit retake/manual fallback, never a guessed value.
+- Own the application scaffold, dependencies, UI, sessions, schema, seed, engines, tests, and documentation needed for cards A–I on `codex/dev`. The project team handles integration to `main` and the production release.
+- Export typed, Zod-validated engine interfaces and document each public engine export in `docs/INTERFACES.md` for integration.
+- Honesty contract: AI measures → deterministic rules flag → doctor decides. No invented data or benchmark numbers. Label `ai_mode` (`live/manual/synthetic/none`) on every evidence path. Low confidence → explicit retake/manual fallback, never a guessed value.
 - Evidence levels are computed server-side; L4 only via doctor resolve of a specific `evidence_log_id`. **Uploaded video = L2, live camera = L3.**
 
 ## Gemini API Guidelines
@@ -28,7 +25,7 @@ Reference archive (read-only): `~/Projects/uzhack-reference-20261117.tar.zst` �
 - `uzhack-agent-opencode/src/app/api/ai/ocr/route.ts` — OCR flow (client downscale 1600px, rate limit, model fallback, patient confirmation).
 - `uzhack-agent-pi/src/components/patient/TaskCards.tsx` — tonometer OCR UX (**fix its bug**: unreadable photo must NOT set `ocrOk=true`).
 - `uzhack-agent-claude/tests/rules.test.ts` — 25 deterministic rule tests to port & extend.
-- `uzhack-agent-claude/schema.sql` — 9-table normalized schema (Claude owns it; read for types).
+- `uzhack-agent-claude/schema.sql` — archived normalized schema for reference.
 
 Old bugs you must **not** reproduce: approving the patient's *latest* log instead of the reviewed `logId`; uploaded video marked L3; motion signature stored but never compared; unreadable OCR accepted as a match; hardcoded date strings; doctor thresholds ignored by the rules engine; fake `setInterval` "MediaPipe"; silent fake OCR fallbacks.
 
@@ -41,3 +38,18 @@ Deliverable per engine: implementation + Vitest unit tests + `docs/INTERFACES.md
 
 ## Verify gate before every push
 `npm run verify` (typecheck + lint + unit tests + build) and `npm run e2e` smoke must pass. Report **real** results in the commit message / PR description. If a check fails: fix it or report it — never silence, skip, or fake it.
+
+Android kodi o‘zgarganda debug APK, Android lint va native UI testlarini tekshiring.
+
+## Maintaining this file
+After a milestone or recurring issue, propose the exact `AGENTS.md` edit and its reason. Apply it only after the user explicitly approves that change.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -1,0 +1,204 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: light dark;
+  --paper: #f6f4ec;
+  --ink: #19312a;
+  --muted: #52645b;
+  --line: #b9c6ba;
+  --panel: #e9eee6;
+  --action: #174b39;
+  --on-action: #f6fff9;
+  --action-hover: #255d49;
+  --focus: #176959;
+  --urgent: #9b2f27;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #172620;
+    --ink: #e9f1e8;
+    --muted: #b6c8bb;
+    --line: #586f60;
+    --panel: #21362c;
+    --action: #bfe4d1;
+    --on-action: #143126;
+    --action-hover: #d2eddf;
+    --focus: #a1e0c9;
+    --urgent: #ffb5a6;
+  }
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Golos Text', system-ui, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.55;
+  min-block-size: 100vh;
+}
+
+:where(a, button):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+h1,
+h2 {
+  font-family: Literata, Georgia, serif;
+  font-weight: 500;
+  line-height: 1.12;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 6.5vw, 5.65rem);
+  letter-spacing: -0.05em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+h2 { font-size: clamp(1.4rem, 2.4vw, 1.85rem); }
+
+.frame {
+  inline-size: min(100% - 2.5rem, 70rem);
+  margin-inline: auto;
+}
+
+.skip-link {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 1;
+  padding: 0.75rem 1rem;
+  background: var(--paper);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus { transform: none; }
+
+.site-header { border-block-end: 1px solid var(--line); }
+
+.header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 1rem;
+  padding-block: 0.65rem;
+}
+
+.header-inner a {
+  display: inline-flex;
+  min-block-size: 3rem;
+  align-items: center;
+}
+
+.wordmark {
+  gap: 0.6rem;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: -0.035em;
+}
+
+.wordmark-symbol {
+  inline-size: 1.2rem;
+  aspect-ratio: 1;
+  border: 0.23rem solid currentColor;
+  border-radius: 48% 48% 48% 12%;
+}
+
+.header-inner nav { color: var(--muted); }
+
+.entry,
+.content {
+  padding-block: clamp(3rem, 9vw, 8rem) 4rem;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  align-items: end;
+  gap: clamp(2rem, 7vw, 7rem);
+}
+
+.entry-intro { border-block-start: 5px solid var(--action); padding-block-start: 1.5rem; }
+
+.lede {
+  max-inline-size: 42ch;
+  margin-block-start: 1.35rem;
+  color: var(--muted);
+}
+
+.role-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-block-size: 4rem;
+  inline-size: 100%;
+  padding: 0.75rem 1.15rem;
+  background: var(--action);
+  color: var(--on-action);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.role-button:hover { background: var(--action-hover); }
+.role-hint { margin: 0.5rem 0 1.2rem; color: var(--muted); font-size: 1rem; }
+.role-hint:last-child { margin-block-end: 0; }
+.content h1 { font-size: clamp(2.35rem, 5.5vw, 4.25rem); }
+
+.ledger {
+  max-inline-size: 49rem;
+  margin-block: 2rem 1rem;
+  border-block-start: 1px solid var(--line);
+}
+
+.ledger section {
+  border-block-end: 1px solid var(--line);
+  padding-block: 1.5rem;
+}
+
+.ledger p {
+  max-inline-size: 56ch;
+  margin-block-start: 0.6rem;
+  color: var(--muted);
+}
+
+.notice {
+  margin-block-start: 1rem;
+  padding: 1rem;
+  max-inline-size: 49rem;
+  border-inline-start: 3px solid var(--focus);
+  background: var(--panel);
+}
+
+.role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 1.5rem;
+  margin-block-start: 1rem;
+}
+
+.text-action,
+.emergency {
+  display: inline-flex;
+  min-block-size: 3rem;
+  align-items: center;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.emergency { color: var(--urgent); font-weight: 600; }
+
+@media (max-width: 46rem) {
+  .entry { grid-template-columns: minmax(0, 1fr); }
+}

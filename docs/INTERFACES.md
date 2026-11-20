@@ -1,0 +1,104 @@
+# ShifoHalqa · Dvigatel va ilova o‘rtasidagi kontrakt
+
+**19-noyabr 2026.** Dalil darajasi, bosim va dori jadvali qoidalari tayyor. Jadvaldagi boshqa nomlar kelgusi integratsiya uchun kontrakt takliflari. Ish tartibi [PLAN](../PLAN.md) da, mahsulot kontrakti [SPEC](SPEC.md) da.
+
+## Bir qaydning hayot sikli
+
+1. **Server.** Sessiyadan shaxs va rolni oladi, vazifa shu bemorga tegishliligini, reja, vaqt hamda takror urinish kalitini tekshiradi. UI bemor tugmasini, qo‘lda qiymatni yoki o‘lchov natijasini yuboradi. Server kelgan natijaning manbasi va tasdiqlash holatini tegishli oqimga bog‘laydi.
+2. **Rules.** Kirishni zod bilan tekshiradi, manba va natijaga qarab dalil darajasini hisoblaydi. Qoidaning kirishiga shifokor belgilagan chegaralar, joriy log va kerak bo‘lganda shu dori bo‘yicha mahalliy kunlarga yig‘ilgan tarix kiradi. Natija sabab kodi, ustuvorlik, qo‘llangan chegara va kuzatilgan qiymatni beradi. Noaniq o‘lchov qayta urinishga olib keladi. Bemor bildirgan og‘riq mustaqil qayd bo‘la oladi.
+3. **DB.** Yangi log, vazifa holati, tegishli bayroq va audit bir tranzaksiyada yoziladi. Bir xil so‘rov qayta kelsa avvalgi natija qaytariladi. Turli vazifalarning qaydlari alohida. UI server qaytargan log ID, daraja va ko‘rik holatini ko‘rsatadi.
+4. **Shifokor tasdig‘i.** Shifokor tanlagan ochiq flagni server bemor va shifokor vakolati bo‘yicha tekshiradi. Flagdagi `evidence_log_id` bilan aynan o‘sha log bog‘lanadi. Ko‘rib tasdiqlash, L4, audit va bemorga mo‘ljallangan xabar birgalikda saqlanadi. Bir qarorni ikki marta yuborish ikkinchi audit yoki bildirishnoma yaratmaydi. Rad etilgan yoki qayta o‘lchash so‘ralgan yozuv asl darajasida qoladi. Ichki shifokor izohi bemor yoki yaqin inson javobiga chiqmaydi.
+
+## Demo sessiyasi va baza
+
+- `getDemoSession()` (`src/lib/demo-session.ts`) imzolangan cookie’dan `{ workspaceId, role }` yoki `null` qaytaradi. `/api/demo/login` ga `role=doctor` yoki `role=patient` bilan POST yuborilganda mavjud ish joyi saqlanadi. Yangi kirish alohida UUID oladi. `/api/demo/logout` cookie’ni tozalaydi. Ikkala POST so‘rovi ham ayni saytdan kelishi kerak.
+- `ensureDemoWorkspace(workspaceId)` (`src/lib/seed.ts`) shu UUID uchun sintetik `{ doctor: { id, name }, patient: { id, name } }` juftini qaytaradi. Qayta tashrifda ID’lar saqlanadi. `DATABASE_URL` bo‘sh bo‘lsa natija `null`. C va D yozuvlari uchun ishonchli `workspaceId` sessiyadan olinadi va SQL so‘rovi shu doirada ishlaydi.
+
+## Klinik halqa
+
+- `POST /api/demo/plan` shifokor sessiyasida bitta kunlik dori va bosim rejasini biriktiradi. `planForm` ism, dori va bosim vaqti, to‘rtta bosim chegarasi va `supplyFollowUp` tanlovini tekshiradi. Qayta yuborilganda amaldagi reja saqlanadi. Sana `Asia/Tashkent` bo‘yicha olinadi.
+- `POST /api/demo/evidence` bemor sessiyasida `taskId` bo‘yicha dori holati yoki qo‘lda kiritilgan bosimni qabul qiladi. Vazifa sessiyadagi bemorga tegishli bo‘lishi kerak. L0, `self_report`, dori uchun `none`, qo‘lda o‘lchov yoki simptom uchun `manual` serverda belgilanadi. `prepareEvidence` mavjud qoidalarni shifokor rejasidagi chegaralar bilan chaqiradi. Shifokor rejada yoqqan bo‘lsa, «Dori tugadi» xabari sariq bayroq oladi. Bir vazifa uchun birinchi qayd, holat, bayroq va audit birgalikda yoziladi.
+- `POST /api/demo/review` shifokor sessiyasida aniq `flagId`, `approved` yoki `retake`, bemorga javob va ixtiyoriy ichki izoh oladi. `approved` biriktirilgan `evidence_log_id` ni L4 ga o‘tkazadi. `retake` darajani saqlaydi. Birinchi qaror va javob keyingi yuborishlarda saqlanadi. Ichki izoh bemor ko‘rinishiga olinmaydi.
+- `src/lib/clinical-store.ts` dagi `assignPlan`, `getTaskContext`, `saveEvidence`, `reviewFlag` va `getClinicalView` `ClinicalActor` ni qabul qiladi. `workspaceId`, rol va shaxs ID’lari imzolangan sessiya hamda shu ish joyidagi demo yozuvlaridan olinadi. Qaydlar joriy Toshkent kuni va oldingi olti kun uchun ko‘rinadi. Shifokor navbatida avval qizil, keyin sariq, bir guruhda eskisi oldin. Ancha eski ochiq bayroqlar navbatda qoladi. Turlar `src/lib/clinical-types.ts` da.
+
+## Android demo API
+
+Yo‘llar `DEMO_ANDROID_ENABLED=true` va veb-demo sessiyasi yoqilganda ishlaydi. Barcha JSON javoblari `no-store` bilan qaytadi. Klient faqat sintetik bemor ish joyiga ulanadi.
+
+| So‘rov | Kontrakt |
+|---|---|
+| `POST /api/demo/android/pairing` | Shu saytdan kelgan shifokor brauzer sessiyasi bilan `{code, expiresAt}` qaytaradi. Kod 32 ta hex belgi, 10 daqiqa amal qiladi. Yangi kod shu ish joyining oldingi Android sessiyasini tugatadi. |
+| `POST /api/mobile/v1/pair` | JSON `{code}` yuboriladi. Kod atomar ravishda bir marta sarflanadi. `{token, expiresAt}` 8 soatlik bemor sessiyasi. Baza kod va tokenning SHA-256 xeshini saqlaydi. |
+| `GET /api/mobile/v1/today` | `Authorization: Bearer <token>` bilan `{patientName, date, tasks, replies}`. `date` Toshkent sanasi. `tasks` bugungi dori vazifalarini `{id, title, time, record}` bilan beradi. `record` `null` yoki `{id, status, reason, reply}`. `reply` `null` yoki `{body, decision, reviewedAt}`. `replies` joriy va oldingi olti kundagi dori javoblarini `{recordId, taskTitle, date, body, decision, reviewedAt}` bilan qaytaradi. |
+| `POST /api/mobile/v1/evidence` | Ayni bearer token bilan `{taskId, medicationStatus: 'taken'}` yoki `{taskId, medicationStatus: 'missed', reason}`. `reason` `out_of_supply`, `side_effects`, `forgot`, `other` dan biri. `{result: 'saved' \| 'already_saved'}` dan keyin klient `today` ni qayta o‘qiydi. Server mavjud klinik qoidalar bilan qaydga L0, `self_report` va `ai_mode: 'none'` beradi. |
+
+Xatolar `{error}` shaklida. `400 invalid` tanasi yaroqsiz, `401 invalid_code` kod ishlatilgan yoki eskirgan, `401 unauthorized` sessiya yo‘q yoki tugagan, `404 not_found` variant o‘chiq yoki vazifa ish joyiga tegishli emas, `503 unavailable` vaqtinchalik xato. Brauzerdagi juftlash so‘rovi boshqa saytdan kelsa `403 unauthorized` qaytadi. Android bearer token veb-shifokor rolini bermaydi. [Playwright sinovi](../tests/e2e/android-api.spec.ts)
+
+## Amaldagi eksportlar
+
+### Dalil darajasi
+
+Import yo‘li `src/lib/rules/evidence-level.ts`. Test `tests/unit/evidence-level.test.ts`.
+
+- `deriveEvidenceLevel(input: unknown): EvidenceLevelResult` server tayyorlagan dalilni Zod bilan tekshiradi. Server endpoint, sessiya va manba asosida obyektni o‘zi yig‘adi, media adapteri natijasini tekshiradi va bemor tasdig‘ini tegishli o‘lchovga bog‘laydi. Qabul qilingan logda server shu obyektning `source` va `ai_mode` maydonlarini saqlaydi.
+- `EvidenceLevelInput` quyidagi source bo‘yicha ajratilgan tiplardan iborat. Noma’lum kalitlar, jumladan kiritilgan `level`, `invalid_input` qaytaradi.
+- `EvidenceLevelResult` quyidagi variantlarni beradi. `{ status: 'accepted', level: 0 | 1 | 2 | 3 }` yangi qayd darajasini, `needs_confirmation` o‘lchov tasdig‘i kerakligini, `retake` esa `reason: 'measurement_unavailable' | 'low_confidence'` bilan qayta o‘lchash yoki qo‘lda qayd tanlovini bildiradi. `invalid_input` kontraktga mos kelmagan obyekt uchun. Qo‘lda fallback alohida `self_report` sifatida yuboriladi. Sintetik seed alohida yozuv jarayoniga tegishli. L4 faqat shifokor tranzaksiyasida qo‘llanadi.
+
+| `source` | Qabul qilinadigan maydonlar va shartlar |
+|---|---|
+| `self_report` | `ai_mode` qiymati `none` yoki `manual`. L0. |
+| `timer` | `ai_mode: 'none'` va noldan katta o‘lchangan `duration_seconds`. L1. |
+| `photo_ocr` | `ai_mode: 'live'`, `measurement` va boolean `patient_confirmed`. Sifat tekshirilgan, ishonch kamida 0.80 va bemor tasdiqlagan bo‘lsa L2. |
+| `uploaded_video` | `ai_mode: 'live'`, `measurement` va boolean `patient_confirmed`. Yetarli kadr, ishonch kamida 0.75 va bemor tasdiqlagan bo‘lsa L2. |
+| `live_camera` | `ai_mode: 'live'` va `measurement`. Yetarli qayta ishlangan kadr va ishonch kamida 0.75 bo‘lsa L3. |
+
+`measurement` qiymati `{ status: 'verified', confidence: number }` yoki `{ status: 'unavailable' }`. `verified` adapter o‘qilgan maydonlar va ijobiy OCR sifat javoblarini yoki yetarli trek qilingan kadrlarni tekshirgach qo‘yiladi. `confidence` 0–1 oralig‘idagi haqiqiy qiymat. O‘lchov natijasi yo‘q yoki yaroqsiz bo‘lsa adapter `unavailable` beradi.
+
+### Qoidalar
+
+Import yo‘li `src/lib/rules/evaluate-rules.ts`. Test `tests/unit/rules.test.ts`.
+
+- `evaluateRules(input: unknown): RuleFlag | null` Zod bilan tekshiradi. Kontraktga mos kelmagan kirish `ZodError` beradi. Mos kirishda ishga tushgan birinchi qoida bayroq qaytaradi, qolgan hollarda natija `null`. Server uni log va shifokor navbatiga bog‘laydi.
+- `RuleInput` quyidagi `kind` variantlarini oladi. `vitals` uchun `chest_pain` boolean va ixtiyoriy `reading: { systolic, diastolic, targets }`. `targets` shifokor belgilagan `maxSystolic`, `maxDiastolic`, `warnSystolic`, `warnDiastolic` dan iborat. Qiymatlar musbat va chekli. Kuzatuv chegarasi o‘sha ko‘rsatkich maksimumidan yuqori bo‘lishi mumkin emas. Bemor bildirgan ko‘krak og‘rig‘ini o‘lchovsiz yuborish mumkin.
+- `RuleInput` ning `medication_adherence` varianti `date`, `status` va ixtiyoriy `previous_scheduled_day: { date, status }` oladi. Server ikkala kunni ham **bitta bemor va bitta rejalashtirilgan dori** uchun `Asia/Tashkent` bo‘yicha `YYYY-MM-DD` shaklida yig‘adi. Oldingi sana darhol oldingi rejalashtirilgan kun bo‘ladi. Rejada belgilangan, ammo javobsiz kun uchun `unanswered` beriladi. `taken`, `missed` va `unanswered` bitta kanonik kun holatini bildiradi. Shu kunning qayta yuborilishi yangi kun sifatida kirmaydi.
+- `RuleFlag` `{ color, rule_key }` hamda bosim qoidalarida `metric`, `observed`, `threshold` ni beradi. `chest_pain` eng oldin, undan keyin `bp_max` (qizil), so‘ng `bp_warning` (sariq). Teng qiymat bayroq beradi. Bir xil ustuvorlikdagi ikki bosim ko‘rsatkichi chegaraga yetsa, sistolik birinchi ko‘rsatiladi. Faqat ikkita ketma-ket rejalashtirilgan `missed` kun `medication_missed_consecutive_days` sariq bayrog‘ini beradi.
+
+### Pose, urinish va reja ijrosi
+
+- `createPoseTracker({ targetAngle })` (`src/lib/pose/engine.ts`) Zod orqali burchakni tekshiradi va `{ update, result }` qaytaradi. `update(landmarks, { width, height, timestampMs })` uchun MediaPipe normalizatsiyalangan nuqtalari va monoton vaqt ishlatiladi. Deteksiya bo‘lmagan kadrga bo‘sh massiv beriladi. `result()` to‘liq va chala takrorlar, eng kichik burchak, ishonch, tahlil qilingan kadrlar soni va ixtiyoriy 20 nuqtali imzoni beradi. Ishonch landmark ko‘rinishi va kadr qamrovini bildiradi.
+- `compareAttempt({ fileSha256, motionSignature, previous })` (`src/lib/anticheat/compare-attempt.ts`) SHA-256 va 20 nuqtali imzolarni tekshiradi. `duplicateFile`, `similarMotion` va `closestMae` qaytadi. MAE 2.5° dan kichik bo‘lsa o‘xshashlik tekshiruv signali bo‘ladi. Saqlashda shu mashq rejasi bo‘yicha avvalgi 100 tagacha imzo ko‘riladi. Aniq bir xil fayl uchun DB cheklovi barcha avvalgi urinishlarga tatbiq etiladi.
+- `POST /api/demo/exercise-plan` shifokorning shu bemor uchun bitta mashq rejasini biriktiradi. `POST /api/demo/exercise` bemor sessiyasida faqat JSON qabul qiladi. Server `uploaded_video` uchun bemor tasdig‘i va sifatni tekshirib L2, jonli kamera o‘lchovi yetarli bo‘lsa L3, qo‘lda takror yoki og‘riq xabari uchun L0 beradi. Video va kadrlar brauzerda qoladi. Bir Toshkent kuni uchun bitta asosiy urinish. Keyingi urinishlar alohida, og‘riq xabari mustaqil saqlanadi. Shifokor ularni «Mashq qaydlari» bo‘limida ko‘radi. Kamera manbasi brauzer oqimini bildiradi.
+- Ichki `exerciseSample` doimiysi CDC klipining yo‘li, manbasi va SHA-256 ni belgilaydi. Aynan shu faylning o‘lchovi uchun server javobi `sample: true` va `primary: false` bo‘ladi. Shifokor uni CDC namunasi sifatida ko‘radi. Namuna haqiqiy bemor urinishining harakat imzosi bilan solishtirilmaydi. [Video manbasi](https://commons.wikimedia.org/wiki/File:30-Second_Chair_Stand_Test.webm)
+- `maximumDailySteps`, `stepCountSchema`, `stepsForm` (`src/lib/adherence.ts`) 0–999999 qo‘lda qadam formatini belgilaydi. `dueAdherenceUnitSchema`, `DueAdherenceUnit`, `AdherenceCounts` va `calculateAdherence(units, today)` muddati kelgan birliklarni plan bandi va Toshkent sanasi bo‘yicha bir marta sanaydi. `taken` va `recorded` bajarilgan, `missed` faqat javob berilgan hisoblanadi. `getActivityDashboard(actor)` shu sanalar va vazifalarni bazadan ajratadi. `POST /api/demo/steps` bemor uchun kunlik L0 `manual` qiymatini yozadi. Dori va bosim rejasining maxraji qadam va alohida mashq urinishlaridan mustaqil.
+
+## DoriMos va «Yaqinim»
+
+- `medicationBoxLabelSchema`, `medicationBoxReadingSchema` va `compareMedicationBox(expected, detected)` (`src/lib/ai/medication-box.ts`) nom–kuch–birlik formatini, model javobi variantlarini va deterministik solishtiruvni belgilaydi. Solishtiruv harf registri va ortiqcha bo‘shliqni normallashtiradi, mg/mkg/g ni bir o‘lchamga keltiradi va IU ni alohida birlik deb tekshiradi. Chiqish `match`, `name_mismatch`, `strength_mismatch` yoki `name_and_strength_mismatch`.
+- `readMedicationBox({ image, mimeType, expected })` (`src/lib/ai/dorimos.ts`) serverga tegishli PNG/JPEG sarlavhasi va 6 MiB limitini tekshiradi. Birinchi model qutining ko‘rinishi, yozuvning o‘qilishi, nom va kuch bo‘yicha to‘rtta javob qaytaradi. Quti ko‘rinishi va yozuv o‘qilishi ehtimoli, shuningdek to‘rtta javobning ishonchi kamida 0.80 bo‘lsa, Interactions API `store:false` bilan nom va quti kuchini o‘qiydi. Umumiy limit 12 soniya. Asosiy model uchun oynaning chegarasi so‘rov boshlanganidan 8 soniya. Shunda tezroq zaxira modelga vaqt qoladi. O‘qilmas rasmda `retake`, kalit yo‘q yoki xizmat xatosida `manual` qaytadi. `needs_confirmation` o‘lchovni tasdiqlash uchun qaytaradi.
+- `POST /api/demo/dorimos` faqat shu demo ish joyidagi bemorning bugungi dori vazifasini qabul qiladi. `scan` uchun sintetik namuna identifikatori, `confirm` uchun server imzolagan 10 daqiqalik token, `manual` uchun vazifa identifikatori ishlatiladi. API rasm fayli va mijozdan kelgan natija, model, moslik, daraja yoki ishonch qiymatlarini qabul qilmaydi. Gemini’ga sintetik quti va qat’iy belgilangan demo nomi beriladi. Haqiqiy reja nomi va kuchi lokal solishtiriladi. Namuna bemor tasdiqlasa L2 `photo_ocr/live`, tekshirilmagani qo‘lda qayd etilsa L0 `self_report/manual`. Bir kunlik dori vazifasiga bittadan `task` va `medication_box` yozuvi. Bemorning dori qabul qilganlik holati DoriMos yozuvidan mustaqil. Mos kelmagan quti alohida qizil bayroq yaratadi. Shifokor faqat shu `evidence_log_id` ni L4 ga ko‘taradi.
+- `getCaregiverSharing(actor)`, `changeCaregiverSharing(actor, 'enable' | 'disable')` va `readCaregiverSummary(token)` (`src/lib/caregiver-store.ts`) 24 soatlik havola chiqaradi, yangilaydi, o‘chiradi va tekshiradi. Baza havolaning SHA-256 xeshini saqlaydi. `/caregiver/[token]` bugungi muddati kelgan, javob berilgan va bajarilgan vazifalar sonini beradi. Havola ishlatilishi auditga yoziladi. Sahifa `no-store`, `noindex` va `no-referrer` bilan yuboriladi. `POST /api/demo/caregiver` bemorning imzolangan demo sessiyasini talab qiladi.
+- `POST /api/demo/reset` demo sessiya kukisini o‘chiradi. Keyingi kirish boshqa sintetik ish joyini ochadi. Avval ulashilgan havola bo‘lsa, bemor yangi demo boshlashdan oldin uni o‘chirishi mumkin.
+
+## Telegram
+
+- Python servisi (`services/telegram_bot`) `GET /healthz` va `POST /api/telegram/webhook` ni taqdim etadi. Webhook `X-Telegram-Bot-Api-Secret-Token`ni tekshiradi va faqat shaxsiy chatdagi `/start`, `/bugun`, `/help` hamda `/stop` buyruqlarini qayta ishlaydi. Bot tokeni va webhook siri Python servisiga beriladi.
+- Veb-ilovadagi `POST /api/demo/telegram` imzolangan shifokor sessiyasini va ayni originni talab qiladi. `pair` 10 daqiqalik bir martalik ulash havolasini qaytaradi. Bazada kodning SHA-256 xeshi saqlanadi. Python’dagi `TelegramStore.redeem_pairing(code, chat_id)` kodni shaxsiy chatga bog‘laydi. `disconnect` va `/stop` bog‘lanishni va yuborilmagan bildirishnomalarni o‘chiradi. Ulash kodi autentifikatsiyalangan veb-sahifaga kirish huquqini bermaydi.
+- PostgreSQL qizil `flags` yozuvi va `telegram_flag_notices` navbatini bitta tranzaksiyada yaratadi. Python worker har bir ochiq xabarni bitta ishchiga ajratadi, umumiy matn va HTTPS ilova havolasini yuboradi. Natija `sent`, `rejected` yoki `unknown`. Noaniq natija avtomatik qayta yuborilmaydi. [Telegram Bot API](https://core.telegram.org/bots/api#making-requests)
+
+### Dalil va qayta urinishlar
+
+| Hodisa | Server va UI xatti-harakati |
+|---|---|
+| «Ichdim», «Icha olmadim», qo‘lda kiritilgan bosim/qadam, qo‘lda bildirilgan og‘riq | L0. Oddiy tugma uchun `ai_mode=none`, qo‘lda kiritish yoki fallback uchun `manual`. «Icha olmadim» javob berilganini saqlaydi, dori bajarilgan deb hisoblanmaydi. |
+| O‘lchangan davomiylik bilan taymer | L1, `ai_mode=none`. Qo‘lda yozilgan takror yoki qadam L0. |
+| Dori qutisida sifat tekshiruvi + ajratish + bemor tasdig‘i | L2, haqiqiy model chaqiruvi uchun `ai_mode=live`. Quti kuchi va doza rejimi alohida maydonlar. Masalan, yarim tabletka rejimida qutidagi mg va bir qabuldagi mg ni bevosita solishtirish xato bayroq beradi. Aniq kutilgan quti kuchi yo‘q bo‘lsa moslikni baholash uchun shifokor izohi kerak. |
+| Qurilmada tanlangan video va bemor tasdig‘i | Yetarli sifati bor haqiqiy tahlil L2, `source=uploaded_video`, `ai_mode=live`. Bu yerda «live» hisoblash ishlaganini anglatadi. UI fayl manbasini ko‘rsatadi. |
+| Jonli kamera, haqiqatan qayta ishlangan kadrlar va yetarli ishonch | L3, `source=live_camera`, `ai_mode=live`. Bemor kiritgan darajadan foydalanilmaydi. Dalil yozuv yaratilgan kanalni bildiradi. Qurilma ortidagi shaxs kimligini bu o‘lchov tasdiqlamaydi. |
+| OCR ishonchi 0.80 dan past, sifat javobi salbiy, maydon o‘qilmagan yoki provayder xatosi | Nom/kuch taxmin qilinmaydi. Rasmni qayta tanlash yoki alohida qo‘lda qayd etish ko‘rsatiladi. Sifat savoli uchun ijobiy javob ham, talab etilgan confidence ham kerak. Qutining o‘qiladigan, lekin rejaga mos kelmaydigan kuchi bemor tasdig‘idan keyin qoidaga yetib boradi. |
+| Mashq ishonchi 0.75 dan past yoki tayanch nuqtalar yetishmaydi | Sifat bo‘yicha sariq holat va retake/manual yo‘l. Bajarilgan AI vazifasi yozilmaydi. Muammo qaydi bo‘lsa server unda haqiqiy manba, rejim va sababni saqlaydi. Bemor bildirgan og‘riqni yuborish uchun mashq tugashi shart emas. |
+| Sintetik tarix yoki demo namuna | Seed uchun `ai_mode=synthetic`. Haqiqiy engine sintetik fixture’ni qayta ishlasa, UI ham «demo namuna»ni, ham hisoblash manbasini ko‘rsatadi. Sun’iy tarix haftalik hisobot va benchmarkda shunday belgilanadi. |
+| Shifokor A bayrog‘ini ko‘rib tasdiqlaydi, bemorda keyinroq B qaydi bor | Faqat A bilan bog‘langan log L4 ga o‘tadi. Uning dastlabki manbasi, `ai_mode` va bemor bildirgan mazmun saqlanadi. B o‘z darajasida qoladi. |
+
+**Qabul misollari.** Shifokor belgilagan BP chegarasiga aniq teng qiymat, faqat diastolik chegaradan chiqishi, ikki kun orasida javobsiz kun, Toshkent yarim tuni, takror bosish, ikki parallel primary urinish, 0.75/0.80 chegaralarining ikki tomoni, bir xil fayl, ikki o‘xshash lekin boshqa harakat. Pose uchun portret va landshaft kadrida bir xil geometriya, bitta nuqtaga tushgan bo‘g‘imlar, kadr yo‘qolishi va yarim sikl sinovlari kiradi. Burchakni hisoblashdan oldin gorizontal va vertikal koordinatalar bir xil uzunlik birligiga keltiriladi.
+
+**DB integratsiyasi uchun izoh.** SPEC’dagi global unique SHA-256 bir nechta hakamga bir xil sintetik namuna berilganda demosessiyalarni to‘sishi mumkin. Taklif — kontent tekshiruvini tegishli bemor va vazifa doirasi bilan chegaralash, takror urinish uchun sababni qaytarish va DB darajasida parallel primary yozishni cheklash. `ensureToday` va `resolve` qayta yuborilganda izchil natija berishi integratsiya testida tekshiriladi. Demo reset tegishli demo doirasini tiklaydi.

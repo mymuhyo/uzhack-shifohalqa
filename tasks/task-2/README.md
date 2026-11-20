@@ -1,27 +1,29 @@
 # Task 2 — MVP (22-noyabr 2026, 23:59 MYT / 20:59 UZT)
 
-**Status:** qayta qurish boshlanmoqda — master plan `PLAN.md`, kontrakt `docs/SPEC.md`. Bu fayl — topshirish checklist.
+**Holat.** `codex/dev` reliz nomzodi va hakam uchun demo matni tayyor. Jamoa ommaviy HTTPS relizi, telefon sinovi va Platform topshirishini bajaradi. [Demo yo‘li va topshirish paketi](PLATFORM_NOTES.md)
 
 ## Brief talablari (`brief/uzhack-online-stage-tasks-en.pdf`, §3.2, §3.4, §5.1.2)
 - [ ] Ishlaydigan havola + **demo loginlar** — hakamlar Incognito'da hech narsa o'rnatmay ochishi kerak
-- [ ] Kamida **bitta to'liq workflow boshidan oxirigacha** (reja → vazifa → dalil → bayroq → shifokor L4)
-- [ ] Statik ekran/slayd/video MVP sanalmaydi — **"what works / what's simulated"** + **AI-use note** majburiy
-- [ ] AI-use note: qaysi AI vositalar (Claude Code, Codex, Gemini), nima uchun; har a'zo MVP'ni tushuntira olishi shart
+- [x] Lokal buildda reja → vazifa → dalil → bayroq → shifokor L4 → bemor javobi E2E sinovdan o‘tdi
+- [x] Ishlaydigan va sintetik qismlar izohi hamda AI-use note tayyor
+- [ ] Har a’zo MVP oqimini tushuntirib bera olishini jamoa tekshiradi
 - [ ] Havola **Grand Finalgacha** ishlab turishi kerak
 
 ## Baholash (100 ball)
 Innovation 25 · Technical execution 25 · Practicality 20 · Impact 20 · Presentation 10 → `competition/RUBRIC.md`
 
 ## Topshirish checklist (Faza 5)
-- [ ] `PLATFORM_NOTES.md`: what works / what's simulated jadvali (SPEC §12 non-goals bilan birga)
-- [ ] AI-use note: build (Claude Code + Codex, skill/MCP) va mahsulot ichida (MediaPipe, gemini-4-hydrogen, gemini-decision-1)
-- [ ] Demo: 1-click rollar (`/`), `/about`, `/api/demo/reset`, 3 demo dori qutisi rasmi
-- [ ] Incognito sinovi: havola + loginlar + to'liq workflow
-- [ ] Mini-Benchmark **real** natijalari (`docs/BENCHMARK.md`) Note'ga qo'shilgan
-- [ ] `npm run verify` + E2E production'da green
-- [ ] Neon `suspend_timeout=0` (cold-start yo'q); Vercel prod `main` dan
+- [x] `PLATFORM_NOTES.md` ishlaydigan, sintetik va keyingi bosqichdagi qismlarni bayon qiladi
+- [x] AI-use note Codex, MediaPipe va ishlatilgan Gemini modellarini ko‘rsatadi
+- [x] Hakam uchun ikki rol tugmasi (`/`), `/about`, demo reset va to‘rtta ko‘rinadigan quti namunasi
+- [x] Amalda o‘lchangan MediaPipe va DoriMos benchmarklari
+- [x] Lokal production build, 120 veb va 15 Python unit testi, Neon `codex-dev` bilan 13 ta Chromium E2E. Telegram yuborishi mock bilan sinaldi.
+- [ ] Jonli Telegram demo uchun alohida botni Python servisining HTTPS webhookiga bog‘lash va shaxsiy chatda bitta sintetik qizil qaydni tekshirish
+- [ ] Jamoa imzolagan reliz, production HTTPS havolasida Incognito sinovi va to‘liq demo
+- [ ] Haqiqiy telefonda jonli kamera qabul sinovi, natijani `docs/BENCHMARK.md` ga qo‘shish
+- [ ] Platformga havola va demo izohlarini joylash
 
 ## Eslatmalar
-- MediaPipe kamera: HTTPS + ruxsat; yuklangan video — zaxira yo'l (L2, L3 EMAS)
-- API buzilsa ham ilova ishlashi shart: manual L0 fallback, ochiq label
-- Topshirishdan keyin havolaga tegmang; Incognito'da qayta tekshiring
+- MediaPipe jonli kamerasi uchun HTTPS va brauzer ruxsati kerak. Yuklangan video tasdiqlansa L2 sifatida saqlanadi.
+- Gemini ishlamay qolsa, bemor tekshirilmagan qutini L0 sifatida qayd eta oladi.
+- Topshirishdan so‘ng jamoa havolaning Incognito oynada va Grand Finalgacha ochiqligini tekshiradi.

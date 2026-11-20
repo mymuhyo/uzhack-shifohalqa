@@ -1,6 +1,6 @@
 # ShifoHalqa · Task 2 holati
 
-20-noyabr 2026 · `codex/dev` reliz nomzodi. Ochiq demo manzilini jamoa relizdan keyin Platform maydoniga kiritadi.
+20-noyabr 2026 · Vercel `main` relizi `17624a1`. [Ochiq demo manzili](https://shifohalqa.vercel.app/) · [Platform formasi uchun matn](SUBMISSION.md)
 
 | Oqim | Holat |
 |---|---|
@@ -39,7 +39,9 @@ Codex, uning subagentlari, Context7 va rasmiy Gemini hujjatlari kodlash hamda te
 
 ## Jamoaga topshirish
 
-1. `codex/dev` reliz o‘zgarishlarini ko‘rib chiqing. Jamoa tasdiqlagan demo reliz muhitida schema va muhit qiymatlarini tekshiring. O‘sha muhitdagi ma’lumotlar sintetik bo‘lsin. Agar avvalgi app shu sxemadan foydalanayotgan bo‘lsa, DDL va yangi buildni kelishilgan bitta reliz oynasida almashtiring.
-2. Jamoa reliz qilgach, ochiq HTTPS manzilini toza brauzerda tekshiring. Hakam kirishi uchun bosh sahifadagi ikkita rol tugmasi yetadi. Real telefonda jonli kamera ruxsati, takrorlar, to‘xtatish va L3 saqlanishini o‘lchang. Qurilma va brauzer versiyasini benchmarkga yozing.
-3. Production manzilida asosiy dori oqimi, xira quti, mos kelmaydigan 10 mg va bekor qilingan «Yaqinim» havolasini qayta sinang. Platformga tekshirilgan URL, rol tugmalari, yuqoridagi demo chegaralari va AI-use izohini kiriting. Ulanish Grand Finalgacha ishlashini jamoa kuzatadi.
+Ochiq relizda bosh sahifa va `/about` 200 javob berdi. Birinchi toza Chromium sinovida shifokor roli ochildi va panel «Demo ma’lumotlarini ochib bo‘lmadi» xabarini ko‘rsatdi. Neon `main` katalogida `shifohalqa` sxemasi yo‘qligi tasdiqlandi. Relizning `schema.sql` fayli bitta tranzaksiyada yangi sxema va 19 ta jadval yaratdi. Keyingi toza Chromium sessiyasida sintetik reja, «Dori tugadi», tanlangan qaydning L0 dan L4 ga o‘tishi va shifokor javobining bemorga ko‘rinishi o‘tdi. Bu tekshiruv 15,7 s davom etdi.
+
+1. Real telefonda jonli kamera ruxsati, takrorlar, to‘xtatish va L3 saqlanishini o‘lchang. Qurilma va brauzer versiyasini benchmarkga yozing.
+2. Ochiq havolada xira quti, mos kelmaydigan 10 mg va bekor qilingan «Yaqinim» havolasini yangi sintetik ish joyida qayta sinang. Bu uchala yo‘l `codex-dev` E2E sinovidan o‘tgan.
+3. Platformga ishlayotgan URL, demo rollari, demo chegaralari va AI-use izohini joylang. [Platform formasi uchun matn](SUBMISSION.md)
 4. Telegramni jonli ulashdan oldin `429` javobidan keyingi qayta urinish va takror yuborilgan `/stop` xabaridan keyin yangi ulanish saqlanishini tekshiring. Ommaviy HTTPS servisda jonli webhook va bitta sintetik bildirishnoma sinovini bajaring.

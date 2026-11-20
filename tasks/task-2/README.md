@@ -1,9 +1,9 @@
 # Task 2 — MVP (22-noyabr 2026, 23:59 MYT / 20:59 UZT)
 
-**Holat.** `codex/dev` reliz nomzodi va hakam uchun demo matni tayyor. Jamoa ommaviy HTTPS relizi, telefon sinovi va Platform topshirishini bajaradi. [Demo yo‘li va topshirish paketi](PLATFORM_NOTES.md)
+**Holat.** Vercel `main` relizida yangi, toza brauzer sessiyasida reja → «Dori tugadi» → shifokor ko‘rigi → bemorga L4 va javob oqimi o‘tdi. [Ochiq demo](https://shifohalqa.vercel.app/) · [Sinov va topshirish tafsilotlari](PLATFORM_NOTES.md) · [Platform formasi uchun matn](SUBMISSION.md)
 
 ## Brief talablari (`brief/uzhack-online-stage-tasks-en.pdf`, §3.2, §3.4, §5.1.2)
-- [ ] Ishlaydigan havola + **demo loginlar** — hakamlar Incognito'da hech narsa o'rnatmay ochishi kerak
+- [x] Ishlaydigan HTTPS havola va **demo rollari** toza brauzer sessiyasida ochildi
 - [x] Lokal buildda reja → vazifa → dalil → bayroq → shifokor L4 → bemor javobi E2E sinovdan o‘tdi
 - [x] Ishlaydigan va sintetik qismlar izohi hamda AI-use note tayyor
 - [ ] Har a’zo MVP oqimini tushuntirib bera olishini jamoa tekshiradi
@@ -17,9 +17,10 @@ Innovation 25 · Technical execution 25 · Practicality 20 · Impact 20 · Prese
 - [x] AI-use note Codex, MediaPipe va ishlatilgan Gemini modellarini ko‘rsatadi
 - [x] Hakam uchun ikki rol tugmasi (`/`), `/about`, demo reset va to‘rtta ko‘rinadigan quti namunasi
 - [x] Amalda o‘lchangan MediaPipe va DoriMos benchmarklari
-- [x] Lokal production build, 120 veb va 15 Python unit testi, Neon `codex-dev` bilan 13 ta Chromium E2E. Telegram yuborishi mock bilan sinaldi.
+- [x] Lokal production build, 123 veb va 15 Python unit testi, Neon `codex-dev` bilan 14 ta Chromium E2E. DoriMos haqiqiy Gemini bilan, Telegram yetkazilishi mock transport bilan sinaldi.
 - [ ] Jonli Telegram demo uchun alohida botni Python servisining HTTPS webhookiga bog‘lash va shaxsiy chatda bitta sintetik qizil qaydni tekshirish
-- [ ] Jamoa imzolagan reliz, production HTTPS havolasida Incognito sinovi va to‘liq demo
+- [x] Production HTTPS havolasida yangi sintetik ish joyidagi asosiy dori oqimi oxirigacha sinaldi
+- [ ] Ochiq demo havolasida DoriMos xira va mos kelmaydigan namunalarini, «Yaqinim» havolasini bekor qilishni qayta sinash
 - [ ] Haqiqiy telefonda jonli kamera qabul sinovi, natijani `docs/BENCHMARK.md` ga qo‘shish
 - [ ] Platformga havola va demo izohlarini joylash
 

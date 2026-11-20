@@ -1,4 +1,17 @@
-# V2 · Uy davosidagi to‘siqqa javob
+# V2 · Mashqni kamera va AI bilan tekshirish
+
+**Joriy ustuvorlik.** Hakam «Mashq demosini ochish»dan tayyor klipni ishga tushiradi. Jonli kamerada MediaPipe kadr ustida o‘lchanayotgan son–tizza–to‘piq chizig‘ini va joriy burchakni ko‘rsatadi. Kadrlar tahlilidan to‘liq sikllar sanaladi. Natija har bir sikl vaqti, eng kichik burchagi va demo maqsadiga yetganini beradi. Gemini o‘sha ommaviy klipni mustaqil ko‘radi. Hakam ikki sanoqni solishtiradi. Ma’lumotlar bazasi yoki akkaunt mashq demosini ochish uchun kerak emas.
+
+| Ish | Hajm | Bog‘liqlik | Qabul mezoni va holat |
+|---|---|---|---|
+| Jonli CV va har bir sikl dalili | O‘rta | MediaPipe, masofaviy modelga bog‘liqlik yo‘q | Haqiqiy dekodlangan kadrda tayanch chizig‘i va burchak chiqadi. Natijada sikllar va vaqtlar bor. Yomon kadrda qayta urinish taklif qilinadi. `exp/mashq-cv-ai` filialida. |
+| Videoni mustaqil Gemini tahlili | O‘rta | Ommaviy CDC klipi, server kaliti va demo flag | Model klipni CV sanoqisiz tahlil qiladi. Ikki o‘lchov ko‘rinadi. Gemini ishlamasa CV natijasi turadi. Real kamera va yuklangan shaxsiy video brauzerda qoladi. `exp/mashq-cv-ai` filialida. |
+| Telefon va alohida kadr sinovlari | O‘rta | Jismoniy Android/iOS, mos litsenziyali turli kliplar, qo‘lda belgilangan sikllar | To‘liq va chala harakat, kadrdan chiqish, yorug‘lik va kamera burchagi bo‘yicha etalon bilan solishtiring. Qurilma, brauzer, muvaffaqiyat va rad holatlarini yozing. |
+| Ovozli jonli kuzatuv | O‘rta | Telefon sinovi, qo‘llanadigan provayder shartlari | Keyingi tajriba. CV belgilagan «kadrda ko‘rinmayapti» kabi o‘lchov holatlaridan ovoz chiqishi va brauzerda ovozni darhol to‘xtatish tekshiriladi. Gemini Live uchun faqat shu maqsadga ruxsat berilgan namuna muhitida alohida sinov. |
+
+**Lokal sinash.** `DEMO_MODE=true` va alohida `SESSION_SECRET` bilan ishga tushiring. `/demo/mashq` da **CDC namunasini sinash** ni bosing. Gemini tugmasi uchun `EXERCISE_GEMINI_DEMO=true` va serverdagi `GEMINI_API_KEY` kerak. Jonli provayder brauzer testini `SHIFO_E2E_EXERCISE_GEMINI=1 npm run e2e -- tests/e2e/exercise-preview.spec.ts --workers=1` bilan tanlang. [Video tahlili](https://aistudio.google.com/docs/video-understanding) · [Gemini foydalanish shartlari](https://aistudio.google.com/docs/terms)
+
+## Oldingi V2 · Uy davosidagi to‘siqqa javob
 
 Hakam muvaffaqiyatni bitta natijadan ko‘ra oladi. Bemor dori tugaganini bildiradi, shifokor o‘sha yozuvga javob beradi, bemor javobni ko‘radi. Klinik natijani keyin bemor bilan tekshirish kerak. Task 2 uchun shu oqimdagi uzilishlarni tuzatamiz. [Audit](AUDIT.md) · [Uch mahsulot yo‘nalishi](FUTURE.md)
 

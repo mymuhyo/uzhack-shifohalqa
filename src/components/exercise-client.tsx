@@ -4,8 +4,10 @@ import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
 import { exerciseSample } from '@/lib/exercise-sample';
-import { createPoseTracker } from '@/lib/pose/engine';
+import { createPoseTracker, type MeasuredCycle } from '@/lib/pose/engine';
+import { drawPoseOverlay } from '@/lib/pose/overlay';
 import { sampleRecordedFrames } from '@/lib/pose/recorded-frames';
+import { ExerciseAnalysisPanel } from './exercise-analysis-panel';
 import styles from './exercise-client.module.css';
 
 type Source = 'live_camera' | 'uploaded_video';
@@ -29,8 +31,8 @@ type Capture = {
 type Screen =
   | { phase: 'idle' }
   | { phase: 'starting' | 'retake'; message: string }
-  | { phase: 'running'; source: Source; framing: Framing | null; validReps: number; shallowReps: number }
-  | { phase: 'result'; source: Source; measurement: Measurement; fileSha256: string | null };
+  | { phase: 'running'; source: Source; framing: Framing | null; currentAngle: number | null; validReps: number; shallowReps: number }
+  | { phase: 'result'; source: Source; measurement: Measurement; cycles: MeasuredCycle[]; fileSha256: string | null };
 
 type Report = 'measurement' | 'manual' | 'pain';
 type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message: string };
@@ -119,13 +121,21 @@ function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
   return { state: 'error', report, message: 'Qayd saqlanganini tekshirib bo‘lmadi. Qayta urinib ko‘ring.' };
 }
 
-export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
+const seconds = new Intl.NumberFormat('uz-Latn-UZ', { maximumFractionDigits: 1 });
+
+export function ExerciseClient({ targetAngle, preview = false, showGemini = false }: {
+  targetAngle: number;
+  preview?: boolean;
+  showGemini?: boolean;
+}) {
   const [screen, setScreen] = useState<Screen>({ phase: 'idle' });
   const [confirmed, setConfirmed] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const activeCapture = useRef<Capture | null>(null);
   const request = useRef<{ controller: AbortController; report: Report } | null>(null);
+  const videoAlternative = preview ? 'Namuna yoki video tanlang.' : 'Video tanlang yoki takrorlarni qo‘lda kiriting.';
 
   useEffect(() => () => {
     const capture = activeCapture.current;
@@ -139,6 +149,8 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
     const capture = activeCapture.current;
     activeCapture.current = null;
     releaseCapture(capture);
+    const overlay = overlayRef.current;
+    if (overlay) overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height);
     return capture;
   }
 
@@ -154,10 +166,12 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
     const measurement = tracker.result();
     takeCapture();
     if (measurement.analyzedFrames < 5 || measurement.minAngle === null || measurement.confidence === null || measurement.confidence < 0.75) {
-      setScreen({ phase: 'retake', message: 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.' });
+      setScreen({ phase: 'retake', message: preview
+        ? 'Tayanch nuqtalar yetarli ko‘rinmadi. Kadrni to‘g‘rilab qayta urinib ko‘ring.'
+        : 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.' });
       return;
     }
-    setScreen({ phase: 'result', source, measurement, fileSha256 });
+    setScreen({ phase: 'result', source, measurement, cycles: tracker.cycles(), fileSha256 });
   }
 
   function begin(source: Source, message: string): Capture | null {
@@ -194,10 +208,12 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
       const height = Math.max(1, Math.round(videoHeight * scale));
       if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
-
       context.drawImage(video, 0, 0, width, height);
       const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
-      tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
+      const trackedFrame = tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
+      if (source === 'live_camera' && overlayRef.current) {
+        drawPoseOverlay(overlayRef.current, width, height, trackedFrame?.joints ?? []);
+      }
       if (framing !== null) {
         if (tracker.isTracking()) {
           framing = 'tracking';
@@ -208,11 +224,13 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
       }
       const { validReps, shallowReps } = tracker.result();
       const currentFraming = framing;
+      const currentAngle = source === 'live_camera' && trackedFrame ? Math.round(trackedFrame.angle / 5) * 5 : null;
       setScreen((current) => current.phase === 'running' && (
-        currentFraming !== current.framing || validReps !== current.validReps || shallowReps !== current.shallowReps
-      ) ? { phase: 'running', source, framing: currentFraming, validReps, shallowReps } : current);
+        currentFraming !== current.framing || currentAngle !== current.currentAngle ||
+        validReps !== current.validReps || shallowReps !== current.shallowReps
+      ) ? { phase: 'running', source, framing: currentFraming, currentAngle, validReps, shallowReps } : current);
     };
-    setScreen({ phase: 'running', source, framing, validReps: 0, shallowReps: 0 });
+    setScreen({ phase: 'running', source, framing, currentAngle: null, validReps: 0, shallowReps: 0 });
 
     if (source === 'uploaded_video') {
       await sampleRecordedFrames(video, minimumFrameIntervalMs, capture.controller.signal, analyze);
@@ -253,14 +271,15 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
     const capture = begin('live_camera', 'Kamera ruxsati kutilmoqda…');
     if (!capture) return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      fallback(capture, 'Bu brauzerda kamera ochilmadi. Video tanlang yoki takrorlarni qo‘lda kiriting.');
+      fallback(capture, `Bu brauzerda kamera ochilmadi. ${videoAlternative}`);
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        // Let the camera keep its native framing. Downscale for inference after capture.
+        video: { facingMode: { ideal: 'user' } },
       });
       if (activeCapture.current !== capture) {
         stopTracks(stream);
@@ -274,16 +293,14 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
       setScreen({ phase: 'starting', message: 'Mashq modeli yuklanmoqda…' });
     } catch (error) {
       const denied = error instanceof DOMException && error.name === 'NotAllowedError';
-      fallback(capture, denied
-        ? 'Kameraga ruxsat berilmadi. Video tanlang yoki takrorlarni qo‘lda kiriting.'
-        : 'Kamera ochilmadi. Video tanlang yoki takrorlarni qo‘lda kiriting.');
+      fallback(capture, `${denied ? 'Kameraga ruxsat berilmadi.' : 'Kamera ochilmadi.'} ${videoAlternative}`);
       return;
     }
 
     try {
       await processCapture(capture);
     } catch {
-      fallback(capture, 'Kamera tahlili ishga tushmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.');
+      fallback(capture, `Kamera tahlili ishga tushmadi. ${videoAlternative}`);
     }
   }
 
@@ -376,9 +393,14 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
 
   const capturing = screen.phase === 'starting' || screen.phase === 'running';
   const saving = saveStatus?.state === 'saving';
+  const sample = screen.phase === 'result' && screen.fileSha256 === exerciseSample.sha256;
   return (
     <div className={styles.exercise}>
       <p>Kadrda son, tizza va to‘piq bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
+      <div>
+        <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
+        <p>Oldindan yozilgan klip. {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={exerciseSample.source}>Video manbasi</a></p>
+      </div>
       <div className={styles.actions}>
         {!capturing ? (
           <button className={styles.primary} type="button" disabled={saving} onClick={startCamera}>Kamerani boshlash</button>
@@ -391,9 +413,9 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
             }
           }}>To‘xtatish</button>
         )}
-        <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
+        {!preview && <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
           <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
-        </form>
+        </form>}
       </div>
       {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
       {screen.phase === 'retake' && <p className={styles.notice} role="status">{screen.message}</p>}
@@ -401,42 +423,59 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
         <div>
           {screen.framing && <p role="status">{framingMessage[screen.framing]}</p>}
           <output className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.validReps} · Chala {screen.shallowReps}</output>
+          {screen.currentAngle !== null && <p>Tizza burchagi taxminan {screen.currentAngle}°</p>}
         </div>
       )}
-      <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" hidden={!capturing} aria-label="Mashq videosi" />
+      <div className={styles.preview} hidden={!capturing}>
+        <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" aria-label="Mashq videosi" />
+        <canvas ref={overlayRef} className={styles.overlay} aria-hidden="true" />
+      </div>
       <label className={styles.file} htmlFor="exercise-video">
         Video tanlash (50 MB gacha)
         <input id="exercise-video" type="file" accept="video/*" disabled={capturing || saving} onChange={selectVideo} />
       </label>
-      <div>
-        <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
-        <p>Namuna bemorning kunlik asosiy urinishiga kirmaydi. <a href={exerciseSample.source}>Video manbasi</a></p>
-      </div>
       {screen.phase === 'result' && (
         <div className={styles.result}>
-          {screen.fileSha256 === exerciseSample.sha256 && <p>CDC namuna videosi</p>}
+          <h2>MediaPipe o‘lchovi</h2>
+          {sample && <p>CDC namuna videosi</p>}
           <p className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.measurement.validReps} · Chala {screen.measurement.shallowReps}</p>
-          <p>Eng kichik burchak {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}%</p>
-          {screen.source === 'uploaded_video' && (
+          <p>Eng kichik burchak {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr</p>
+          {screen.cycles.length > 0 && (
+            <table className={styles.cycles}>
+              <caption>Sikllar · tizza burchagi maqsadi {targetAngle}°</caption>
+              <thead><tr><th scope="col">Vaqt</th><th scope="col">Min. burchak</th><th scope="col">Natija</th></tr></thead>
+              <tbody>
+                {screen.cycles.map(cycle => (
+                  <tr key={cycle.fromMs}>
+                    <td>{seconds.format(cycle.fromMs / 1000)}–{seconds.format(cycle.toMs / 1000)} s</td>
+                    <td>{Math.round(cycle.minAngle)}°</td>
+                    <td>{cycle.reachesTarget ? 'Maqsadga yetdi' : 'Maqsadga yetmadi'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!preview && screen.source === 'uploaded_video' && (
             <label className={styles.confirm}>
               <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.currentTarget.checked)} />
               Videodagi mashq natijasini tasdiqlayman
             </label>
           )}
-          <button className={styles.primary} type="button" onClick={saveMeasurement} disabled={
+          {!preview && <button className={styles.primary} type="button" onClick={saveMeasurement} disabled={
             saving || (saveStatus?.state === 'saved' && saveStatus.report === 'measurement') || (screen.source === 'uploaded_video' && !confirmed)
-          }>Natijani yuborish</button>
+          }>Natijani yuborish</button>}
+          {sample && showGemini && <ExerciseAnalysisPanel poseCycles={screen.measurement.validReps + screen.measurement.shallowReps} />}
         </div>
       )}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
-      <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
+      {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
         <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>
         <form onSubmit={saveManual} className={styles.manualForm} aria-labelledby="exercise-manual-heading">
           <label htmlFor="exercise-reps">Takrorlar soni</label>
           <input id="exercise-reps" name="reps" type="number" inputMode="numeric" min={0} max={999} step={1} required />
           <button className={styles.primary} type="submit" disabled={capturing || saving}>Qo‘lda qayd yuborish</button>
         </form>
-      </details>
+      </details>}
     </div>
   );
 }

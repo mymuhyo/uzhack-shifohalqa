@@ -7,6 +7,7 @@ type Phase = 'waiting' | 'standing' | 'descending' | 'bottom' | 'ascending';
 type AngleSample = { angle: number; time: number };
 type Measurement = { side: Side; angle: number; visibility: number };
 type Cycle = { samples: AngleSample[]; minimum: number; bottomFrames: number };
+export type MeasuredCycle = { fromMs: number; toMs: number; minAngle: number; reachesTarget: boolean };
 
 const standingAngle = 160;
 const descendingAngle = 150;
@@ -99,6 +100,7 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
   let validReps = 0;
   let shallowReps = 0;
   let motionSignature: number[] | null = null;
+  const completed: MeasuredCycle[] = [];
 
   function resetSegment() {
     recentAngles.length = 0;
@@ -142,8 +144,11 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     if (sample.angle < standingAngle) return;
 
     if (phase === 'ascending' && duration >= minCycleMs) {
-      if (cycle.minimum <= targetAngle + 1e-9) validReps += 1;
+      const reachesTarget = cycle.minimum <= targetAngle + 1e-9;
+      if (reachesTarget) validReps += 1;
       else shallowReps += 1;
+      completed.push({ fromMs: cycle.samples[0].time, toMs: sample.time, minAngle: cycle.minimum, reachesTarget });
+      if (completed.length > 40) completed.shift();
       motionSignature ??= sampleSignature(cycle.samples);
     }
     phase = 'standing';
@@ -151,7 +156,7 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     cycle = null;
   }
 
-  function update(landmarks: readonly Landmark[], frame: Frame): void {
+  function update(landmarks: readonly Landmark[], frame: Frame) {
     const { timestampMs } = frame;
     if (!Number.isFinite(timestampMs) || timestampMs <= lastFrameTime) return;
     if (timestampMs - lastFrameTime > maxFrameGapMs) resetSegment();
@@ -178,10 +183,12 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     const angle = recentAngles.reduce((total, value) => total + value, 0) / angleWindow;
     minAngle = Math.min(minAngle ?? angle, angle);
     advance({ angle, time: timestampMs }, measurement.angle);
+    return { angle, joints: indices[measurement.side].map(index => landmarks[index]) };
   }
 
   return {
     update,
+    cycles: () => completed.slice(),
     isTracking: () => recentAngles.length === angleWindow,
     result: () => {
       // A person may step out of frame to stop the camera after a completed rep.

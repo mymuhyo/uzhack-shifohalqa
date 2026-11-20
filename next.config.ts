@@ -3,6 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/demo/dorimos': ['./public/demo/box-*.png'],
+    '/api/demo/exercise-analysis': ['./public/demo/pose-cdc-sample.webm'],
   },
   async headers() {
     return [

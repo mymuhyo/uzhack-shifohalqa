@@ -57,3 +57,15 @@ Yangi limitda to‘liq brauzer sinovi o‘tdi. Xira sintetik quti qayta urinishg
 ### Lokal V2 · yozilgan CDC klipi
 
 Avval ikki worker ostidagi bitta Chromium ishga tushirishda 1 to‘liq va 1 chala takror qaytdi. Kadrlar taqdimot vaqtiga bog‘lanib qolgan ekan. V2 yozilgan klipni 80 ms oralig‘idagi media nuqtalari bo‘yicha izlaydi va bir xil dekodlangan kadrni ikkinchi marta sanamaydi. To‘liq suite va uchta alohida takrorda har safar **2 to‘liq, 0 chala, 109 kadr, 0,861 ishonch, 88,3°**. Tugmadan natijagacha 9 130, 10 754, 10 836 va 8 688 ms o‘lchandi. Bu bitta klip va Chromium uchun natija. Kamera ochiq turgan jismoniy telefon shu V2 tekshiruviga kirmadi. [Sinov](../tests/e2e/exercise.spec.ts)
+
+### Mashq prototipi · Jonli kamera yo‘li
+
+Chromiumga ommaviy CDC WebM klipidan tayyorlangan 360×568 Y4M fayli aylanib turuvchi kamera manbasi qilib berildi. Dastlabki kamera so‘rovi oqimni 360×480 qilib kesdi va sinovda tizza burchagi chiqmagan. Brauzerga kadr nisbatini tanlash qoldirilgach, 390×844 ekranda tayanch chizig‘i va burchak ko‘rindi. To‘xtatishdan oldin ekranda 1 to‘liq va 4 chala takror ko‘rindi. Kamera yopildi, kadr yuboradigan POST so‘rovi kuzatilmadi. Takrorlanuvchi klipdagi bu sanoq **kamera yo‘lining ishlashini** tekshiradi. Bitta klipning etalon sanog‘i va jismoniy telefondagi aniqlik alohida tekshiriladi.
+
+### Mashq prototipi · CV va Gemini bir sahifada
+
+21-noyabr 2026 · Chromium, 360×800 · repodagi 8,792 soniyalik ommaviy CDC klipi. MediaPipe ikkita to‘liq siklni qaytardi. 1,2–4,2 s oralig‘idagi siklning minimumi 94°, 5,3–8,5 s oralig‘idagisi 88°. Tugmadan jadvalgacha 59 405 ms kuzatildi. Oldingi mahalliy sinovlar va hozirgi yuklama ostidagi o‘lchov bir xil tezlikni va’da qilishga yetarli emas.
+
+Gemini `gemini-3.5-flash-lite` shu klipni MediaPipe raqamlarisiz tahlil qildi va taxminan 2 s va 6 s da o‘tirish kuzatilganini qaytardi. Interfeys ikki modelning ikkita tugallangan sikl sanaganini ko‘rsatdi. Gemini tugmasidan tekshirilgan javobgacha 11 740 ms. Bu bir klipdagi moslik, boshqa odamlar va kamera sharoitlarida aniqlik o‘lchanmagan. [Mashq rejasi](V2_PLAN.md) · [Sinov](../tests/e2e/exercise-preview.spec.ts)
+
+Yakuniy CSS tuzatishidan keyin ayni 360×800 Chromium oqimi boshidan oxirigacha o‘tdi. Ikki CV sikli va Gemini vaqtlari aynan takrorlandi. Bu urinishda CV 58 578 ms, Gemini 18 752 ms oldi. Sahifa 360 px eniga sig‘di. Mashq tahlili endpointi foydalanuvchi videosi maydonini HTTP 400 bilan rad etdi.

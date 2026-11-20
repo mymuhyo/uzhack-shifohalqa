@@ -83,7 +83,7 @@ test('analyzes the public sample locally and saves L2 outside the daily primary 
   await video.evaluate(element => element.addEventListener('play', () => element.setAttribute('data-file-played', 'yes')));
   const started = performance.now();
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
-  await expect(page.getByText(/Eng kichik burchak/)).toBeVisible({ timeout: 35_000 });
+  await expect(page.getByText(/Eng kichik burchak/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText('Yuklangan video · To‘liq 2 · Chala 0')).toBeVisible();
   const elapsed = Math.round(performance.now() - started);
   expect(await video.getAttribute('data-file-played')).toBeNull();

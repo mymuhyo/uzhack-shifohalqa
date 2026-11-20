@@ -92,6 +92,13 @@ describe('sit-to-stand pose tracker', () => {
     const measured = tracker.result();
     expect(measured).toMatchObject({ validReps: 1, shallowReps: 1 });
     expect(measured.minAngle).toBeCloseTo(105);
+    expect(tracker.cycles()).toEqual([
+      { fromMs: expect.any(Number), toMs: expect.any(Number), minAngle: expect.closeTo(105), reachesTarget: true },
+      { fromMs: expect.any(Number), toMs: expect.any(Number), minAngle: expect.closeTo(120), reachesTarget: false },
+    ]);
+    const [first, second] = tracker.cycles();
+    expect(first.fromMs).toBeLessThan(first.toMs);
+    expect(first.toMs).toBeLessThan(second.fromMs);
     expect(measured.motionSignature).toHaveLength(20);
     expect(Math.min(...measured.motionSignature!)).toBeCloseTo(105);
     expect(measured.motionSignature![19]).toBeGreaterThanOrEqual(160);

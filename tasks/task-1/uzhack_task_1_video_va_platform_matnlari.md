@@ -74,6 +74,8 @@ Agar montajga vaqt sarflamasdan bitta urinishda (one-take) yozmoqchi bo‘lsangi
 
 ## 6-QISM: TASK 1 VIDEO SSENARIYSI (3 A’ZO UCHUN TAQSIMLANGAN, ~4 DAQIQA 15 SONIYA)
 
+> **Yangilanish (17-noyabr):** Yakuniy matn — **`video_script_4m25.md`** (cue sheet bilan 1:1). Bu bo‘lim esa tarixiy variant.
+
 Bu ssenariy Task 1 baholash mezonlarining har bir punktini ($30 + 20 + 30 + 20 = 100\text{ ball}$) aniq nishonga oladi.
 
 ### 1-Qism: Jamoa tanishtiruvi ($0:00\text{ – }0:30$) — *Talab: hamma ko‘rinishi va rolini aytishi shart*

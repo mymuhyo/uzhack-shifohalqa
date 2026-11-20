@@ -44,6 +44,7 @@ Bu siz xohlagan “3 kishidan 2/1 kishiga silliq o‘tish”ning eng sodda va is
 | 7 ta slayd (PNG, 1920×1080) | `~/Projects/uzhack/slides/` | ❌ **Yaratilmagan** — 18-noyabrdan oldin tayyorlash shart |
 | Yozuvlar papkasi | `~/Projects/uzhack/recordings/` | ❌ Yaratilmagan — `mkdir -p ~/Projects/uzhack/recordings` |
 | Shu qo‘llanma | `tasks/task-1/presentatsiya_runbook.md` | ✅ (ko‘chirib qo‘yildi, sanalar yangilandi) |
+| Yakuniy video ssenariysi | `tasks/task-1/video_script_4m25.md` | ✅ Tayyor (4:25, cue sheet bilan 1:1) |
 | Bir varaqli cue sheet | `tasks/task-1/cue_sheet.md` | ✅ (ko‘chirib qo‘yildi, sanalar yangilandi) |
 
 Slaydlar — Task 1 hujjatidagi mazmun asosida tayyorlash kerak. Agar o‘z dizayningiz bo‘lsa, xuddi shu nomlar bilan (`01.png` … `07.png`) `slides/` papkasiga qo‘ying yoki OBS’da “Slaydlar” source’ining papkasini o‘zgartiring.

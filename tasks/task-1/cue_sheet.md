@@ -1,5 +1,7 @@
 # ShifoHalqa — Taqdimot cue sheet (4:25)
 
+> **So‘zma-so‘z matn:** `video_script_4m25.md` — shu jadval bilan 1:1 mos.
+
 **Deadline:** 18-noyabr, 20:59 UZT / 23:59 MYT · **Format:** 1080p30 · **OBS profile:** ShifoHalqa
 
 ## Rollar

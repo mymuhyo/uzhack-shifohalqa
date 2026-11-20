@@ -125,6 +125,8 @@ UzHack platformasida `Project` bo‘limiga kirib, quyidagi **5-bo‘limdagi tayy
 
 ## 4. Tayyor Video Ssenariysi (~4 daqiqa 20 soniya)
 
+> **Yangilanish (17-noyabr):** Yakuniy, `cue_sheet.md` bilan 1:1 mos matn — **`video_script_4m25.md`**. Bu bo‘lim tarixiy variant sifatida qoldirilgan; yozuvda yangi fayldan foydalaning.
+
 > **Eslatma:** Matn jonli nutq tezligiga (`~115–125 so‘z/daqiqa`) moslab yozilgan. Xotirjam, tushunarli va ishonchli ohangda o‘qing.
 
 ### 1-QISM: Jamoa Tanishtiruvi (`0:00 – 0:30`) — **[Slayd 1]**

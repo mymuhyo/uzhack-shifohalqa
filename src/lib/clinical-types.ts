@@ -73,6 +73,7 @@ export type ClinicalTask = {
   status: 'pending' | 'taken' | 'missed' | 'recorded';
   evidence: EvidenceView | null;
   boxEvidence: EvidenceView | null;
+  lateReview?: true;
 };
 
 export type ClinicalFlag = EvidenceFlag & { id: string; evidence: EvidenceView };

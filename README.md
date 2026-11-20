@@ -13,7 +13,7 @@ Mashq rejasini biriktirgach, bemor sahifasidan «O‘tirib-turish mashqi»ni och
 | Vazifa | MYT | UZT | Nima topshiriladi |
 |---|---|---|---|
 | **Task 1** — Video + Project info | **18-noyabr 2026, 23:59** | 20:59 | 3–5 daqiqa video (YouTube Unlisted) + platformadagi `Project` maydonlari |
-| **Task 2** — Working MVP | **22-noyabr 2026, 23:59** | 20:59 | Brauzer havolasi + demo loginlar + "what works / what's simulated" + AI-use note |
+| **Task 2** — Working MVP | **22-noyabr 2026, 23:59**, jamoa tasdiqlagan | 20:59 | Brauzer havolasi + demo loginlar + "what works / what's simulated" + AI-use note |
 
 Ball = 0.30·Task1 + 0.70·Task2; ikkalasi ham majburiy; havola Grand Finalgacha jonli turishi shart.
 
@@ -29,7 +29,8 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 ## O'qish tartibi
 | Fayl | Maqsad |
 |---|---|
-| [`PLAN.md`](PLAN.md) | **Yagona master plan** — fazalar, task board, skill/MCP xaritasi, tozalash logi |
+| [`docs/V2_PLAN.md`](docs/V2_PLAN.md) | Joriy ish, qabul mezonlari va reliz qarori |
+| [`PLAN.md`](PLAN.md) | A–I bosqichlari va avvalgi qabul yozuvlari |
 | [`AGENTS.md`](AGENTS.md) | Codex ish chegaralari, Gemini qoidalari va pushdan oldingi tekshiruvlar |
 | [`docs/SPEC.md`](docs/SPEC.md) | Mahsulot + texnik kontrakt: rollar, sxema, AI pipeline, qoidalar |
 | [`docs/INTERFACES.md`](docs/INTERFACES.md) | Engine eksportlari va server integratsiyasi |
@@ -39,14 +40,14 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 | [`brief/uzhack-online-stage-tasks-en.pdf`](brief/uzhack-online-stage-tasks-en.pdf) | Rasmiy Brief v1.0 (tarixiy sanalar bilan) |
 | [`archive/`](archive/) | Eski reja fayllar — joriy emas |
 
-Eski 4 lane kodi arxivi: `~/Projects/uzhack-reference-20261117.tar.zst` (porting uchun; `AGENTS.md` da yo'llar).
+Eski 4 lane kodi arxivi: `~/Projects/uzhack-reference-20261117.tar.zst` (tarixiy manba).
 
 ## Lokal demo
 
 Node.js 22 yoki yangirog‘i kerak. `.env.example` shablonidan `.env.local` yarating. `DEMO_MODE=true` va `openssl rand -hex 32` bilan yaratilgan `SESSION_SECRET` ni kiriting.
 
 ```bash
-cd ~/Projects/uzhack-codex
+cd ~/Projects/uzhack
 npm ci
 npm run dev
 ```
@@ -147,4 +148,4 @@ Sessiya 8 soat amal qiladi va ilova jarayoni tugaganda qurilmada qayta ulash ker
 ## Halollik qoidasi (muzokaraga yopiq)
 **AI o'lchaydi → kod qoidalari bayroq ko'taradi → shifokor qaror qiladi.** Hech qachon "AI isbotladi/tashxis qo'ydi" yozilmaydi; simulyatsiya qismlar ochiq belgilanadi; har submission bilan "what works / what's simulated" + AI-use note keladi.
 
-Qolgan ishlar va qabul mezonlari [A–I jadvali](PLAN.md#ish-jadvali) da.
+Joriy ishlar va qabul mezonlari [V2 rejasida](docs/V2_PLAN.md).

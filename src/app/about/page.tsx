@@ -10,12 +10,14 @@ export default function About() {
       <div className="ledger">
         <section>
           <h2>Hozir sinab ko‘ring</h2>
-          <p>Shifokor reja biriktiradi, bemor dori yoki qon bosimini qayd etadi. Shifokor navbatdagi qaydni ko‘rib chiqadi va bemorga javob yuboradi.</p>
+          <p>Shifokor namuna rejani biriktiradi. Bemor «Icha olmadim»ni ochib, «Dori tugadi» sababini yuboradi. Shifokor shu qaydda «Ko‘rib chiqish»ni ochadi, «Bemorga javob» yozadi va qaydni tasdiqlaydi. Bemor o‘z vazifasida javobni va L4 belgisini ko‘radi.</p>
+          <p>L4 shifokor aynan shu yozuvni ko‘rganini va tasdiqlaganini bildiradi. Dorining ichilgani yoki muammo hal bo‘lgani alohida tasdiq talab qiladi.</p>
           <p>Bemor mashq takrorini qurilmasida sanaydi, haftalik reja ijrosini ko‘radi va «Yaqinim» orqali bugungi qisqa holatni ulashadi.</p>
         </section>
         <section>
           <h2>Namuna ma’lumotlar</h2>
           <p>Dr. Sardor va Anvar aka sintetik qahramonlar. Bu demo bir brauzer sessiyasi uchun alohida ish joyi ochadi.</p>
+          <p>CDC mashqi oldindan yozilgan namuna video. Tasdiqlangan video L2, yetarli sifatdagi jonli kamera o‘lchovi L3 sifatida saqlanadi.</p>
           <p>DoriMos tayyor sintetik quti rasmlarini o‘qiydi. O‘qilgan yozuvni bemor tasdiqlaydi. Xira rasm yoki xizmat uzilishida qo‘lda qayd yo‘li bor.</p>
         </section>
         <section>
@@ -24,6 +26,7 @@ export default function About() {
           <p>Kodlash va sinovlarda Codex, uning subagentlari va hujjat qidiruv vositalari ishlatildi.</p>
         </section>
       </div>
+      <p className="notice">«Yaqinim» havolasi ochilgan bo‘lsa, eski ish joyidan chiqishdan oldin bemor sahifasida ulashishni o‘chiring. Aks holda havola 24 soatlik muddati tugaguncha ishlaydi.</p>
       <div className="role-actions">
         <Link className="text-action" href="/">Demo rollariga qaytish</Link>
         <form action="/api/demo/reset" method="post">

@@ -78,11 +78,15 @@ test('real local MediaPipe rejects an empty scene with no media upload', async (
 test('analyzes the public sample locally and saves L2 outside the daily primary attempt', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await prescribeExercise(page);
+  // File analysis must not race the playback clock when inference or decoding is slow.
+  const video = page.getByLabel('Mashq videosi');
+  await video.evaluate(element => element.addEventListener('play', () => element.setAttribute('data-file-played', 'yes')));
   const started = performance.now();
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
   await expect(page.getByText(/Eng kichik burchak/)).toBeVisible({ timeout: 35_000 });
   await expect(page.getByText('Yuklangan video · To‘liq 2 · Chala 0')).toBeVisible();
   const elapsed = Math.round(performance.now() - started);
+  expect(await video.getAttribute('data-file-played')).toBeNull();
   await expect(page.getByRole('button', { name: 'Natijani yuborish' })).toBeDisabled();
   await page.getByRole('checkbox', { name: 'Videodagi mashq natijasini tasdiqlayman' }).check();
   const posted = page.waitForResponse(response => response.url().endsWith('/api/demo/exercise') && response.request().method() === 'POST');

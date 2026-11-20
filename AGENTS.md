@@ -1,48 +1,31 @@
-# AGENTS.md — ShifoHalqa · Codex development
+# ShifoHalqa engineering guide
 
-You are **Codex**, responsible for building, integrating, and verifying ShifoHalqa (UzHack 2026 · Track 01 Smart Healthcare) in `~/Projects/uzhack-codex` on **`codex/dev`**. Delegate independent work to Codex subagents when useful and retain responsibility for integration.
+Work in `~/Projects/uzhack` on local `main` for submission fixes. The public demo uses synthetic data. A push to remote `main` triggers Vercel and Railway. Get the owner's OK before releasing or merging an `exp/<idea>` experiment. Keep private environment files, user records, share links and service credentials out of Git and logs.
 
-Read first: `PLAN.md` (use the A–I board and take the next unblocked Codex-owned task), `docs/SPEC.md` (contract), and `docs/INTERFACES.md` (public engine interfaces). Use [PLAN.md §10](PLAN.md#codex-workflow) to choose skills and MCP tools and prepare handoffs.
+Read [V2_PLAN](docs/V2_PLAN.md) for current work, [SPEC](docs/SPEC.md) for the product contract and [INTERFACES](docs/INTERFACES.md) before changing an engine. [SUBMISSION](tasks/task-2/SUBMISSION.md) is the judge's browser walkthrough.
 
-## Hard rules
-- **Never push to `main`, never deploy, never touch Vercel project settings.** Push `codex/dev` only.
-- Own the application scaffold, dependencies, UI, sessions, schema, seed, engines, tests, and documentation needed for cards A–I on `codex/dev`. The project team handles integration to `main` and the production release.
-- Export typed, Zod-validated engine interfaces and document each public engine export in `docs/INTERFACES.md` for integration.
-- Honesty contract: AI measures → deterministic rules flag → doctor decides. No invented data or benchmark numbers. Label `ai_mode` (`live/manual/synthetic/none`) on every evidence path. Low confidence → explicit retake/manual fallback, never a guessed value.
-- Evidence levels are computed server-side; L4 only via doctor resolve of a specific `evidence_log_id`. **Uploaded video = L2, live camera = L3.**
+## Run and verify
 
-## Gemini API Guidelines
-- Before writing Gemini API code, consult the `geminiDocs` MCP server (`gemini_search_docs` / `gemini_get_doc`) or https://aistudio.google.com/llms.txt, and load the `gemini-api-dev` skill.
-- Always use the current Google Gen AI SDK (`@google/genai` ≥ 3.2.0 for TypeScript). **Never** legacy SDKs (`@google/generative-ai`, `google-generativeai`).
-- Use the **Interactions API** (`client.interactions.create`) for extraction/generation; set `store: false` for all patient media (privacy).
-- Use the **Decisions API** (`ai.decisions.create`, `new GoogleGenAI({ apiVersion: "v1beta" })`, model `gemini-decision-1`) for calibrated `noul` / `choice` / `score` gates — 0 output tokens; use the returned `confidence`.
-- Current models: `gemini-4-hydrogen` (default extraction), `gemini-3.5-flash-lite` (fallback), `gemini-decision-1` (gates/scoring). **Never** deprecated `gemini-1.5-*` / `2.0-*` / `2.5-*`. Read model IDs from env (`GEMINI_MODEL`, `GEMINI_DECISION_MODEL`).
-- Decisions API: one narrow question per key; full question text in `instructions` (keys are invisible to the model); describe every `choice` option and ordered `score` level; thresholds inside 0.01–0.99; group related questions into one call; no context caching / batch support.
+- Node ≥22. Run `npm ci`, then `npm run dev`. Set `DEMO_MODE=true` and a random `SESSION_SECRET` of at least 32 characters in ignored `.env.local`. The judge workflow needs a populated schema and an isolated database. With no DB, only role/session navigation is available.
+- Use a verified non-production Neon branch. Check its identity before using `psql` with the direct URL and [schema.sql](schema.sql). Use the pooled URL for the web app. A checkout name does not identify its database.
+- Run `npm run verify` for types, lint, units and a production build. Run `npm run e2e` for session smoke. Supply the isolated branch as `SHIFO_E2E_DATABASE_URL` for the DB-backed browser suite. Add `SHIFO_E2E_LIVE_GEMINI=1` and a Gemini key for the optional live synthetic-box test. Record the actual selection and results.
+- For Telegram, run `uv sync --project services/telegram_bot --locked` and `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests`. Full web E2E uses this service with a mock Telegram transport. After Android changes run `./gradlew :app:assembleDebug :app:lintDebug :app:connectedDebugAndroidTest` in `android/` with a device.
+- Before release, complete the [judge checklist](tasks/task-2/README.md) in a fresh browser on the intended URL. Preserve the existing public link through the end of the Grand Final.
 
-## Engines you build (study the archive, port the good parts, modernize + test)
-Reference archive (read-only): `~/Projects/uzhack-reference-20261117.tar.zst` — extract into a temp dir to study the old lanes:
-- `uzhack-agent-opencode/src/lib/pose.ts` + `src/components/ExerciseClient.tsx` — MediaPipe state machine (5-frame smoothing, hysteresis `WAITING→STANDING→DESCENDING→BOTTOM→ASCENDING→STANDING`), valid vs shallow reps, confidence, hip–knee–ankle angle on the better-visible side.
-- `uzhack-agent-opencode/src/app/api/ai/ocr/route.ts` — OCR flow (client downscale 1600px, rate limit, model fallback, patient confirmation).
-- `uzhack-agent-pi/src/components/patient/TaskCards.tsx` — tonometer OCR UX (**fix its bug**: unreadable photo must NOT set `ocrOk=true`).
-- `uzhack-agent-claude/tests/rules.test.ts` — 25 deterministic rule tests to port & extend.
-- `uzhack-agent-claude/schema.sql` — archived normalized schema for reference.
+## Code map and extension points
 
-Old bugs you must **not** reproduce: approving the patient's *latest* log instead of the reviewed `logId`; uploaded video marked L3; motion signature stored but never compared; unreadable OCR accepted as a match; hardcoded date strings; doctor thresholds ignored by the rules engine; fake `setInterval` "MediaPipe"; silent fake OCR fallbacks.
+| Change | Files and constraints |
+|---|---|
+| Roles and requests | `src/lib/demo-session.ts` signs the browser workspace and role. `seed.ts` provisions its synthetic actors. Web mutations in `src/app/api/demo` validate role and origin. Scope SQL by workspace, patient and doctor. |
+| Task types | Start with `schema.sql`, `src/lib/clinical-types.ts`, `clinical-inputs.ts` and `clinical-store.ts`. Add Zod input/read contracts, idempotent writes, dated instances, doctor/patient views under `src/components`, and explicit adherence/caregiver inclusion rules. The present schema admits one medication and one vitals item per plan. Exercise and steps have separate stores. |
+| Rules and evidence | Extend `src/lib/rules`, then `prepareEvidence` and the queue label/details for each new reason. Test both sides of the doctor's threshold, equal values, missing data, retries and workspace isolation. Use the scheduled day in `Asia/Tashkent`. Distinguish completed, reported missed and unanswered. |
+| AI and devices | Pose and motion comparison live in `src/lib/pose` and `anticheat`. DoriMos uses `src/lib/ai` with synthetic fixtures. Read current Gemini docs and the Gemini API skill before changing it. Use the pinned Google Gen AI SDK, quality gate, extraction with `store: false`, patient confirmation and manual fallback. Android calls `/api/mobile/v1`. Python Telegram runs independently in `services/telegram_bot`. |
 
-Deliverable per engine: implementation + Vitest unit tests + `docs/INTERFACES.md` entry + (where relevant) a **real** benchmark run recorded in `docs/BENCHMARK.md`.
+## Definition of done
 
-## Database & env for your lane
-- Use the **Neon branch `codex-dev`** (isolated from production data). This worktree's `.env.local` `DATABASE_URL` points to it. Never run seeds/migrations against the production branch.
-- Skills: `neon-postgres` / `neon` (branch ops), `context7-mcp` (any library API), `test-driven-development`, `webapp-testing`, `debugging-and-error-recovery`, `security-and-hardening`, `source-driven-development`.
-- MCPs configured in `~/.codex/config.toml`: `geminiDocs`, `context7`.
+AI measures, deterministic rules flag, the doctor decides. Preserve source and `ai_mode`. Uncertain input gets a retake or manual entry. Uploaded confirmed video is L2, eligible live camera is L3. Only doctor approval of the selected evidence log promotes it to L4. Keep internal notes private. Show all simulations and the limits of measurements in the UI and submission note.
 
-## Verify gate before every push
-`npm run verify` (typecheck + lint + unit tests + build) and `npm run e2e` smoke must pass. Report **real** results in the commit message / PR description. If a check fails: fix it or report it — never silence, skip, or fake it.
-
-Android kodi o‘zgarganda debug APK, Android lint va native UI testlarini tekshiring.
-
-## Maintaining this file
-After a milestone or recurring issue, propose the exact `AGENTS.md` edit and its reason. Apply it only after the user explicitly approves that change.
+Document typed, Zod-validated public engine exports in [INTERFACES](docs/INTERFACES.md). Add a regression test for changed behavior and benchmark real measurements in [BENCHMARK](docs/BENCHMARK.md). Read installed Next.js guides and use Context7 for library API changes. Commit without AI co-author trailers.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

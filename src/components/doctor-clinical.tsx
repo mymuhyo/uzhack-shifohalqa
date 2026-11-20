@@ -73,7 +73,7 @@ function PlanAssignment({ patientName }: { patientName: string }) {
           </div>
         </fieldset>
         <label className={styles.checkbox}>
-          <input name="supplyFollowUp" type="checkbox" value="yes" />
+          <input name="supplyFollowUp" type="checkbox" value="yes" defaultChecked />
           <span>«Dori tugadi» xabarini tekshiruv navbatiga chiqarish</span>
         </label>
         <button className={styles.submit} type="submit">Rejani biriktirish</button>
@@ -216,7 +216,7 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
       <div>
         <section className={styles.panel} aria-labelledby="queue-heading">
           <h2 id="queue-heading">Bemorlar navbati</h2>
-          <p className={styles.hint}>{patientName} · Ochiq qaydlar ({openFlags.length})</p>
+          <p className={styles.hint}>{patientName} · Dori va bosim bo‘yicha ochiq qaydlar ({openFlags.length})</p>
           {openFlags.length > 0 ? (
             <ul role="list" className={styles.queue}>{openFlags.map((flag) => <QueueEntry key={flag.id} flag={flag} />)}</ul>
           ) : (

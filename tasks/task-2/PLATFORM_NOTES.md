@@ -1,6 +1,6 @@
 # ShifoHalqa · Task 2 holati
 
-20-noyabr 2026 · Vercel `main` relizi `17624a1`. [Ochiq demo manzili](https://shifohalqa.vercel.app/) · [Platform formasi uchun matn](SUBMISSION.md)
+20-noyabr 2026 · Quyida avvalgi reliz tekshiruvlari ham saqlangan. Eng so‘nggi mustaqil ommaviy sinov [auditda](../../docs/AUDIT.md). [Ochiq demo manzili](https://shifohalqa.vercel.app/) · [Platform formasi uchun matn](SUBMISSION.md)
 
 | Oqim | Holat |
 |---|---|
@@ -16,7 +16,7 @@
 
 ## Demo ketma-ketligi
 
-1. Shifokor sifatida kirib, rejada «Dori tugadi» xabarini tekshiruv navbatiga chiqarish bandini yoqing va rejani biriktiring.
+1. Shifokor sifatida kirib, rejada «Dori tugadi» xabarini tekshiruv navbatiga chiqarish bandi yoqilganini tekshiring va rejani biriktiring.
 2. Bemor roliga o‘ting. «Icha olmadim» ostidan «Dori tugadi»ni tanlab yuboring. Ikkinchi dalil uchun shifokor belgilagan yuqori bosim chegarasiga teng namunaviy qiymat kiriting.
 3. Shifokor roliga qayting. Navbatdan «Dori tugadi»ni oching, bemorga javob yozing va tasdiqlang. Shu qayd L4, bosim qaydi L0 bo‘lib qoladi.
 4. Bemor rolida aynan dori qaydi ostidagi javobni ko‘ring.

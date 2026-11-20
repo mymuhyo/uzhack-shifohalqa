@@ -1,5 +1,7 @@
 # ShifoHalqa · Task 2 ish rejasi
 
+A–I bosqichlari va avvalgi qabul natijalari shu yerda. Asosiy papka, joriy V2 ishlari va chiqarish qarori [V2 rejasida](docs/V2_PLAN.md).
+
 **19-noyabr 2026. Task 1 topshirilgan** (jamoa xabari). **Task 2 — 22-noyabr.** Ish jadvali bo‘yicha oxirgi vaqt 23:59 MYT / 20:59 UZT. Tashkilotchi sayti 22-noyabrni tasdiqlaydi. Topshirishda Platform ko‘rsatgan vaqt ustuvor. Mahalliy brief v1.0 dagi 12/15-noyabr sanalari eski. Hakam brauzerda kamida bitta ishni boshidan oxirigacha bajarishi kerak. Task 2 umumiy ballning 70 foizi. [UzHack](https://uzhack.uz/en) · [Rasmiy shartlar](https://uzhack.uz/en/terms) · [Brief, §3–4](brief/uzhack-online-stage-tasks-en.pdf)
 
 **Birinchi demo.** Shifokor Anvar aka uchun uy rejasini biriktiradi. Bemor telefonida «Icha olmadim → Dori tugadi» deb belgilaydi. Shifokor navbatda sababni ko‘radi, aynan shu yozuvni ochib bemorga keyingi qadam haqida xabar qoldiradi. Bemor «Shifokor ko‘rib chiqdi» degan holatni va unga yozilgan xabarni ko‘radi. Bu yo‘l kamera, Telegram va bulutdagi AI kalitisiz ham to‘liq ishlashi kerak. Ikkinchi demo shu navbatga haqiqiy brauzer o‘lchovini olib keladi.

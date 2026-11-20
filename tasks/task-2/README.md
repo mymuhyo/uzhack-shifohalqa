@@ -1,31 +1,17 @@
-# Task 2 — MVP (22-noyabr 2026, 23:59 MYT / 20:59 UZT)
+# Task 2 · Hakam checklisti
 
-**Holat.** Vercel `main` relizida yangi, toza brauzer sessiyasida reja → «Dori tugadi» → shifokor ko‘rigi → bemorga L4 va javob oqimi o‘tdi. [Ochiq demo](https://shifohalqa.vercel.app/) · [Sinov va topshirish tafsilotlari](PLATFORM_NOTES.md) · [Platform formasi uchun matn](SUBMISSION.md)
+[Ochiq demo](https://shifohalqa.vercel.app/) · [Platformaga qo‘yiladigan qisqa inglizcha matn](SUBMISSION.md) · [Ommaviy sinov dalillari](../../docs/AUDIT.md)
 
-## Brief talablari (`brief/uzhack-online-stage-tasks-en.pdf`, §3.2, §3.4, §5.1.2)
-- [x] Ishlaydigan HTTPS havola va **demo rollari** toza brauzer sessiyasida ochildi
-- [x] Lokal buildda reja → vazifa → dalil → bayroq → shifokor L4 → bemor javobi E2E sinovdan o‘tdi
-- [x] Ishlaydigan va sintetik qismlar izohi hamda AI-use note tayyor
-- [ ] Har a’zo MVP oqimini tushuntirib bera olishini jamoa tekshiradi
-- [ ] Havola **Grand Finalgacha** ishlab turishi kerak
+## Topshirishdan oldin
 
-## Baholash (100 ball)
-Innovation 25 · Technical execution 25 · Practicality 20 · Impact 20 · Presentation 10 → `competition/RUBRIC.md`
+Har yakuniy relizda toza Incognito oynada ushbu ketma-ketlikni bajaring. 20-noyabrdagi mavjud ommaviy reliz shu oqimdan o‘tdi. Lokal V2 natijalari [V2 rejasida](../../docs/V2_PLAN.md).
 
-## Topshirish checklist (Faza 5)
-- [x] `PLATFORM_NOTES.md` ishlaydigan, sintetik va keyingi bosqichdagi qismlarni bayon qiladi
-- [x] AI-use note Codex, MediaPipe va ishlatilgan Gemini modellarini ko‘rsatadi
-- [x] Hakam uchun ikki rol tugmasi (`/`), `/about`, demo reset va to‘rtta ko‘rinadigan quti namunasi
-- [x] Amalda o‘lchangan MediaPipe va DoriMos benchmarklari
-- [x] Lokal production build, 123 veb va 18 Python unit testi, Neon `codex-dev` bilan 14 ta Chromium E2E. DoriMos haqiqiy Gemini bilan, Telegram yetkazilishi mock transport bilan sinaldi.
-- [x] `@shifohalqa_bot` Railway HTTPS webhookiga bog‘landi va sintetik `/bugun` so‘rovi ishladi
-- [ ] Shaxsiy Telegram chatida bitta sintetik qizil qayd yetib kelishini qabul qilish
-- [x] Production HTTPS havolasida yangi sintetik ish joyidagi asosiy dori oqimi oxirigacha sinaldi
-- [x] Ochiq demo havolasida DoriMos xira va mos kelmaydigan namunalari hamda «Yaqinim» havolasini bekor qilish yangi sintetik sessiyalarda sinaldi
-- [ ] Haqiqiy telefonda jonli kamera qabul sinovi, natijani `docs/BENCHMARK.md` ga qo‘shish
-- [ ] Platformga havola va demo izohlarini joylash
-
-## Eslatmalar
-- MediaPipe jonli kamerasi uchun HTTPS va brauzer ruxsati kerak. Yuklangan video tasdiqlansa L2 sifatida saqlanadi.
-- Gemini ishlamay qolsa, bemor tekshirilmagan qutini L0 sifatida qayd eta oladi.
-- Topshirishdan so‘ng jamoa havolaning Incognito oynada va Grand Finalgacha ochiqligini tekshiradi.
+- [ ] HTTPS bosh sahifasi va «Demo haqida» ochiladi. APK, parol, kamera yoki Telegram so‘ralmasdan ikkala demo roli ishlaydi. Shifokor va bemorni bir xil oynada almashtiring.
+- [ ] **Shifokor sifatida kirish** → «Dori tugadi» bandi yoqilganini tekshirish → **Rejani biriktirish**.
+- [ ] **Bemor sifatida kirish** → **Icha olmadim** → **Dori tugadi** → **Sababni yuborish**. Alohida ikkinchi qayd uchun faqat sintetik misol sifatida bosimni rejaning kuzatuv chegarasida kiriting.
+- [ ] **Shifokor** → «Dori tugadi» → **Ko‘rib chiqish** → **Bemorga javob** → **Qaydni tasdiqlash**. **Bemor** rolida o‘sha dori qaydida javob va L4 bor. Ikkinchi bosim qaydi L0 bo‘lib qolgan.
+- [ ] Ixtiyoriy «Yaqinim» ssenariysi uchun bemor ulashishni yoqadi. Boshqa brauzer/profilda uchta kunlik hisob ko‘rinadi. Bemor ulashishni o‘chiradi va o‘sha havola qayta ochilganda yopiq bo‘ladi.
+- [ ] **Simulyatsiya izohi** matnda va ekranda mos. Bemor, shifokor, reja va dori qutilari sintetik. CDC mashqi yozib olingan namuna, tasdiqlangan video L2. Jismoniy kamera qabul natijasi faqat haqiqiy qurilmada o‘lchangach yoziladi.
+- [ ] **AI-use note** bor. Codex dasturlash va tekshiruvda, MediaPipe brauzerdagi harakatni o‘lchashda, Gemini sintetik quti sifatini tekshirish va yozuvini o‘qishda ishlatilgan. Shartli bayroqni qoidalar hisoblaydi, javobni shifokor yozadi.
+- [ ] Jamoa kabinetida Task 2 sanasi, soati va mintaqasini tekshiradi. Ochiq FAQ 22-noyabrni ko‘rsatadi. Jamoa 22-noyabr 23:59 MYT (20:59 UZT) vaqtini tasdiqladi. Jamoa havola va [submission matni](SUBMISSION.md)ni yuborib, Platform qabul tasdig‘ini saqlaydi. [FAQ](https://uzhack.uz/en#faq) · [Platform](https://uzhack.uz/en/login)
+- [ ] Grand Final yakunigacha mas’ul a’zo domen, Vercel va Neon holatini kuzatadi. Har relizdan keyin yangi Incognito oynada asosiy oqimni takrorlaydi. O‘chirilishi mumkin bo‘lgan test filiali faqat lokal ishlash uchun.

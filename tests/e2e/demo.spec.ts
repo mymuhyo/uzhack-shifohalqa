@@ -36,8 +36,12 @@ test('protects role pages and opens the doctor role by keyboard on a narrow scre
   await expect(page.getByRole('button', { name: 'Shifokor sifatida kirish' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/doctor');
+  await expect(page.getByRole('link', { name: 'Rolni almashtirish' })).toBeInViewport();
+  await page.getByRole('link', { name: 'Rolni almashtirish' }).click();
+  await page.getByRole('button', { name: 'Bemor sifatida kirish' }).click();
+  await expect(page.getByRole('link', { name: 'Rolni almashtirish' })).toBeInViewport();
 
-  await page.goto('/patient');
+  await page.goto('/doctor');
   await expect(page).toHaveURL('/');
 });
 

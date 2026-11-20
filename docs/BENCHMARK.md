@@ -46,3 +46,14 @@ Ilova tasdiqlanmagan OCR natijasini dalilga aylantirmaydi. Bemor tasdiqlagan mos
 20-noyabr 2026 (MYT) · Samsung SM-S928B, Android 17 (API 37) · native debug APK · tizim animatsiyalari 1×. Mustaqil demoda «Bugun» va «Javoblar» orasida besh marta ikki tomonlama o‘tish bajarildi. Ilovaga tegishli `dumpsys gfxinfo` o‘lchovida 486 kadrdan 10 tasi muddatidan kechikdi (2,06%). Kadr vaqti p50 5 ms, p95 8 ms va p99 36 ms. Bu raqamlar shu telefon va shu o‘tishlar uchun olingan.
 
 Ulangan demoda shu telefonda «Icha olmadim» oynasini ochish, sabab tanlash va qaydni server javobi bilan yopish ikki marta o‘lchandi. Birinchi urinishda 211 kadrdan 9 tasi kechikdi (4,27%). Kadr vaqti p50 5 ms, p95 11 ms va p99 40 ms. Ikkinchisida 231 kadrdan 11 tasi kechikdi (4,76%). Kadr vaqti p50 5 ms, p95 12 ms va p99 36 ms.
+
+### Lokal V2 · sintetik 10 mg quti
+
+20-noyabr. Birinchi to‘liq Chromium sinovida o‘qiladigan quti `manual` qaytardi. Xuddi shu eski vaqt sozlamasi bilan alohida qayta o‘lchashda sifat so‘rovi HTTP 200 (1 010 ms), birinchi model so‘rovi timeout (6 962 ms), zaxira model so‘rovi HTTP 200 (3 858 ms) bo‘ldi. Natija `needs_confirmation`, jami 11 886 ms. Bu bitta ishlash tezligi kuzatuvi. Birinchi model oynasi 5 soniyaga tushirilgach, alohida urinishda sifat so‘rovi HTTP 200 (793 ms), birinchi model HTTP 503 (3 013 ms) qaytardi, zaxira so‘rovi esa qolgan 8 170 ms ichida tugamadi. V2 sifat talabini saqlab, umumiy limitni 18 soniyaga uzaytiradi.
+
+
+Yangi limitda to‘liq brauzer sinovi o‘tdi. Xira sintetik quti qayta urinishga yuborildi. 10 mg quti o‘qildi, bemor tasdiqlagach 5 mg namunaviy rejadan farqi shifokor navbatiga tushdi. Bitta brauzer ssenariysining umumiy vaqti 17,4 s. Bu alohida API javobi vaqti yoki xizmat darajasi ko‘rsatkichi sifatida ishlatilmaydi.
+
+### Lokal V2 · yozilgan CDC klipi
+
+Avval ikki worker ostidagi bitta Chromium ishga tushirishda 1 to‘liq va 1 chala takror qaytdi. Kadrlar taqdimot vaqtiga bog‘lanib qolgan ekan. V2 yozilgan klipni 80 ms oralig‘idagi media nuqtalari bo‘yicha izlaydi va bir xil dekodlangan kadrni ikkinchi marta sanamaydi. To‘liq suite va uchta alohida takrorda har safar **2 to‘liq, 0 chala, 109 kadr, 0,861 ishonch, 88,3°**. Tugmadan natijagacha 9 130, 10 754, 10 836 va 8 688 ms o‘lchandi. Bu bitta klip va Chromium uchun natija. Kamera ochiq turgan jismoniy telefon shu V2 tekshiruviga kirmadi. [Sinov](../tests/e2e/exercise.spec.ts)

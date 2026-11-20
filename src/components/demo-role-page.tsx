@@ -50,7 +50,10 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
     <main className="frame content" id="content" tabIndex={-1}>
       <h1>{titles[role]}</h1>
       <p className="lede">{workspace?.[role].name ?? names[role]} · Namuna foydalanuvchi</p>
-      {role === 'patient' && <a className="emergency" href="tel:103">Tez yordam · 103</a>}
+      <div className="role-actions">
+        {role === 'patient' && <a className="emergency" href="tel:103">Tez yordam · 103</a>}
+        <Link className="text-action" href="/">Rolni almashtirish</Link>
+      </div>
       {message && <p className="notice" role={result === 'already_saved' ? 'status' : 'alert'}>{message}</p>}
       {view === null && (
         <p className="notice" role={storageUnavailable ? 'alert' : undefined}>
@@ -68,7 +71,6 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
       {view && role === 'patient' && <PatientTelegramPanel />}
       <div className="role-actions">
         {role === 'patient' && <Link className="text-action" href="/patient/exercise">O‘tirib-turish mashqi</Link>}
-        <Link className="text-action" href="/">Rolni almashtirish</Link>
         <form action="/api/demo/logout" method="post">
           <button className="text-action" type="submit">Demodan chiqish</button>
         </form>

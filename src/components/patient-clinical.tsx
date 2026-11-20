@@ -141,7 +141,8 @@ function PatientTask({ task, today, boxStrengthKnown }: { task: ClinicalTask; to
 export function PatientClinical({ view }: { view: ClinicalView }) {
   const today = localDate.format(new Date());
   const todayTasks = view.tasks.filter((task) => task.date === today);
-  const pastTasks = view.tasks.filter((task) => task.date < today && (task.evidence !== null || task.boxEvidence !== null));
+  const pastTasks = view.tasks.filter((task) => task.date < today && !task.lateReview && (task.evidence !== null || task.boxEvidence !== null));
+  const lateReplies = view.tasks.filter((task) => task.lateReview);
   const boxStrengthKnown = view.plan?.medicationStrengthMg != null;
 
   return (
@@ -154,14 +155,17 @@ export function PatientClinical({ view }: { view: ClinicalView }) {
           </ul>
         ) : <p>Hozircha vazifa biriktirilmagan.</p>}
       </section>
-      {pastTasks.length > 0 && (
-        <section>
-          <h2>Oldingi qaydlar</h2>
+      {[
+        { title: 'Eski qaydlarga yangi javoblar', tasks: lateReplies },
+        { title: 'Oldingi qaydlar', tasks: pastTasks },
+      ].filter(({ tasks }) => tasks.length > 0).map(({ title, tasks }) => (
+        <section key={title} aria-label={title}>
+          <h2>{title}</h2>
           <ul className={styles.tasks}>
-            {pastTasks.map((task) => <PatientTask key={task.id} task={task} today={false} boxStrengthKnown={boxStrengthKnown} />)}
+            {tasks.map((task) => <PatientTask key={task.id} task={task} today={false} boxStrengthKnown={boxStrengthKnown} />)}
           </ul>
         </section>
-      )}
+      ))}
     </div>
   );
 }

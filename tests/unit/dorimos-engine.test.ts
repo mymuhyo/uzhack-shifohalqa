@@ -122,7 +122,7 @@ describe('DoriMos reading', () => {
     expect(sdk.interaction).not.toHaveBeenCalled();
   });
 
-  it('applies one 12-second deadline and does not attempt another model on expiry', async () => {
+  it('applies one 18-second deadline and does not attempt another model on expiry', async () => {
     const controller = new AbortController();
     const timer = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
     sdk.interaction.mockImplementationOnce(() => {
@@ -130,7 +130,7 @@ describe('DoriMos reading', () => {
       return Promise.reject(new DOMException('timeout', 'TimeoutError'));
     });
     await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'manual', reason: 'timeout' });
-    expect(timer).toHaveBeenCalledWith(12_000);
+    expect(timer).toHaveBeenCalledWith(18_000);
     expect(sdk.decision.mock.calls[0][1].signal).toBe(controller.signal);
     expect(sdk.interaction.mock.calls[0][1].signal.reason).toBe(controller.signal.reason);
     expect(sdk.interaction).toHaveBeenCalledOnce();
@@ -139,7 +139,7 @@ describe('DoriMos reading', () => {
   it('uses the reserved fallback time when only the primary model window expires', async () => {
     const overall = new AbortController();
     const primary = new AbortController();
-    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => ms === 8_000 ? primary.signal : overall.signal);
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => ms === 5_000 ? primary.signal : overall.signal);
     sdk.interaction.mockImplementationOnce(() => {
       primary.abort();
       return Promise.reject(primary.signal.reason);

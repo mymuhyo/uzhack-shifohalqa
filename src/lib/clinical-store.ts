@@ -157,6 +157,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
         AND (task.scheduled_date = local_date.today
           OR (task.scheduled_date < local_date.today AND evidence.id IS NOT NULL
             AND (task.scheduled_date >= local_date.today - 6
+              OR (flag.reviewed_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
               OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND flag.decision IS NULL))))
       ORDER BY task.scheduled_date DESC, item.due_time, item.type
     `,
@@ -175,17 +176,18 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
         review: task.decision ? resolvedFields.parse(row) : null,
       };
     }
-    if (task.recent) {
+    if (task.recent || (actor.role === 'patient' && evidence?.review)) {
       let item = visibleTasks.get(task.taskId);
       if (!item) {
         item = { id: task.taskId, type: task.type, title: task.title, date: task.date,
           dueTime: task.dueTime, status: task.status, evidence: null, boxEvidence: null };
+        if (!task.recent) item.lateReview = true;
         visibleTasks.set(task.taskId, item);
       }
       if (evidence?.payload.kind === 'medication_box') item.boxEvidence = evidence;
       else if (evidence) item.evidence = evidence;
     }
-    if (actor.role === 'doctor' && evidence && task.flagId && (task.recent || !task.decision)) {
+    if (actor.role === 'doctor' && evidence && task.flagId) {
       const { detail, ...flag } = flagFields.parse(row);
       view.flags.push({ ...flag, ...detail, id: task.flagId, evidence });
     }

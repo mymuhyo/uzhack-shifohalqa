@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import type { ExerciseInput } from '@/lib/exercise-inputs';
 import { exerciseSample } from '@/lib/exercise-sample';
 import { createPoseTracker } from '@/lib/pose/engine';
+import { sampleRecordedFrames } from '@/lib/pose/recorded-frames';
 import styles from './exercise-client.module.css';
 
 type Source = 'live_camera' | 'uploaded_video';
@@ -16,6 +17,7 @@ type Capture = {
   source: Source;
   video: HTMLVideoElement;
   tracker: Tracker;
+  controller: AbortController;
   landmarker?: PoseLandmarker;
   stream?: MediaStream;
   objectUrl?: string;
@@ -54,6 +56,7 @@ function stopTracks(stream?: MediaStream) {
 function releaseCapture(capture: Capture | null) {
   if (!capture) return;
   const { video, objectUrl } = capture;
+  capture.controller.abort();
   capture.cancelFrame?.();
   capture.removeListeners?.();
   stopTracks(capture.stream);
@@ -160,7 +163,7 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
   function begin(source: Source, message: string): Capture | null {
     if (!videoRef.current || activeCapture.current || request.current) return null;
     const tracker = createPoseTracker({ targetAngle, liveCamera: source === 'live_camera' });
-    const capture = { source, video: videoRef.current, tracker, fileSha256: null };
+    const capture = { source, video: videoRef.current, tracker, controller: new AbortController(), fileSha256: null };
     activeCapture.current = capture;
     setConfirmed(false);
     setSaveStatus(null);
@@ -181,6 +184,42 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Video frame canvas unavailable');
 
+    let framing: Framing | null = source === 'live_camera' ? 'positioning' : null;
+    let lastTrackedTimestamp = -Infinity;
+    const analyze = (timestampMs: number) => {
+      const { videoWidth, videoHeight } = video;
+      if (!videoWidth || !videoHeight) return;
+      const scale = Math.min(1, longestFrameSide / Math.max(videoWidth, videoHeight));
+      const width = Math.max(1, Math.round(videoWidth * scale));
+      const height = Math.max(1, Math.round(videoHeight * scale));
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+
+      context.drawImage(video, 0, 0, width, height);
+      const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
+      tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
+      if (framing !== null) {
+        if (tracker.isTracking()) {
+          framing = 'tracking';
+          lastTrackedTimestamp = timestampMs;
+        } else if (framing === 'tracking' && timestampMs - lastTrackedTimestamp >= framingLostDelayMs) {
+          framing = 'lost';
+        }
+      }
+      const { validReps, shallowReps } = tracker.result();
+      const currentFraming = framing;
+      setScreen((current) => current.phase === 'running' && (
+        currentFraming !== current.framing || validReps !== current.validReps || shallowReps !== current.shallowReps
+      ) ? { phase: 'running', source, framing: currentFraming, validReps, shallowReps } : current);
+    };
+    setScreen({ phase: 'running', source, framing, validReps: 0, shallowReps: 0 });
+
+    if (source === 'uploaded_video') {
+      await sampleRecordedFrames(video, minimumFrameIntervalMs, capture.controller.signal, analyze);
+      finish(capture);
+      return;
+    }
+
     const onEnded = () => finish(capture);
     const onError = () => fallback(capture, 'Video o‘qilmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.');
     video.addEventListener('ended', onEnded);
@@ -189,43 +228,17 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onError);
     };
-
     await video.play();
     if (activeCapture.current !== capture) return;
-    let framing: Framing | null = source === 'live_camera' ? 'positioning' : null;
-    setScreen({ phase: 'running', source, framing, validReps: 0, shallowReps: 0 });
 
     let previousTimestamp = -Infinity;
-    let lastTrackedTimestamp = -Infinity;
     function onFrame(timeSeconds: number) {
       if (activeCapture.current !== capture) return;
       const timestampMs = Math.round(timeSeconds * 1000);
-      const { videoWidth, videoHeight } = video;
-      if (context && videoWidth && videoHeight && timestampMs - previousTimestamp >= minimumFrameIntervalMs) {
+      if (timestampMs - previousTimestamp >= minimumFrameIntervalMs) {
         previousTimestamp = timestampMs;
-        const scale = Math.min(1, longestFrameSide / Math.max(videoWidth, videoHeight));
-        const width = Math.max(1, Math.round(videoWidth * scale));
-        const height = Math.max(1, Math.round(videoHeight * scale));
-        if (canvas.width !== width) canvas.width = width;
-        if (canvas.height !== height) canvas.height = height;
-
         try {
-          context.drawImage(video, 0, 0, width, height);
-          const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
-          tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
-          if (framing !== null) {
-            if (tracker.isTracking()) {
-              framing = 'tracking';
-              lastTrackedTimestamp = timestampMs;
-            } else if (framing === 'tracking' && timestampMs - lastTrackedTimestamp >= framingLostDelayMs) {
-              framing = 'lost';
-            }
-          }
-          const { validReps, shallowReps } = tracker.result();
-          const currentFraming = framing;
-          setScreen((current) => current.phase === 'running' && (
-            currentFraming !== current.framing || validReps !== current.validReps || shallowReps !== current.shallowReps
-          ) ? { phase: 'running', source, framing: currentFraming, validReps, shallowReps } : current);
+          analyze(timestampMs);
         } catch {
           fallback(capture, 'Kadrlarni tahlil qilib bo‘lmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.');
           return;
@@ -306,7 +319,7 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
     const capture = begin('uploaded_video', 'CDC namuna videosi tayyorlanmoqda…');
     if (!capture) return;
     try {
-      const response = await fetch(exerciseSample.path);
+      const response = await fetch(exerciseSample.path, { signal: capture.controller.signal });
       if (!response.ok) throw new Error('Demo video is unavailable');
       await analyzeLocalVideo(capture, await response.blob());
     } catch {
@@ -371,7 +384,7 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
           <button className={styles.primary} type="button" disabled={saving} onClick={startCamera}>Kamerani boshlash</button>
         ) : (
           <button className={styles.primary} type="button" onClick={() => {
-            if (screen.phase === 'running' && activeCapture.current) finish(activeCapture.current);
+            if (screen.phase === 'running' && activeCapture.current?.source === 'live_camera') finish(activeCapture.current);
             else {
               takeCapture();
               setScreen({ phase: 'idle' });

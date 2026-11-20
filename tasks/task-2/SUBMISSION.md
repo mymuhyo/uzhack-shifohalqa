@@ -4,20 +4,20 @@
 
 https://shifohalqa.vercel.app/
 
-Open the link in a private browser window. The demo uses synthetic patient and doctor profiles. Select **Shifokor sifatida kirish** for the doctor role or **Bemor sifatida kirish** for the patient role. Both roles in the same browser share a demo workspace. Use **Demo haqida → Yangi demo ish joyini boshlash** for a fresh workspace.
+Open the link in a private browser window. The demo uses synthetic patient and doctor profiles. Select **Shifokor sifatida kirish** for the doctor role or **Bemor sifatida kirish** for the patient role. Both roles in the same browser share a demo workspace. For a fresh workspace, disable any active **Yaqinim** share in the patient role, then select **Demo haqida → Yangi demo ish joyini boshlash**.
 
 ## What works
 
-1. As the doctor, enable the **Dori tugadi** notification in the sample plan and select **Rejani biriktirish**.
+1. As the doctor, check that the **Dori tugadi** notification is enabled in the sample plan and select **Rejani biriktirish**.
 2. Return to the home page and open the patient role in the same browser. Select **Icha olmadim → Dori tugadi → Sababni yuborish** to report that the medication ran out.
 3. Switch back to the doctor role. Open **Dori tugadi → Ko‘rib chiqish**, write a reply under **Bemorga javob**, and select **Qaydni tasdiqlash**.
-4. Return to the patient role. The reply and the reviewed evidence level, L4, appear on that medication report.
+4. Return to the patient role. The reply and the reviewed evidence level, L4, appear on that medication report. L4 records the doctor's approval of this report. The patient's clinical outcome is unknown.
 
 The demo also includes manual blood pressure and step entries, daily and weekly plan progress, the revocable **Yaqinim** daily summary link, and a chair-stand exercise. For a camera-free exercise demo, assign **Mashqni biriktirish** as the doctor, then select **O‘tirib-turish mashqi → CDC namunasini sinash** as the patient. The public sample has two complete repetitions. A confirmed sample is labeled L2. MediaPipe processes the video in the browser.
 
 ## What is simulated
 
-The accounts, care plans and DoriMos package images use synthetic examples. DoriMos runs on the supplied images. A blurred image prompts a retry, and the 10 mg example can be reviewed against the sample 5 mg plan. The submission uses the browser app. Native Android and the Telegram service are optional project additions. This demo is designed for synthetic data only.
+The accounts, care plans and DoriMos package images use synthetic examples. The CDC exercise video is prerecorded. Saved reports and replies persist in a separate demo workspace for each browser session. DoriMos runs on the supplied images. A blurred image prompts a retry, and the 10 mg example can be reviewed against the sample 5 mg plan. The submission uses the browser app. Native Android and the Telegram service are optional project additions. This demo is designed for synthetic data only.
 
 ## AI use
 

@@ -72,7 +72,7 @@ export function CaregiverSharingControls({ initialExpiresAt }: { initialExpiresA
           </button>
         )}
       </div>
-      {sharing.expiresAt && <p>Havolani yangilash oldingi havolani bekor qiladi.</p>}
+      {sharing.expiresAt && <p>Havolani yangilash oldingi havolani bekor qiladi. Demodan chiqsangiz ham faol havola muddatigacha ishlaydi. Ulashishni tugatish uchun chiqishdan oldin «Ulashishni o‘chirish»ni bosing.</p>}
       <p role="status" className={styles.feedback}>{feedback}</p>
     </div>
   );

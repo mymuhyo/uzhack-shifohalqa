@@ -24,7 +24,7 @@ test('live DoriMos rejects a blurred sample and reviews the confirmed mismatch o
   const patientConfirm = page.getByRole('button', { name: 'Qutidagi yozuvni tasdiqlash' });
   await sample.selectOption('box-unreadable');
   await check.click();
-  await expect(page.getByText(/Quti yozuvini ishonchli o‘qib bo‘lmadi/)).toBeVisible({ timeout: 18_000 });
+  await expect(page.getByText(/Quti yozuvini ishonchli o‘qib bo‘lmadi/)).toBeVisible({ timeout: 22_000 });
   await expect(patientConfirm).toHaveCount(0);
   await expect(page.getByText('L2', { exact: true })).toHaveCount(0);
 

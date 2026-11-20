@@ -16,6 +16,8 @@ Repodagi Pose Landmarker Lite modeli Google e’lon qilgan `float16/1` fayliga m
 
 Qo‘shimcha API sinovida sintetik o‘lchovlar bilan fayl L2, jonli kamera manbasi L3, past ishonchda qayta urinish, aynan bir faylga rad javobi va o‘xshash harakat signali tekshirildi. Bu sinov kamera aniqligini o‘lchamaydi. Haqiqiy telefon kamerasi, turli burchaklar va bir nechta qo‘lda belgilangan kliplar bilan qabul sinovi ochiq. [Playwright sinovlari](../tests/e2e/exercise.spec.ts)
 
+20-noyabr 2026 (MYT) · Chromium 159.0.8154.6, Linux x64, 390 px viewport. Kamera o‘rnida bo‘sh kadrlar bilan boshlangan va tugagan CDC klipidan `MediaStream` berildi. Avvalgi kod ikki takrorni ko‘rsatdi, «To‘xtatish» bosilganda esa qayta urinish xabarini chiqardi. Tuzatilgan kod tayyorlanish, kuzatish va kadrdan chiqish holatlarini ko‘rsatdi. «To‘xtatish»dan so‘ng ekranda 2 to‘liq, 0 chala takror, 89° va 85% ishonch ko‘rindi. Bu sinov natijani bazaga yuborishdan oldin tugatildi.
+
 ## DoriMos
 
 20-noyabr 2026 (MYT) · `codex/dev` ish daraxti · `@google/genai` 3.6.1 · haqiqiy Gemini API. Oldindan belgilangan 10 ta sintetik PNG har biri bir marta ishlandi. Reja namunasi «Namuna dori 5 mg». Vaqt modelga bog‘liq barcha so‘rovlar uchun o‘lchandi. Ishonch ustunida to‘rtta Decisions javobining eng past confidence qiymati berilgan.

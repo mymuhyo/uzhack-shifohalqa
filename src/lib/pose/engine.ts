@@ -13,12 +13,16 @@ const descendingAngle = 150;
 const meaningfulBottomAngle = 140;
 const angleWindow = 5;
 const minimumVisibility = 0.4;
+const framingVisibility = 0.75;
 const maxFrameGapMs = 750;
 const minCycleMs = 350;
 const maxCycleMs = 15_000;
 const signatureSize = 20;
 const indices = { left: [23, 25, 27], right: [24, 26, 28] } as const;
-const trackerConfig = z.strictObject({ targetAngle: z.number().min(0).max(meaningfulBottomAngle) });
+const trackerConfig = z.strictObject({
+  targetAngle: z.number().min(0).max(meaningfulBottomAngle),
+  liveCamera: z.boolean().default(false),
+});
 
 function isVisible(point?: Landmark): point is Landmark & { visibility: number } {
   return !!point && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1
@@ -78,15 +82,17 @@ function sampleSignature(samples: AngleSample[]): number[] {
   });
 }
 
-export function createPoseTracker(config: { targetAngle: number }) {
-  const { targetAngle } = trackerConfig.parse(config);
+export function createPoseTracker(config: z.input<typeof trackerConfig>) {
+  const { targetAngle, liveCamera } = trackerConfig.parse(config);
   const recentAngles: number[] = [];
+  let measuring = !liveCamera;
   let phase: Phase = 'waiting';
   let trackedSide: Side | null = null;
   let standingSample: AngleSample | null = null;
   let cycle: Cycle | null = null;
   let lastFrameTime = -Infinity;
   let attemptedFrames = 0;
+  let trailingMissedFrames = 0;
   let analyzedFrames = 0;
   let visibilitySum = 0;
   let minAngle: number | null = null;
@@ -100,6 +106,11 @@ export function createPoseTracker(config: { targetAngle: number }) {
     trackedSide = null;
     standingSample = null;
     cycle = null;
+    if (!measuring) {
+      attemptedFrames = 0;
+      analyzedFrames = 0;
+      visibilitySum = 0;
+    }
   }
 
   function advance(sample: AngleSample, rawAngle: number) {
@@ -145,21 +156,25 @@ export function createPoseTracker(config: { targetAngle: number }) {
     if (!Number.isFinite(timestampMs) || timestampMs <= lastFrameTime) return;
     if (timestampMs - lastFrameTime > maxFrameGapMs) resetSegment();
     lastFrameTime = timestampMs;
-    attemptedFrames += 1;
 
     const measurement = measureFrame(landmarks, frame, trackedSide);
-    if (!measurement) {
+    if (!measurement || (!measuring && measurement.visibility < framingVisibility)) {
+      attemptedFrames += 1;
+      trailingMissedFrames += 1;
       resetSegment();
       return;
     }
     if (trackedSide && measurement.side !== trackedSide) resetSegment();
     trackedSide = measurement.side;
+    attemptedFrames += 1;
+    trailingMissedFrames = 0;
     analyzedFrames += 1;
     visibilitySum += measurement.visibility;
 
     recentAngles.push(measurement.angle);
     if (recentAngles.length > angleWindow) recentAngles.shift();
     if (recentAngles.length < angleWindow) return;
+    measuring = true;
     const angle = recentAngles.reduce((total, value) => total + value, 0) / angleWindow;
     minAngle = Math.min(minAngle ?? angle, angle);
     advance({ angle, time: timestampMs }, measurement.angle);
@@ -167,13 +182,20 @@ export function createPoseTracker(config: { targetAngle: number }) {
 
   return {
     update,
-    result: () => ({
-      validReps,
-      shallowReps,
-      minAngle,
-      confidence: minAngle === null ? null : visibilitySum / attemptedFrames,
-      motionSignature: motionSignature?.slice() ?? null,
-      analyzedFrames,
-    }),
+    isTracking: () => recentAngles.length === angleWindow,
+    result: () => {
+      // A person may step out of frame to stop the camera after a completed rep.
+      const frames = liveCamera && (validReps > 0 || shallowReps > 0)
+        ? attemptedFrames - trailingMissedFrames
+        : attemptedFrames;
+      return {
+        validReps,
+        shallowReps,
+        minAngle,
+        confidence: minAngle === null ? null : visibilitySum / frames,
+        motionSignature: motionSignature?.slice() ?? null,
+        analyzedFrames,
+      };
+    },
   };
 }

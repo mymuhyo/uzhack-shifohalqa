@@ -131,4 +131,59 @@ describe('sit-to-stand pose tracker', () => {
     expect(tracker.result().confidence).toBeCloseTo(0.48);
     expect(tracker.result().analyzedFrames).toBe(5);
   });
+
+  it('omits camera setup and stopping frames outside a measured repetition', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    for (let index = 0; index < 30; index += 1) {
+      tracker.update([], { ...landscape, timestampMs: index * 50 });
+    }
+    expect(tracker.isTracking()).toBe(false);
+
+    const end = feed(tracker, cycle(95), 1500);
+    expect(tracker.isTracking()).toBe(true);
+    for (let index = 0; index < 30; index += 1) {
+      tracker.update([], { ...landscape, timestampMs: end + index * 50 });
+    }
+
+    expect(tracker.isTracking()).toBe(false);
+    expect(tracker.result()).toMatchObject({ validReps: 1, analyzedFrames: cycle(95).length });
+    expect(tracker.result().confidence).toBeCloseTo(0.96);
+  });
+
+  it('keeps intervening missed live frames in the confidence calculation', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const end = feed(tracker, [172, 172, 172, 172, 172]);
+    for (let index = 0; index < 10; index += 1) {
+      tracker.update([], { ...landscape, timestampMs: end + index * 50 });
+    }
+    feed(tracker, [172, 172, 172, 172, 172], end + 500);
+
+    expect(tracker.result().confidence).toBeCloseTo(0.48);
+    expect(tracker.result().analyzedFrames).toBe(10);
+  });
+
+  it('retains the quality penalty if the camera loses tracking before any completed rep', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const end = feed(tracker, [172, 172, 172, 172, 172]);
+    for (let index = 0; index < 5; index += 1) {
+      tracker.update([], { ...landscape, timestampMs: end + index * 50 });
+    }
+
+    expect(tracker.result()).toMatchObject({ validReps: 0, shallowReps: 0 });
+    expect(tracker.result().confidence).toBeCloseTo(0.48);
+  });
+
+  it('waits for a stable, clearly visible leg before starting live measurement', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const end = feed(tracker, [172, 172, 172, 172]);
+    tracker.update(landmarks(172, landscape, 0.65), { ...landscape, timestampMs: end });
+    feed(tracker, [172, 172, 172, 172], end + 50);
+    expect(tracker.isTracking()).toBe(false);
+    expect(tracker.result()).toMatchObject({ confidence: null, minAngle: null });
+
+    feed(tracker, [172], end + 250);
+    expect(tracker.isTracking()).toBe(true);
+    expect(tracker.result()).toMatchObject({ analyzedFrames: 5 });
+    expect(tracker.result().confidence).toBeCloseTo(0.96);
+  });
 });

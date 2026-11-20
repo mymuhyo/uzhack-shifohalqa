@@ -8,6 +8,7 @@ import { createPoseTracker } from '@/lib/pose/engine';
 import styles from './exercise-client.module.css';
 
 type Source = 'live_camera' | 'uploaded_video';
+type Framing = 'positioning' | 'tracking' | 'lost';
 type Tracker = ReturnType<typeof createPoseTracker>;
 type Measurement = ReturnType<Tracker['result']>;
 
@@ -26,7 +27,7 @@ type Capture = {
 type Screen =
   | { phase: 'idle' }
   | { phase: 'starting' | 'retake'; message: string }
-  | { phase: 'running'; source: Source; validReps: number; shallowReps: number }
+  | { phase: 'running'; source: Source; framing: Framing | null; validReps: number; shallowReps: number }
   | { phase: 'result'; source: Source; measurement: Measurement; fileSha256: string | null };
 
 type Report = 'measurement' | 'manual' | 'pain';
@@ -34,10 +35,16 @@ type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message
 
 const maxVideoBytes = 50_000_000;
 const minimumFrameIntervalMs = 80;
+const framingLostDelayMs = 600;
 const longestFrameSide = 640;
 const sourceLabel: Record<Source, string> = {
   live_camera: 'Jonli kamera',
   uploaded_video: 'Yuklangan video',
+};
+const framingMessage: Record<Framing, string> = {
+  positioning: 'Tayyorlaning. Kameraga yon tomoningizni tuting. Son, tizza va to‘piq kadrga sig‘sin.',
+  tracking: 'Tayanch nuqtalar ko‘rinyapti. Tik turgan holatdan boshlang.',
+  lost: 'Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, yon tomoningiz bilan tik turing.',
 };
 
 function stopTracks(stream?: MediaStream) {
@@ -152,7 +159,8 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
 
   function begin(source: Source, message: string): Capture | null {
     if (!videoRef.current || activeCapture.current || request.current) return null;
-    const capture = { source, video: videoRef.current, tracker: createPoseTracker({ targetAngle }), fileSha256: null };
+    const tracker = createPoseTracker({ targetAngle, liveCamera: source === 'live_camera' });
+    const capture = { source, video: videoRef.current, tracker, fileSha256: null };
     activeCapture.current = capture;
     setConfirmed(false);
     setSaveStatus(null);
@@ -184,9 +192,11 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
 
     await video.play();
     if (activeCapture.current !== capture) return;
-    setScreen({ phase: 'running', source, validReps: 0, shallowReps: 0 });
+    let framing: Framing | null = source === 'live_camera' ? 'positioning' : null;
+    setScreen({ phase: 'running', source, framing, validReps: 0, shallowReps: 0 });
 
     let previousTimestamp = -Infinity;
+    let lastTrackedTimestamp = -Infinity;
     function onFrame(timeSeconds: number) {
       if (activeCapture.current !== capture) return;
       const timestampMs = Math.round(timeSeconds * 1000);
@@ -203,10 +213,19 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
           context.drawImage(video, 0, 0, width, height);
           const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
           tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
+          if (framing !== null) {
+            if (tracker.isTracking()) {
+              framing = 'tracking';
+              lastTrackedTimestamp = timestampMs;
+            } else if (framing === 'tracking' && timestampMs - lastTrackedTimestamp >= framingLostDelayMs) {
+              framing = 'lost';
+            }
+          }
           const { validReps, shallowReps } = tracker.result();
+          const currentFraming = framing;
           setScreen((current) => current.phase === 'running' && (
-            validReps !== current.validReps || shallowReps !== current.shallowReps
-          ) ? { phase: 'running', source, validReps, shallowReps } : current);
+            currentFraming !== current.framing || validReps !== current.validReps || shallowReps !== current.shallowReps
+          ) ? { phase: 'running', source, framing: currentFraming, validReps, shallowReps } : current);
         } catch {
           fallback(capture, 'Kadrlarni tahlil qilib bo‘lmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.');
           return;
@@ -363,6 +382,15 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
           <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
         </form>
       </div>
+      {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
+      {screen.phase === 'retake' && <p className={styles.notice} role="status">{screen.message}</p>}
+      {screen.phase === 'running' && (
+        <div>
+          {screen.framing && <p role="status">{framingMessage[screen.framing]}</p>}
+          <output className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.validReps} · Chala {screen.shallowReps}</output>
+        </div>
+      )}
+      <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" hidden={!capturing} aria-label="Mashq videosi" />
       <label className={styles.file} htmlFor="exercise-video">
         Video tanlash (50 MB gacha)
         <input id="exercise-video" type="file" accept="video/*" disabled={capturing || saving} onChange={selectVideo} />
@@ -371,12 +399,6 @@ export function ExerciseClient({ targetAngle }: { targetAngle: number }) {
         <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
         <p>Namuna bemorning kunlik asosiy urinishiga kirmaydi. <a href={exerciseSample.source}>Video manbasi</a></p>
       </div>
-      <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" hidden={!capturing} aria-label="Mashq videosi" />
-      {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
-      {screen.phase === 'retake' && <p className={styles.notice} role="status">{screen.message}</p>}
-      {screen.phase === 'running' && (
-        <output className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.validReps} · Chala {screen.shallowReps}</output>
-      )}
       {screen.phase === 'result' && (
         <div className={styles.result}>
           {screen.fileSha256 === exerciseSample.sha256 && <p>CDC namuna videosi</p>}

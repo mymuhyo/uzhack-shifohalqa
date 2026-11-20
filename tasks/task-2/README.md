@@ -17,10 +17,10 @@ Innovation 25 · Technical execution 25 · Practicality 20 · Impact 20 · Prese
 - [x] AI-use note Codex, MediaPipe va ishlatilgan Gemini modellarini ko‘rsatadi
 - [x] Hakam uchun ikki rol tugmasi (`/`), `/about`, demo reset va to‘rtta ko‘rinadigan quti namunasi
 - [x] Amalda o‘lchangan MediaPipe va DoriMos benchmarklari
-- [x] Lokal production build, 123 veb va 15 Python unit testi, Neon `codex-dev` bilan 14 ta Chromium E2E. DoriMos haqiqiy Gemini bilan, Telegram yetkazilishi mock transport bilan sinaldi.
+- [x] Lokal production build, 123 veb va 18 Python unit testi, Neon `codex-dev` bilan 14 ta Chromium E2E. DoriMos haqiqiy Gemini bilan, Telegram yetkazilishi mock transport bilan sinaldi.
 - [ ] Jonli Telegram demo uchun alohida botni Python servisining HTTPS webhookiga bog‘lash va shaxsiy chatda bitta sintetik qizil qaydni tekshirish
 - [x] Production HTTPS havolasida yangi sintetik ish joyidagi asosiy dori oqimi oxirigacha sinaldi
-- [ ] Ochiq demo havolasida DoriMos xira va mos kelmaydigan namunalarini, «Yaqinim» havolasini bekor qilishni qayta sinash
+- [x] Ochiq demo havolasida DoriMos xira va mos kelmaydigan namunalari hamda «Yaqinim» havolasini bekor qilish yangi sintetik sessiyalarda sinaldi
 - [ ] Haqiqiy telefonda jonli kamera qabul sinovi, natijani `docs/BENCHMARK.md` ga qo‘shish
 - [ ] Platformga havola va demo izohlarini joylash
 

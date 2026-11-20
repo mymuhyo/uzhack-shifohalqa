@@ -101,6 +101,12 @@ uv run --locked --env-file .env.local python -m shifo_telegram.webhook --registe
 
 Shifokor sahifasida «Telegramni ulash»ni bosing va hosil bo‘lgan havolani shaxsiy chatda oching. `/bugun` ShifoHalqa havolasini beradi. Shifokor veb-ilovada yoki `/stop` orqali ulanishni uzishi mumkin. Bot xabaridagi ilova havolasi o‘sha brauzerdagi mavjud demo sessiyasidan foydalanadi. [Telegram kontrakti](docs/INTERFACES.md#telegram)
 
+### Railway Trial
+
+Railway servisiga shu GitHub reposini ulang. Service Root Directory `/services/telegram_bot`, Railway Config File `/services/telegram_bot/railway.toml`. Railpack `uv.lock` orqali bog‘liqliklarni o‘rnatadi. Konfiguratsiya ilovani Railway bergan `$PORT` da ishga tushiradi va `/healthz` javobini kutadi. Demo uchun bitta replika yetadi. Servis veb-so‘rovsiz ham xabar navbatini kuzatadi, shuning uchun alohida uyqu rejimini yoqmang. [Monorepo sozlamasi](https://docs.railway.com/deployments/monorepo) · [Trial chegaralari](https://docs.railway.com/pricing/free-plan)
+
+Servisning Railway Variables bo‘limiga `TELEGRAM_BOT_USERNAME`, `TELEGRAM_APP_URL`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_TOKEN` va sinov bazasining `TELEGRAM_DATABASE_URL` qiymatlarini kiriting. Botning pilot sinovi veb-panel bilan aynan shu bazadan foydalanadi. `schema.sql` dagi Telegram ustunlarini avval ajratilgan bazada tekshiring. Deploy sog‘lom bo‘lgach HTTPS manzilini yarating va `/api/telegram/webhook` ni ro‘yxatdan o‘tkazing. Trial muddati yoki krediti tugashidan oldin jonli webhookni qayerda davom ettirishni kelishing.
+
 ## Android demo
 
 `android/` ni Android Studio’da alohida loyiha sifatida oching. Mustaqil demo oqimida «Bugun» → «Icha olmadim» → «Dori tugadi» → «Qaydni saqlash» → «Qaydni ko‘rish» → «Namuna javobni ochish» ishlaydi. «Ichdim» yo‘li ham bor. Mahalliy qayd qurilmada saqlanadi. «Javoblar» bo‘limidagi «Demoni qayta boshlash» tasdiqdan keyin uni o‘chiradi.

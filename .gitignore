@@ -13,12 +13,18 @@ archive/draft-plan.md
 # Dependencies / build outputs
 node_modules/
 .next/
+next-env.d.ts
+public/models/wasm/
+*.tsbuildinfo
+playwright-report/
+test-results/
 out/
 dist/
 build/
 .venv/
 venv/
 __pycache__/
+.pytest_cache/
 *.py[cod]
 
 # Vercel / Claude local

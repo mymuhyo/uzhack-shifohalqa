@@ -219,6 +219,19 @@ CREATE INDEX IF NOT EXISTS caregiver_audit_patient_idx
 
 CREATE UNIQUE INDEX IF NOT EXISTS flags_workspace_id_idx ON shifohalqa.flags (workspace_id, id);
 
+CREATE TABLE IF NOT EXISTS shifohalqa.android_demo_access (
+  workspace_id uuid PRIMARY KEY,
+  patient_id uuid NOT NULL,
+  pairing_hash text UNIQUE,
+  pairing_expires_at timestamptz,
+  session_hash text UNIQUE,
+  session_expires_at timestamptz,
+  FOREIGN KEY (workspace_id, patient_id)
+    REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE,
+  CHECK ((pairing_hash IS NULL) = (pairing_expires_at IS NULL)),
+  CHECK ((session_hash IS NULL) = (session_expires_at IS NULL))
+);
+
 CREATE TABLE IF NOT EXISTS shifohalqa.telegram_pairings (
   workspace_id uuid NOT NULL,
   doctor_id uuid NOT NULL,

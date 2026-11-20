@@ -19,6 +19,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: databaseUrl,
       DEMO_MODE: 'true',
+      DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
       ...(useLiveOcr ? {} : { GEMINI_API_KEY: '' }),
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       NEXT_TELEMETRY_DISABLED: '1',

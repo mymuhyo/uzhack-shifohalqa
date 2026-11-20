@@ -1,0 +1,7 @@
+<resources>
+    <style name="ShifoTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F5F4ED</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#185443</item>
+    </style>
+</resources>

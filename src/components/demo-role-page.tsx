@@ -3,9 +3,11 @@ import { redirect } from 'next/navigation';
 import { getDemoSession } from '@/lib/demo-session';
 import { ensureDemoWorkspace } from '@/lib/seed';
 import { getClinicalView } from '@/lib/clinical-store';
+import { isAndroidDemoEnabled } from '@/lib/mobile-demo';
 import type { ClinicalActor, ClinicalView } from '@/lib/clinical-types';
 import { CaregiverSharing } from './caregiver-sharing';
 import { DoctorClinical } from './doctor-clinical';
+import { DoctorAndroidPairing } from './doctor-android-pairing';
 import { DoctorExercise } from './doctor-exercise';
 import { DoctorAdherence, PatientAdherence } from './patient-adherence';
 import { PatientClinical } from './patient-clinical';
@@ -56,6 +58,7 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
         </p>
       )}
       {view && role === 'doctor' && <DoctorClinical view={view} patientName={workspace?.patient.name ?? names.patient} />}
+      {view && role === 'doctor' && isAndroidDemoEnabled() && <DoctorAndroidPairing />}
       {view && role === 'patient' && <PatientClinical view={view} />}
       {view && actor && role === 'patient' && <PatientAdherence actor={actor} />}
       {actor && role === 'patient' && <CaregiverSharing actor={actor} />}

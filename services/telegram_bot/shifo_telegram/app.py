@@ -5,11 +5,12 @@ import json
 import logging
 import re
 from contextlib import suppress
-from typing import Literal
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.enums import ChatType
-from aiogram.exceptions import ClientDecodeError, TelegramAPIError, TelegramNetworkError, TelegramServerError
+from aiogram.exceptions import (
+    ClientDecodeError, TelegramAPIError, TelegramNetworkError, TelegramRetryAfter, TelegramServerError,
+)
 from aiogram.filters import Filter
 from aiogram.methods import SendMessage
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
@@ -18,7 +19,7 @@ from aiohttp import web
 from pydantic import ValidationError
 
 from .config import Config
-from .store import TelegramStore, telegram_chat_id_valid, telegram_pair_code_valid
+from .store import DeliveryResult, RetryAfter, TelegramStore, telegram_chat_id_valid, telegram_pair_code_valid
 from .worker import run_delivery_worker
 
 WEBHOOK_PATH = "/api/telegram/webhook"
@@ -75,14 +76,17 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
     router = Router()
 
     @router.message(PrivateCommand(config.bot_username))
-    async def reply(message: Message, command: str, argument: str | None) -> SendMessage:
+    async def reply(message: Message, command: str, argument: str | None, event_update: Update) -> SendMessage | None:
         chat_id = message.chat.id
+        sent_at = int(message.date.timestamp())
         if command == "start" and argument:
-            linked = telegram_pair_code_valid(argument) and await store.redeem_pairing(argument, chat_id)
+            linked = telegram_pair_code_valid(argument) and await store.redeem_pairing(
+                argument, chat_id, sent_at=sent_at, update_id=event_update.update_id,
+            )
             return _message(chat_id, "Telegram xabarlari ulandi." if linked else INVALID_PAIR, config.app_url)
         if command == "stop":
-            await store.disconnect_chat(chat_id)
-            return _message(chat_id, "Telegram xabarlari o‘chirildi.")
+            stopped = await store.disconnect_chat(chat_id, sent_at=sent_at, update_id=event_update.update_id)
+            return _message(chat_id, "Telegram xabarlari o‘chirildi.") if stopped else None
         return _message(chat_id, HELP if command == "help" else TODAY, config.app_url)
 
     dispatcher = Dispatcher()
@@ -90,11 +94,13 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
     return dispatcher
 
 
-async def send_red_notice(bot: Bot, config: Config, chat_id: int) -> Literal["sent", "rejected", "unknown"]:
+async def send_red_notice(bot: Bot, config: Config, chat_id: int) -> DeliveryResult:
     if not telegram_chat_id_valid(chat_id):
         return "rejected"
     try:
         result = await bot(_message(chat_id, RED_NOTICE, config.app_url), request_timeout=3.5)
+    except TelegramRetryAfter as error:
+        return RetryAfter(max(1, error.retry_after))
     except (ClientDecodeError, TelegramNetworkError, TelegramServerError, TimeoutError):
         return "unknown"
     except TelegramAPIError:
@@ -108,7 +114,7 @@ def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Applicatio
     app = web.Application(client_max_size=MAX_WEBHOOK_BYTES)
 
     async def database_and_worker(_: web.Application):
-        async def send(chat_id: int) -> Literal["sent", "rejected", "unknown"]:
+        async def send(chat_id: int) -> DeliveryResult:
             return await send_red_notice(bot, config, chat_id)
 
         try:
@@ -148,7 +154,7 @@ def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Applicatio
         except (UnicodeError, ValueError, RecursionError):
             return web.Response(status=400, headers=NO_STORE)
 
-        if not isinstance(data, dict) or type(data.get("update_id")) is not int or data["update_id"] < 1:
+        if not isinstance(data, dict) or type(data.get("update_id")) is not int or not 0 < data["update_id"] < 2**63:
             return web.Response(headers=NO_STORE)
         try:
             update = Update.model_validate(data, context={"bot": bot})

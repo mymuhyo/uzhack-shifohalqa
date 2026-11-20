@@ -1,0 +1,9 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "sh -c 'TELEGRAM_HOST=0.0.0.0 TELEGRAM_PORT=\"$PORT\" exec python -m shifo_telegram'"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

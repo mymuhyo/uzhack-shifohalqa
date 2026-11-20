@@ -1,6 +1,6 @@
 # ShifoHalqa · Task 2 holati
 
-20-noyabr 2026 · `codex/dev` reliz nomzodi. Ochiq demo manzilini jamoa relizdan keyin Platform maydoniga kiritadi.
+20-noyabr 2026 · Vercel `main` relizi `17624a1`. [Ochiq demo manzili](https://shifohalqa.vercel.app/) · [Platform formasi uchun matn](SUBMISSION.md)
 
 | Oqim | Holat |
 |---|---|
@@ -27,7 +27,7 @@
 
 ## Benchmark va demo chegaralari
 
-- `npm run verify` typecheck, lint, 123 veb unit testi va production builddan o‘tdi. Python botining 15 ta unit testi o‘tdi. Ajratilgan Neon `codex-dev` va haqiqiy Gemini bilan 14 ta Chromium E2E o‘tdi. Telegram mock transporti qizil qayd ikki marta yuborilganda bitta bildirishnoma oldi. DoriMos brauzer sinovi 390 px kenglikda ishladi.
+- `npm run verify` typecheck, lint, 123 veb unit testi va production builddan o‘tdi. Python botining 18 ta unit testi o‘tdi. Ajratilgan Neon `codex-dev` va haqiqiy Gemini bilan 14 ta Chromium E2E o‘tdi. Telegram mock transportida 429 javobiga kutib qayta urinish, bir qaydga bitta bildirishnoma va oldingi `/stop` takrorlanganda yangi ulanish saqlanishi tekshirildi. DoriMos brauzer sinovi 390 px kenglikda ishladi.
 - MediaPipe haqiqiy model bilan ommaviy klipdagi 2 ta to‘liq takrorni topdi. Namuna klipi L2, real telefon kamerasi qabuli jamoada ochiq.
 - DoriMosning yakuniy Gemini sinovida 7 ta o‘qiladigan namuna to‘g‘ri o‘qildi va 3 ta o‘qilmas namuna qayta urinishga yuborildi. O‘qilgan yozuvlar zaxira modeldan qaytdi. Oldingi sinovda 12 soniyalik umumiy limit qo‘lda qayd yo‘lini ishga tushirgani kuzatildi. [O‘lchovlar](../../docs/BENCHMARK.md)
 - Bemor va shifokor profillari hamda DoriMos qutilari sintetik. Real qutini yuklash, tonometr OCR, Teach-Back, Telegram Mini App, Android ommaviy relizi va klinik pilot keyingi bosqichda. Demo ish holati va shifokor javobi bazada saqlanadi.
@@ -39,7 +39,10 @@ Codex, uning subagentlari, Context7 va rasmiy Gemini hujjatlari kodlash hamda te
 
 ## Jamoaga topshirish
 
-1. `codex/dev` reliz o‘zgarishlarini ko‘rib chiqing. Jamoa tasdiqlagan demo reliz muhitida schema va muhit qiymatlarini tekshiring. O‘sha muhitdagi ma’lumotlar sintetik bo‘lsin. Agar avvalgi app shu sxemadan foydalanayotgan bo‘lsa, DDL va yangi buildni kelishilgan bitta reliz oynasida almashtiring.
-2. Jamoa reliz qilgach, ochiq HTTPS manzilini toza brauzerda tekshiring. Hakam kirishi uchun bosh sahifadagi ikkita rol tugmasi yetadi. Real telefonda jonli kamera ruxsati, takrorlar, to‘xtatish va L3 saqlanishini o‘lchang. Qurilma va brauzer versiyasini benchmarkga yozing.
-3. Production manzilida asosiy dori oqimi, xira quti, mos kelmaydigan 10 mg va bekor qilingan «Yaqinim» havolasini qayta sinang. Platformga tekshirilgan URL, rol tugmalari, yuqoridagi demo chegaralari va AI-use izohini kiriting. Ulanish Grand Finalgacha ishlashini jamoa kuzatadi.
-4. Telegramni jonli ulashdan oldin `429` javobidan keyingi qayta urinish va takror yuborilgan `/stop` xabaridan keyin yangi ulanish saqlanishini tekshiring. Ommaviy HTTPS servisda jonli webhook va bitta sintetik bildirishnoma sinovini bajaring.
+Ochiq relizda bosh sahifa va `/about` 200 javob berdi. Birinchi toza Chromium sinovida shifokor roli ochildi va panel «Demo ma’lumotlarini ochib bo‘lmadi» xabarini ko‘rsatdi. Neon `main` katalogida `shifohalqa` sxemasi yo‘qligi tasdiqlandi. Relizning `schema.sql` fayli bitta tranzaksiyada yangi sxema va 19 ta jadval yaratdi. Keyingi toza Chromium sessiyasida sintetik reja, «Dori tugadi», tanlangan qaydning L0 dan L4 ga o‘tishi va shifokor javobining bemorga ko‘rinishi o‘tdi. Bu tekshiruv 15,7 s davom etdi.
+
+Ochiq relizning boshqa sintetik sessiyalarida DoriMos xira qutida qayta urinishni ko‘rsatdi va 5 mg rejaga qarshi tasdiqlangan 10 mg namunani shifokor navbatiga L2 qilib yozdi. «Yaqinim» havolasi boshqa sessiyada ochildi va bemor ulashishni bekor qilganidan keyin yopildi. Ochiq relizdagi MediaPipe modeli va CDC video namunasining SHA-256 qiymatlari ish daraxtidagi fayllarga mos keldi.
+
+1. Real telefonda jonli kamera ruxsati, takrorlar, to‘xtatish va L3 saqlanishini o‘lchang. Qurilma va brauzer versiyasini benchmarkga yozing.
+2. Platformga ishlayotgan URL, demo rollari, demo chegaralari va AI-use izohini joylang. [Platform formasi uchun matn](SUBMISSION.md)
+3. Telegram jonli sinovi uchun Railway Trial servisida yangilangan token va sinov bazasi bilan HTTPS webhookni ulang. Bitta sintetik qizil qaydning shaxsiy chatga yetib borishini tekshiring. [Railway sozlamasi](../../README.md#railway-trial)

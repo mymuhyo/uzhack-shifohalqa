@@ -31,20 +31,21 @@ function telegramStatus(page: Page) {
   return page.getByRole('region', { name: 'Telegram bildirishnomalari' }).getByRole('status');
 }
 
-test('private Telegram pairing isolates workspaces and delivers exactly one privacy-safe red notice after a duplicate submit', async ({ page, browser, request, baseURL }) => {
+test('Telegram isolates workspaces, retries a throttled red notice and ignores stale stop commands', async ({ page, browser, request, baseURL }) => {
   test.setTimeout(90_000);
 
   const chatId = Number(process.env.SHIFO_E2E_TELEGRAM_CHAT_ID);
   expect(Number.isSafeInteger(chatId) && chatId > 0).toBe(true);
   const otherChatId = chatId + 1;
   let updateId = 1;
-  const update = (text: string, id = chatId, secret = webhookSecret, group = false) => request.post(webhook, {
+  const commandDate = Math.floor(Date.now() / 1000);
+  const update = (text: string, { id = chatId, secret = webhookSecret, group = false, eventId = updateId++, date = commandDate } = {}) => request.post(webhook, {
     headers: { 'X-Telegram-Bot-Api-Secret-Token': secret },
     data: {
-      update_id: updateId++,
+      update_id: eventId,
       message: {
-        message_id: updateId,
-        date: Math.floor(Date.now() / 1000),
+        message_id: eventId,
+        date,
         chat: { id: group ? -id : id, type: group ? 'group' : 'private' },
         from: { id, is_bot: false, first_name: 'Demo' },
         text,
@@ -74,15 +75,15 @@ test('private Telegram pairing isolates workspaces and delivers exactly one priv
   expect((await manage(page, 'pair', 'https://example.invalid')).status()).toBe(403);
 
   const pairCode = await issuePairing(page);
-  expect((await update(`/start ${pairCode}`, chatId, 'wrong-secret')).status()).toBe(403);
-  const ignored = await update(`/start ${pairCode}`, chatId, webhookSecret, true);
+  expect((await update(`/start ${pairCode}`, { secret: 'wrong-secret' })).status()).toBe(403);
+  const ignored = await update(`/start ${pairCode}`, { group: true });
   expect(ignored.status()).toBe(200);
   expect(await ignored.text()).toBe('');
 
   const paired = await update(`/start ${pairCode}`);
   await expect(paired).toBeOK();
   expect(await paired.json()).toMatchObject({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
-  expect(await (await update(`/start ${pairCode}`, otherChatId)).json()).toMatchObject({ chat_id: otherChatId, text: expect.stringContaining('yaroqsiz') });
+  expect(await (await update(`/start ${pairCode}`, { id: otherChatId })).json()).toMatchObject({ chat_id: otherChatId, text: expect.stringContaining('yaroqsiz') });
   expect(await (await update(`/start ${pairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
   await page.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
   await expect(telegramStatus(page)).toContainText('Telegram ulangan.');
@@ -144,7 +145,21 @@ test('private Telegram pairing isolates workspaces and delivers exactly one priv
     expect(await (await update(`/start ${otherPairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
     await otherDoctor.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
     await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
-    expect(await (await update('/stop')).json()).toEqual({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
+    const stopId = updateId++;
+    expect(await (await update('/stop', { eventId: stopId })).json()).toEqual({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
+    await otherDoctor.reload();
+    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+
+    const newerCode = await issuePairing(otherDoctor);
+    expect(await (await update(`/start ${newerCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
+    const staleStop = await update('/stop', { eventId: stopId });
+    await expect(staleStop).toBeOK();
+    expect(await staleStop.text()).toBe('');
+    await otherDoctor.reload();
+    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
+
+    const freshStop = await update('/stop', { eventId: 1, date: commandDate + 7 * 86_400 + 1 });
+    expect(await freshStop.json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
     await otherDoctor.reload();
     await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
   } finally {

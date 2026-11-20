@@ -24,6 +24,14 @@ def telegram_chat_id_valid(value: object) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
+class RetryAfter:
+    seconds: int
+
+
+DeliveryResult = DeliveryStatus | RetryAfter
+
+
+@dataclass(frozen=True, slots=True)
 class Notice:
     workspace_id: UUID
     doctor_id: UUID
@@ -50,7 +58,7 @@ class TelegramStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def redeem_pairing(self, code: str, chat_id: int) -> bool:
+    async def redeem_pairing(self, code: str, chat_id: int, *, sent_at: int, update_id: int) -> bool:
         if not telegram_pair_code_valid(code) or not telegram_chat_id_valid(chat_id):
             return False
         code_hash = sha256(code.encode("ascii")).hexdigest()
@@ -82,12 +90,13 @@ class TelegramStore:
 
             linked = await connection.execute(
                 """
-                INSERT INTO shifohalqa.telegram_doctor_links (workspace_id, doctor_id, chat_id)
-                VALUES (%s, %s, %s)
+                INSERT INTO shifohalqa.telegram_doctor_links
+                  (workspace_id, doctor_id, chat_id, paired_message_at, paired_update_id)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 RETURNING 1
                 """,
-                (workspace_id, doctor_id, chat_id),
+                (workspace_id, doctor_id, chat_id, sent_at, update_id),
             )
             if await linked.fetchone() is None:
                 return False
@@ -101,23 +110,47 @@ class TelegramStore:
             )
             return True
 
-    async def disconnect_chat(self, chat_id: int) -> None:
+    async def disconnect_chat(self, chat_id: int, *, sent_at: int, update_id: int) -> bool:
         if not telegram_chat_id_valid(chat_id):
-            return
+            return False
         async with self._pool.connection() as connection:
+            target = await connection.execute(
+                """
+                SELECT link.workspace_id, link.doctor_id, link.link_id, pairing.code_hash,
+                       CASE WHEN link.paired_message_at IS NULL
+                            THEN date_trunc('second', link.connected_at) < to_timestamp(%s)
+                            ELSE (link.paired_message_at, link.paired_update_id) < (%s, %s)
+                       END AS can_disconnect
+                FROM shifohalqa.telegram_doctor_links AS link
+                LEFT JOIN shifohalqa.telegram_pairings AS pairing USING (workspace_id, doctor_id)
+                WHERE link.chat_id = %s
+                """,
+                (sent_at, sent_at, update_id, chat_id),
+            )
+            row = await target.fetchone()
+            if row is None:
+                return True
+            workspace_id, doctor_id, link_id, code_hash, can_disconnect = row
+            if not can_disconnect:
+                return False
+
+            # Keep the web disconnect's lock order and delete only the identities read above.
             await connection.execute(
                 """
-                DELETE FROM shifohalqa.telegram_pairings AS pairing
-                USING shifohalqa.telegram_doctor_links AS link
-                WHERE link.chat_id = %s AND pairing.workspace_id = link.workspace_id
-                  AND pairing.doctor_id = link.doctor_id
+                DELETE FROM shifohalqa.telegram_pairings
+                WHERE workspace_id = %s AND doctor_id = %s AND code_hash = %s
                 """,
-                (chat_id,),
+                (workspace_id, doctor_id, code_hash),
             )
-            await connection.execute(
-                "DELETE FROM shifohalqa.telegram_doctor_links WHERE chat_id = %s",
-                (chat_id,),
+            removed = await connection.execute(
+                """
+                DELETE FROM shifohalqa.telegram_doctor_links
+                WHERE workspace_id = %s AND doctor_id = %s AND link_id = %s
+                RETURNING 1
+                """,
+                (workspace_id, doctor_id, link_id),
             )
+            return await removed.fetchone() is not None
 
     async def claim_pending(self, *, chat_id: int | None = None) -> Notice | None:
         if chat_id is not None and not telegram_chat_id_valid(chat_id):
@@ -132,6 +165,7 @@ class TelegramStore:
                   JOIN shifohalqa.flags AS flag ON flag.workspace_id = notice.workspace_id AND flag.id = notice.flag_id
                   WHERE notice.delivery_status = 'pending'
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
+                    AND notice.next_attempt_at <= CURRENT_TIMESTAMP
                     AND flag.decision IS NULL
                     AND (%s::bigint IS NULL OR link.chat_id = %s)
                   ORDER BY notice.created_at, notice.workspace_id, notice.flag_id
@@ -158,4 +192,20 @@ class TelegramStore:
                   AND delivery_status = 'unknown'
                 """,
                 (status, notice.workspace_id, notice.doctor_id, notice.link_id, notice.flag_id),
+            )
+
+    async def schedule_retry(self, notice: Notice, seconds: int) -> None:
+        async with self._pool.connection() as connection:
+            await connection.execute(
+                """
+                WITH scheduled AS (SELECT clock_timestamp() + %s * interval '1 second' AS due)
+                UPDATE shifohalqa.telegram_flag_notices AS notice
+                SET next_attempt_at = scheduled.due,
+                    delivery_status = CASE WHEN scheduled.due < notice.created_at + interval '1 hour'
+                                           THEN 'pending' ELSE 'rejected' END
+                FROM scheduled
+                WHERE workspace_id = %s AND doctor_id = %s AND link_id = %s AND flag_id = %s
+                  AND delivery_status = 'unknown'
+                """,
+                (seconds, notice.workspace_id, notice.doctor_id, notice.link_id, notice.flag_id),
             )

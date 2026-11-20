@@ -3,16 +3,18 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from .store import DeliveryStatus, Notice, RecordedStatus
+from .store import DeliveryResult, Notice, RecordedStatus, RetryAfter
 
 _LOG = logging.getLogger(__name__)
-Send = Callable[[int], Awaitable[DeliveryStatus]]
+Send = Callable[[int], Awaitable[DeliveryResult]]
 
 
 class DeliveryStore(Protocol):
     async def claim_pending(self) -> Notice | None: ...
 
     async def record_delivery(self, notice: Notice, status: RecordedStatus) -> None: ...
+
+    async def schedule_retry(self, notice: Notice, seconds: int) -> None: ...
 
 
 async def _deliver_batch(store: DeliveryStore, send: Send, batch_size: int) -> int:
@@ -28,7 +30,9 @@ async def _deliver_batch(store: DeliveryStore, send: Send, batch_size: int) -> i
         except Exception:
             _LOG.warning("Telegram notice delivery could not be confirmed.")
             continue
-        if status == "sent" or status == "rejected":
+        if isinstance(status, RetryAfter):
+            await store.schedule_retry(notice, status.seconds)
+        elif status == "sent" or status == "rejected":
             await store.record_delivery(notice, status)
     return attempted
 

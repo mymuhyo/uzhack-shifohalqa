@@ -2,9 +2,11 @@
 
 from datetime import datetime, timezone
 import os
+from time import monotonic
 
 from aiogram import Bot
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramRetryAfter
 from aiogram.methods import GetMe, SendMessage
 from aiogram.types import Chat, Message, User
 from aiohttp import web
@@ -15,6 +17,10 @@ from shifo_telegram.store import TelegramStore
 
 
 class OfflineTelegramSession(BaseSession):
+    def __init__(self):
+        super().__init__()
+        self.retry_at = {}
+
     async def close(self):
         pass
 
@@ -31,6 +37,10 @@ class OfflineTelegramSession(BaseSession):
         buttons = method.reply_markup.inline_keyboard
         assert len(buttons) == 1 and len(buttons[0]) == 1
         assert buttons[0][0].url == "https://shifohalqa.example.test/"
+        if method.chat_id not in self.retry_at:
+            self.retry_at[method.chat_id] = monotonic() + 2
+            raise TelegramRetryAfter(method=method, message="synthetic flood control", retry_after=2)
+        assert monotonic() >= self.retry_at[method.chat_id], "Retry happened before the provider delay"
         return Message(message_id=1, date=datetime.now(timezone.utc), chat=Chat(id=method.chat_id, type="private"))
 
 

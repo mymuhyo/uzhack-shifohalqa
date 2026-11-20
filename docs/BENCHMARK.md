@@ -69,3 +69,21 @@ Chromiumga ommaviy CDC WebM klipidan tayyorlangan 360×568 Y4M fayli aylanib tur
 Gemini `gemini-3.5-flash-lite` shu klipni MediaPipe raqamlarisiz tahlil qildi va taxminan 2 s va 6 s da o‘tirish kuzatilganini qaytardi. Interfeys ikki modelning ikkita tugallangan sikl sanaganini ko‘rsatdi. Gemini tugmasidan tekshirilgan javobgacha 11 740 ms. Bu bir klipdagi moslik, boshqa odamlar va kamera sharoitlarida aniqlik o‘lchanmagan. [Mashq rejasi](V2_PLAN.md) · [Sinov](../tests/e2e/exercise-preview.spec.ts)
 
 Yakuniy CSS tuzatishidan keyin ayni 360×800 Chromium oqimi boshidan oxirigacha o‘tdi. Ikki CV sikli va Gemini vaqtlari aynan takrorlandi. Bu urinishda CV 58 578 ms, Gemini 18 752 ms oldi. Sahifa 360 px eniga sig‘di. Mashq tahlili endpointi foydalanuvchi videosi maydonini HTTP 400 bilan rad etdi.
+
+### Mashq prototipi · ketma-ket video dekodlash
+
+21-noyabr 2026 · Chromium, 360×800, bir xil ommaviy CDC klipi. O‘lchov tugma bosilishidan jadvalgacha. Seek vaqti brauzerdagi `seeking` va `seeked` hodisalari oralig‘ining yig‘indisi.
+
+| Yo‘l | Jami vaqt | Seek soni va yig‘indi vaqt | O‘lchov |
+|---|---:|---:|---|
+| Oldingi build | 54 103 ms | 110, 20 184 ms | 2 to‘liq, 0 chala |
+| Yangilangan WebCodecs/Mediabunny | 40 803 ms | 0 | 2 to‘liq, 0 chala |
+| O‘sha yangilangan buildda `VideoDecoder` o‘chirilgan | 63 589 ms | 110, 23 769 ms | 2 to‘liq, 0 chala |
+
+Uchala yo‘lda 1,2–4,2 s sikli 94°, 5,3–8,5 s sikli 88° bo‘ldi. Bir xil builddagi ikki alohida urinishda ketma-ket dekoder jami vaqtni taxminan 36% kamaytirdi. Bu mahalliy qurilmada bitta klip o‘lchovi. Odam ko‘rinmaydigan WebM 10 737 ms da qayta urinishga yo‘naltirildi. Kamera yoki video ma’lumotini jo‘natadigan POST kuzatilmadi.
+
+Yakuniy 360×800 brauzer sinovida CDC klipi ishga tushgach, CV tugashidan oldin alohida Gemini tugmasi bosildi. MediaPipe 37 145 ms da jadvalni ko‘rsatdi. Gemini so‘rovi 2 994 ms da, CV dan oldin tugadi va 2 s hamda 6 s ni qaytardi. Birinchi tugmadan ikkala natija ko‘rinishigacha 37 389 ms o‘tdi. Bu bitta brauzer urinishidagi tarmoq va qurilma natijasi.
+
+Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
+
+Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 chala sikl chiqdi. Oldingi aylanuvchi klip urinishida 1 to‘liq va 4 chala bo‘lgan. Aylanma klip sikllari etalon sifatida ishlatilmadi. Alohida resurs sinovi 360×568 oqim saqlanishini, tayanch chizig‘i va joriy burchak chiqishini, «To‘xtatish» treklarni yakunlashini va POST bo‘lmasligini tekshirdi. USB orqali jismoniy telefon topilmadi. Jonli sikl aniqligi qurilma va kadr tezligi bilan alohida sinov talab qiladi.

@@ -10,7 +10,7 @@ const viewLabels = {
   unclear: 'Klipdan harakatni ishonchli ajratib bo‘lmadi.',
 };
 
-export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles: number }) {
+export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: number }) {
   const [report, setReport] = useState<ExerciseAnalysis | null>(null);
   const [pending, setPending] = useState(false);
   const request = useRef<AbortController | null>(null);
@@ -53,11 +53,15 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles: number }) {
           <p>{viewLabels[report.observation.view]}</p>
           {report.observation.view !== 'unclear' && (
             <>
-              <p className={styles.counter}>MediaPipe: {poseCycles} sikl · Gemini: {report.observation.seatedAtSeconds.length} sikl</p>
+              <p className={styles.counter}>
+                {poseCycles !== undefined && `MediaPipe: ${poseCycles} sikl · `}Gemini: {report.observation.seatedAtSeconds.length} sikl
+              </p>
               {report.observation.seatedAtSeconds.length > 0 && (
                 <p>Gemini bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
               )}
-              <p>{poseCycles === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi. Kadrlarni qayta ko‘rib chiqing.'}</p>
+              {poseCycles !== undefined && (
+                <p>{poseCycles === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi. Kadrlarni qayta ko‘rib chiqing.'}</p>
+              )}
             </>
           )}
           <p className={styles.modelName}>{report.model} · Ommaviy namuna</p>

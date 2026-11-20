@@ -28,9 +28,9 @@ test('asks real Gemini to observe the fixed clip and leaves MediaPipe evidence s
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/demo/mashq');
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
-  await expect(page.getByRole('heading', { name: 'MediaPipe o‘lchovi' })).toBeVisible({ timeout: 95_000 });
+  await expect(page.getByRole('button', { name: 'Namunani Gemini bilan tahlil qilish' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'MediaPipe o‘lchovi' })).toHaveCount(0);
   const poseResult = page.getByText(/Yuklangan video · To‘liq/);
-  const measurement = await poseResult.innerText();
   const rejected = await page.request.post('/api/demo/exercise-analysis', {
     headers: { Origin: baseURL! }, data: { source: 'user_media' },
   });
@@ -46,7 +46,9 @@ test('asks real Gemini to observe the fixed clip and leaves MediaPipe evidence s
   expect(response.request().postDataJSON()).toEqual({});
   const panel = page.getByRole('region', { name: 'Gemini kuzatuvi' });
   await expect(panel).toContainText('Ommaviy namuna');
-  await expect(poseResult).toHaveText(measurement);
+  const result = page.getByRole('heading', { name: 'MediaPipe o‘lchovi' });
+  await expect(result).toBeVisible({ timeout: 95_000 });
+  await expect(poseResult).toHaveText('Yuklangan video · To‘liq 2 · Chala 0');
   expect(await page.locator('body').evaluate(body => body.scrollWidth)).toBeLessThanOrEqual(360);
   console.log('Gemini public clip:', Math.round(performance.now() - started), 'ms;', JSON.stringify(report));
 });

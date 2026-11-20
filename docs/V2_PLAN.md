@@ -6,6 +6,7 @@
 |---|---|---|---|
 | Jonli CV va har bir sikl dalili | O‘rta | MediaPipe, masofaviy modelga bog‘liqlik yo‘q | Haqiqiy dekodlangan kadrda tayanch chizig‘i va burchak chiqadi. Natijada sikllar va vaqtlar bor. Yomon kadrda qayta urinish taklif qilinadi. `exp/mashq-cv-ai` filialida. |
 | Videoni mustaqil Gemini tahlili | O‘rta | Ommaviy CDC klipi, server kaliti va demo flag | Model klipni CV sanoqisiz tahlil qiladi. Ikki o‘lchov ko‘rinadi. Gemini ishlamasa CV natijasi turadi. Real kamera va yuklangan shaxsiy video brauzerda qoladi. `exp/mashq-cv-ai` filialida. |
+| Mahalliy video tahlil vaqti | O‘rta | Bir xil klipda oldingi va ketma-ket dekoder o‘lchovi | Kadr izlash soni kamayadi. Ikkita sikl va bo‘sh kadrni rad etish o‘z kuchida. Gemini tugmasi CV tahlili ketayotganda ham ishlaydi. |
 | Telefon va alohida kadr sinovlari | O‘rta | Jismoniy Android/iOS, mos litsenziyali turli kliplar, qo‘lda belgilangan sikllar | To‘liq va chala harakat, kadrdan chiqish, yorug‘lik va kamera burchagi bo‘yicha etalon bilan solishtiring. Qurilma, brauzer, muvaffaqiyat va rad holatlarini yozing. |
 | Ovozli jonli kuzatuv | O‘rta | Telefon sinovi, qo‘llanadigan provayder shartlari | Keyingi tajriba. CV belgilagan «kadrda ko‘rinmayapti» kabi o‘lchov holatlaridan ovoz chiqishi va brauzerda ovozni darhol to‘xtatish tekshiriladi. Gemini Live uchun faqat shu maqsadga ruxsat berilgan namuna muhitida alohida sinov. |
 

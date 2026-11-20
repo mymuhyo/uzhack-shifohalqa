@@ -131,6 +131,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
   const [screen, setScreen] = useState<Screen>({ phase: 'idle' });
   const [confirmed, setConfirmed] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
+  const [reviewingSample, setReviewingSample] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const activeCapture = useRef<Capture | null>(null);
@@ -181,11 +182,12 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
     activeCapture.current = capture;
     setConfirmed(false);
     setSaveStatus(null);
+    setReviewingSample(false);
     setScreen({ phase: 'starting', message });
     return capture;
   }
 
-  async function processCapture(capture: Capture) {
+  async function processCapture(capture: Capture, file?: Blob) {
     const { video, source, tracker } = capture;
     const landmarker = await loadLandmarker();
     if (activeCapture.current !== capture) {
@@ -200,15 +202,14 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
 
     let framing: Framing | null = source === 'live_camera' ? 'positioning' : null;
     let lastTrackedTimestamp = -Infinity;
-    const analyze = (timestampMs: number) => {
-      const { videoWidth, videoHeight } = video;
-      if (!videoWidth || !videoHeight) return;
-      const scale = Math.min(1, longestFrameSide / Math.max(videoWidth, videoHeight));
-      const width = Math.max(1, Math.round(videoWidth * scale));
-      const height = Math.max(1, Math.round(videoHeight * scale));
+    const analyze = (timestampMs: number, frameWidth: number, frameHeight: number, draw: (width: number, height: number) => void) => {
+      if (!frameWidth || !frameHeight) return;
+      const scale = Math.min(1, longestFrameSide / Math.max(frameWidth, frameHeight));
+      const width = Math.max(1, Math.round(frameWidth * scale));
+      const height = Math.max(1, Math.round(frameHeight * scale));
       if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
-      context.drawImage(video, 0, 0, width, height);
+      draw(width, height);
       const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
       const trackedFrame = tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
       if (source === 'live_camera' && overlayRef.current) {
@@ -230,10 +231,23 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
         validReps !== current.validReps || shallowReps !== current.shallowReps
       ) ? { phase: 'running', source, framing: currentFraming, currentAngle, validReps, shallowReps } : current);
     };
+    const analyzeVideo = (timestampMs: number) => analyze(timestampMs, video.videoWidth, video.videoHeight,
+      (width, height) => context.drawImage(video, 0, 0, width, height));
     setScreen({ phase: 'running', source, framing, currentAngle: null, validReps: 0, shallowReps: 0 });
 
-    if (source === 'uploaded_video') {
-      await sampleRecordedFrames(video, minimumFrameIntervalMs, capture.controller.signal, analyze);
+    if (file) {
+      const signal = capture.controller.signal;
+      let decoded = false;
+      if (typeof VideoDecoder !== 'undefined') {
+        const decoder = await import('@/lib/pose/sequential-frames').catch(() => null);
+        signal.throwIfAborted();
+        if (decoder) {
+          decoded = await decoder.sampleSequentialFrames(file, minimumFrameIntervalMs, signal, frame => {
+            analyze(frame.timestampMs, frame.width, frame.height, (width, height) => frame.draw(context, width, height));
+          });
+        }
+      }
+      if (!decoded) await sampleRecordedFrames(video, minimumFrameIntervalMs, signal, analyzeVideo);
       finish(capture);
       return;
     }
@@ -256,7 +270,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
       if (timestampMs - previousTimestamp >= minimumFrameIntervalMs) {
         previousTimestamp = timestampMs;
         try {
-          analyze(timestampMs);
+          analyzeVideo(timestampMs);
         } catch {
           fallback(capture, 'Kadrlarni tahlil qilib bo‘lmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.');
           return;
@@ -310,7 +324,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
     if (activeCapture.current !== capture) return;
     capture.objectUrl = URL.createObjectURL(file);
     capture.video.src = capture.objectUrl;
-    await processCapture(capture);
+    await processCapture(capture, file);
   }
 
   async function selectVideo(event: ChangeEvent<HTMLInputElement>) {
@@ -335,6 +349,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
   async function playSample() {
     const capture = begin('uploaded_video', 'CDC namuna videosi tayyorlanmoqda…');
     if (!capture) return;
+    setReviewingSample(true);
     try {
       const response = await fetch(exerciseSample.path, { signal: capture.controller.signal });
       if (!response.ok) throw new Error('Demo video is unavailable');
@@ -394,6 +409,8 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
   const capturing = screen.phase === 'starting' || screen.phase === 'running';
   const saving = saveStatus?.state === 'saving';
   const sample = screen.phase === 'result' && screen.fileSha256 === exerciseSample.sha256;
+  const poseCycles = sample ? screen.measurement.validReps + screen.measurement.shallowReps : undefined;
+  const showVideo = capturing && (screen.phase !== 'running' || screen.source === 'live_camera');
   return (
     <div className={styles.exercise}>
       <p>Kadrda son, tizza va to‘piq bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
@@ -410,6 +427,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
             else {
               takeCapture();
               setScreen({ phase: 'idle' });
+              setReviewingSample(false);
             }
           }}>To‘xtatish</button>
         )}
@@ -426,7 +444,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
           {screen.currentAngle !== null && <p>Tizza burchagi taxminan {screen.currentAngle}°</p>}
         </div>
       )}
-      <div className={styles.preview} hidden={!capturing}>
+      <div className={styles.preview} hidden={!showVideo}>
         <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" aria-label="Mashq videosi" />
         <canvas ref={overlayRef} className={styles.overlay} aria-hidden="true" />
       </div>
@@ -464,9 +482,9 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
           {!preview && <button className={styles.primary} type="button" onClick={saveMeasurement} disabled={
             saving || (saveStatus?.state === 'saved' && saveStatus.report === 'measurement') || (screen.source === 'uploaded_video' && !confirmed)
           }>Natijani yuborish</button>}
-          {sample && showGemini && <ExerciseAnalysisPanel poseCycles={screen.measurement.validReps + screen.measurement.shallowReps} />}
         </div>
       )}
+      {reviewingSample && showGemini && <ExerciseAnalysisPanel poseCycles={poseCycles} />}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
       {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
         <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>

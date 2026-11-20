@@ -6,7 +6,7 @@ from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import patch
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError
+from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter
 from aiogram.methods import SendMessage
 from aiogram.types import Message
 from aiohttp.test_utils import make_mocked_request
@@ -42,6 +42,7 @@ class OfflineStore:
         self.closed = False
         self.redeemed = []
         self.disconnected = []
+        self.stop_applied = True
 
     async def open(self):
         self.opened = True
@@ -49,12 +50,13 @@ class OfflineStore:
     async def close(self):
         self.closed = True
 
-    async def redeem_pairing(self, code, chat_id):
-        self.redeemed.append((code, chat_id))
+    async def redeem_pairing(self, code, chat_id, *, sent_at, update_id):
+        self.redeemed.append((code, chat_id, sent_at, update_id))
         return code == CODE
 
-    async def disconnect_chat(self, chat_id):
-        self.disconnected.append(chat_id)
+    async def disconnect_chat(self, chat_id, *, sent_at, update_id):
+        self.disconnected.append((chat_id, sent_at, update_id))
+        return self.stop_applied
 
 
 class OfflineBot(Bot):
@@ -160,16 +162,22 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
     async def test_valid_pairing_and_stop(self):
         linked = await self.message(f"/start {CODE}")
         self.assertEqual(json.loads(linked.text)["text"], "Telegram xabarlari ulandi.")
-        self.assertEqual(self.store.redeemed, [(CODE, 42)])
+        self.assertEqual(self.store.redeemed, [(CODE, 42, 1770000000, 7)])
         invalid = await self.message("/start 0123456789")
         self.assertIn("yaroqsiz", json.loads(invalid.text)["text"])
         self.assertEqual(len(self.store.redeemed), 1)
         stopped = await self.message("/stop")
         self.assertEqual(json.loads(stopped.text), {"method": "sendMessage", "chat_id": 42, "text": "Telegram xabarlari o‘chirildi."})
-        self.assertEqual(self.store.disconnected, [42])
+        self.assertEqual(self.store.disconnected, [(42, 1770000000, 7)])
+
+    async def test_a_stale_stop_does_not_claim_the_newer_link_was_removed(self):
+        self.store.stop_applied = False
+        response = await self.message("/stop")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.text or "", "")
 
     async def test_store_failure_is_retryable_without_exception_details(self):
-        async def fail(code, chat_id):
+        async def fail(code, chat_id, **event):
             raise RuntimeError("private postgres URL")
 
         with patch.object(self.store, "redeem_pairing", new=fail):
@@ -189,6 +197,12 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         self.assertEqual(await send_red_notice(self.bot, CONFIG, 42), "rejected")
         self.assertEqual(await send_red_notice(self.bot, CONFIG, -42), "rejected")
         self.assertEqual(len(self.bot.requests), 3)
+
+    async def test_explicit_flood_control_returns_the_provider_delay(self):
+        self.bot.error = lambda **kwargs: TelegramRetryAfter(retry_after=17, **kwargs)
+        retry = await send_red_notice(self.bot, CONFIG, 42)
+        self.assertEqual(retry.seconds, 17)
+        self.assertEqual(len(self.bot.requests), 1)
 
 
 class ConfigTests(TestCase):

@@ -253,6 +253,10 @@ CREATE TABLE IF NOT EXISTS shifohalqa.telegram_doctor_links (
   FOREIGN KEY (workspace_id, doctor_id) REFERENCES shifohalqa.doctors (workspace_id, id) ON DELETE CASCADE
 );
 
+ALTER TABLE shifohalqa.telegram_doctor_links
+  ADD COLUMN IF NOT EXISTS paired_message_at bigint CHECK (paired_message_at > 0),
+  ADD COLUMN IF NOT EXISTS paired_update_id bigint CHECK (paired_update_id > 0);
+
 CREATE TABLE IF NOT EXISTS shifohalqa.telegram_flag_notices (
   workspace_id uuid NOT NULL,
   doctor_id uuid NOT NULL,
@@ -266,6 +270,9 @@ CREATE TABLE IF NOT EXISTS shifohalqa.telegram_flag_notices (
   FOREIGN KEY (workspace_id, doctor_id, link_id)
     REFERENCES shifohalqa.telegram_doctor_links (workspace_id, doctor_id, link_id) ON DELETE CASCADE
 );
+
+ALTER TABLE shifohalqa.telegram_flag_notices
+  ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS telegram_flag_notices_delivery_queue_idx
   ON shifohalqa.telegram_flag_notices (created_at, workspace_id, flag_id) WHERE delivery_status = 'pending';

@@ -3,7 +3,7 @@ import unittest
 from collections import deque
 from uuid import uuid4
 
-from shifo_telegram.store import Notice, TelegramStore, telegram_chat_id_valid, telegram_pair_code_valid
+from shifo_telegram.store import Notice, RetryAfter, TelegramStore, telegram_chat_id_valid, telegram_pair_code_valid
 from shifo_telegram.worker import _deliver_batch, run_delivery_worker
 
 
@@ -28,12 +28,16 @@ class FakeStore:
     def __init__(self, notices=()):
         self.pending = deque(notices)
         self.results = []
+        self.retries = []
 
     async def claim_pending(self):
         return self.pending.popleft() if self.pending else None
 
     async def record_delivery(self, job, status):
         self.results.append((job, status))
+
+    async def schedule_retry(self, job, seconds):
+        self.retries.append((job, seconds))
 
 
 class DeliveryTests(unittest.IsolatedAsyncioTestCase):
@@ -58,6 +62,18 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await _deliver_batch(store, sender, 10), 0)
         self.assertEqual(calls, [1, 2, 3, 4])
         self.assertEqual(store.results, [(sent, "sent"), (rejected, "rejected")])
+        self.assertEqual(store.retries, [])
+
+    async def test_provider_delay_is_persisted_without_delaying_other_jobs(self):
+        throttled, sent = notice(1), notice(2)
+        store = FakeStore([throttled, sent])
+
+        async def sender(chat_id):
+            return RetryAfter(17) if chat_id == throttled.chat_id else "sent"
+
+        self.assertEqual(await _deliver_batch(store, sender, 10), 2)
+        self.assertEqual(store.retries, [(throttled, 17)])
+        self.assertEqual(store.results, [(sent, "sent")])
 
     async def test_worker_can_stop_without_waiting_for_another_poll(self):
         sent = notice(1)

@@ -1,0 +1,108 @@
+import { expect, test, type Page } from 'playwright/test';
+
+test.describe.configure({ timeout: 90_000 });
+
+async function enterRole(page: Page, role: 'doctor' | 'patient') {
+  await page.goto('/');
+  await page.getByRole('button', { name: role === 'doctor' ? 'Shifokor sifatida kirish' : 'Bemor sifatida kirish' }).click();
+  await expect(page).toHaveURL(`/${role}`);
+}
+
+async function assignDemoPlan(page: Page) {
+  await enterRole(page, 'doctor');
+  await page.getByLabel('Sistolik yuqori chegara').fill('144');
+  await page.getByRole('checkbox', { name: /Dori tugadi/ }).check();
+  await page.getByRole('button', { name: 'Rejani biriktirish' }).click();
+  await expect(page.getByRole('heading', { name: 'Biriktirilgan reja' })).toBeVisible();
+}
+
+test('returns the reply and L4 to the exact older log in the clinical loop', async ({ page }) => {
+  await assignDemoPlan(page);
+
+  await enterRole(page, 'patient');
+  await page.getByText('Icha olmadim', { exact: true }).click();
+  await page.getByLabel('Nega icha olmadingiz?').selectOption('out_of_supply');
+  await page.getByRole('button', { name: 'Sababni yuborish' }).click();
+  await expect(page.getByText('Icha olmadim · Dori tugadi')).toBeVisible();
+
+  await page.getByLabel('Sistolik bosim').fill('144');
+  await page.getByLabel('Diastolik bosim').fill('80');
+  await page.getByRole('button', { name: 'Qaydni yuborish' }).click();
+  await page.reload();
+  await expect(page.getByText('Qayd saqlandi')).toHaveCount(2);
+
+  await enterRole(page, 'doctor');
+  const queue = page.getByRole('region', { name: 'Bemorlar navbati' });
+  const older = queue.getByRole('article', { name: 'Dori tugadi' });
+  const newer = queue.getByRole('article', { name: 'Bosim reja chegarasiga yetdi' });
+  await expect(queue.getByRole('article').first()).toContainText('144/80');
+  await expect(older).toContainText('L0');
+  await expect(newer).toContainText('L0');
+  await older.getByText('Ko‘rib chiqish', { exact: true }).click();
+  await older.getByLabel('Bemorga javob').fill('Xabaringizni oldim. Siz bilan bog‘lanaman.');
+  await older.getByLabel('Ichki izoh (ixtiyoriy)').fill('Faqat ichki demo izoh');
+  await older.getByRole('button', { name: 'Qaydni tasdiqlash' }).click();
+  await expect(newer).toContainText('L0');
+  await expect(queue.getByRole('article')).toHaveCount(1);
+  const reviewed = page.getByRole('region', { name: 'Ko‘rib chiqilgan qaydlar' });
+  await expect(reviewed.getByRole('article', { name: 'Dori tugadi' })).toContainText('L4');
+
+  await enterRole(page, 'patient');
+  await expect(page.getByText('Shifokor ko‘rib tasdiqladi')).toBeVisible();
+  await expect(page.getByText('Xabaringizni oldim. Siz bilan bog‘lanaman.')).toBeVisible();
+  await expect(page.getByText('Faqat ichki demo izoh')).toHaveCount(0);
+  await expect(page.getByText('L4', { exact: true })).toHaveCount(1);
+  await expect(page.getByText('L0', { exact: true })).toHaveCount(1);
+});
+
+test('deduplicates concurrent submissions and rejects cross-workspace review', async ({ page, browser }) => {
+  await assignDemoPlan(page);
+  await enterRole(page, 'patient');
+  const medication = page.locator('form').filter({ has: page.getByRole('button', { name: 'Ichdim', exact: true }) });
+  const taskId = await medication.locator('[name="taskId"]').getAttribute('value');
+  expect(taskId).toBeTruthy();
+  const origin = new URL(page.url()).origin;
+  const request = { headers: { Origin: origin }, maxRedirects: 0, form: {
+    taskId: taskId ?? '', medicationStatus: 'missed', reason: 'out_of_supply',
+  } };
+  const results = await Promise.all([page.request.post('/api/demo/evidence', request), page.request.post('/api/demo/evidence', request)]);
+  expect(results.map((result) => result.status())).toEqual([303, 303]);
+  expect(results.map((result) => result.headers()['location']).sort()).toEqual(['/patient', '/patient?result=already_saved']);
+  await page.reload();
+  await expect(page.getByText('Qayd saqlandi')).toHaveCount(1);
+
+  await enterRole(page, 'doctor');
+  const entry = page.getByRole('article', { name: 'Dori tugadi' });
+  await entry.getByText('Ko‘rib chiqish', { exact: true }).click();
+  const flagId = await entry.locator('[name="flagId"]').getAttribute('value');
+  expect(flagId).toBeTruthy();
+
+  const isolated = await browser.newContext({ baseURL: origin });
+  try {
+    const other = await isolated.newPage();
+    await enterRole(other, 'doctor');
+    await expect(other.getByRole('article', { name: 'Dori tugadi' })).toHaveCount(0);
+    const response = await other.request.post('/api/demo/review', {
+      headers: { Origin: origin }, maxRedirects: 0, form: { flagId: flagId ?? '', decision: 'approved', reply: 'Boshqa sessiya' },
+    });
+    expect(response.status()).toBe(303);
+    expect(response.headers()['location']).toBe('/doctor?result=not_found');
+  } finally {
+    await isolated.close();
+  }
+
+  await page.reload();
+  await expect(entry).toContainText('L0');
+  await entry.getByText('Ko‘rib chiqish', { exact: true }).click();
+  await entry.getByLabel('Bemorga javob').fill('Iltimos, qayta qayd yuboring.');
+  await entry.getByRole('button', { name: 'Qayta o‘lchashni so‘rash' }).click();
+  const repeat = await page.request.post('/api/demo/review', {
+    headers: { Origin: origin }, maxRedirects: 0, form: { flagId: flagId ?? '', decision: 'approved', reply: 'Ikkinchi javob' },
+  });
+  expect(repeat.headers()['location']).toBe('/doctor?result=already_saved');
+  await enterRole(page, 'patient');
+  await expect(page.getByText('Shifokor qayta o‘lchashni so‘radi')).toBeVisible();
+  await expect(page.getByText('Iltimos, qayta qayd yuboring.')).toBeVisible();
+  await expect(page.getByText('L0', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ikkinchi javob')).toHaveCount(0);
+});

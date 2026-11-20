@@ -1,0 +1,39 @@
+.controls {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.5rem;
+}
+
+.actions button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  margin-block-start: 0.6rem;
+}
+
+.link input {
+  inline-size: 100%;
+  min-block-size: 3rem;
+  border: 1px solid var(--line);
+  padding-inline: 0.65rem;
+  background: var(--paper);
+}
+
+.link input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.controls .feedback:empty {
+  margin: 0;
+}

@@ -1,0 +1,124 @@
+.summaries {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.75rem;
+  margin-block-start: 1rem;
+}
+
+.summary {
+  min-inline-size: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+}
+
+.summary h3 {
+  font-weight: 600;
+}
+
+.summaryBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.summaryBody p {
+  font-size: 1rem;
+}
+
+.completion.completion {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.bar {
+  inline-size: 100%;
+  accent-color: var(--action);
+}
+
+.ring {
+  --ring-fill: var(--action);
+  --ring-track: var(--line);
+  --ring-center: var(--paper);
+  display: grid;
+  inline-size: 3.75rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.ring::after {
+  inline-size: 74%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--ring-center);
+  content: '';
+}
+
+@media (forced-colors: active) {
+  .ring {
+    --ring-fill: CanvasText;
+    --ring-track: GrayText;
+    --ring-center: Canvas;
+    forced-color-adjust: none;
+  }
+}
+
+.visuallyHidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.stepRecord {
+  margin-block: 1rem;
+  padding: 0.4rem 1rem 0.8rem;
+  border-inline-start: 3px solid var(--line);
+  background: var(--panel);
+}
+
+.stepsForm {
+  display: grid;
+  gap: 0.6rem;
+  max-inline-size: 24rem;
+  margin-block-start: 1rem;
+}
+
+.field,
+.submit {
+  min-block-size: 3rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.field {
+  min-inline-size: 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.field:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.field:user-invalid {
+  border-color: var(--urgent);
+}
+
+.submit {
+  background: var(--action);
+  color: var(--on-action);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:hover {
+  background: var(--action-hover);
+}

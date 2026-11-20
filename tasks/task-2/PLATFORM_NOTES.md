@@ -45,4 +45,4 @@ Ochiq relizning boshqa sintetik sessiyalarida DoriMos xira qutida qayta urinishn
 
 1. Real telefonda jonli kamera ruxsati, takrorlar, to‘xtatish va L3 saqlanishini o‘lchang. Qurilma va brauzer versiyasini benchmarkga yozing.
 2. Platformga ishlayotgan URL, demo rollari, demo chegaralari va AI-use izohini joylang. [Platform formasi uchun matn](SUBMISSION.md)
-3. Telegram jonli sinovi uchun Railway Trial servisida yangilangan token va sinov bazasi bilan HTTPS webhookni ulang. Bitta sintetik qizil qaydning shaxsiy chatga yetib borishini tekshiring. [Railway sozlamasi](../../README.md#railway-trial)
+3. `@shifohalqa_bot` webhooki Railway HTTPS servisiga ulangan. Vercel va Railway GitHub `main`dan chiqadi, Neon `shifohalqa/main`dan foydalanadi. Railway’da `/healthz`, imzoli sintetik `/bugun` va Vercel’dagi ikkala rol tugmasi tekshirildi. Shaxsiy chatga bitta sintetik qizil bildirishnoma yetib borishini qabul qilish ochiq. [Railway sozlamasi](../../README.md#railway-relizi)

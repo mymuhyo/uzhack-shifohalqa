@@ -18,7 +18,8 @@ Innovation 25 · Technical execution 25 · Practicality 20 · Impact 20 · Prese
 - [x] Hakam uchun ikki rol tugmasi (`/`), `/about`, demo reset va to‘rtta ko‘rinadigan quti namunasi
 - [x] Amalda o‘lchangan MediaPipe va DoriMos benchmarklari
 - [x] Lokal production build, 123 veb va 18 Python unit testi, Neon `codex-dev` bilan 14 ta Chromium E2E. DoriMos haqiqiy Gemini bilan, Telegram yetkazilishi mock transport bilan sinaldi.
-- [ ] Jonli Telegram demo uchun alohida botni Python servisining HTTPS webhookiga bog‘lash va shaxsiy chatda bitta sintetik qizil qaydni tekshirish
+- [x] `@shifohalqa_bot` Railway HTTPS webhookiga bog‘landi va sintetik `/bugun` so‘rovi ishladi
+- [ ] Shaxsiy Telegram chatida bitta sintetik qizil qayd yetib kelishini qabul qilish
 - [x] Production HTTPS havolasida yangi sintetik ish joyidagi asosiy dori oqimi oxirigacha sinaldi
 - [x] Ochiq demo havolasida DoriMos xira va mos kelmaydigan namunalari hamda «Yaqinim» havolasini bekor qilish yangi sintetik sessiyalarda sinaldi
 - [ ] Haqiqiy telefonda jonli kamera qabul sinovi, natijani `docs/BENCHMARK.md` ga qo‘shish

@@ -4,7 +4,7 @@
 
 **Birinchi demo.** Shifokor Anvar aka uchun uy rejasini biriktiradi. Bemor telefonida «Icha olmadim → Dori tugadi» deb belgilaydi. Shifokor navbatda sababni ko‘radi, aynan shu yozuvni ochib bemorga keyingi qadam haqida xabar qoldiradi. Bemor «Shifokor ko‘rib chiqdi» degan holatni va unga yozilgan xabarni ko‘radi. Bu yo‘l kamera, Telegram va bulutdagi AI kalitisiz ham to‘liq ishlashi kerak. Ikkinchi demo shu navbatga haqiqiy brauzer o‘lchovini olib keladi.
 
-**Joriy holat.** `codex/dev` da **A–D va F–H** yakunlandi. E da mashq brauzerda tekshirildi va haqiqiy telefon qabuli ochiq. I uchun Codex reliz paketi tayyor. Jamoa HTTPS relizi va Platform topshirishini bajaradi. [Vazifalar jadvali](#ish-jadvali) · [Topshirish paketi](tasks/task-2/PLATFORM_NOTES.md)
+**Joriy holat.** **A–D va F–H** yakunlandi. Vercel veb-ilovasi va Railway Telegram servisi GitHub `main`dan chiqadi. Ikkalasi Neon `shifohalqa/main`dan foydalanadi. E uchun haqiqiy telefon kamerasi qabuli, I uchun UzHack Platform topshirishi ochiq. [Vazifalar jadvali](#ish-jadvali) · [Topshirish paketi](tasks/task-2/PLATFORM_NOTES.md)
 
 ## 1. Loyiha auditi va foydalaniladigan qismlar
 
@@ -84,7 +84,7 @@ Barcha vaqtlar MYT. Quyidagi sanalar jamoaning ichki nishonlari. `[x]` faqat kod
 | [x] **H · 21 noyabr. «Yaqinim»** | Codex · Neon `codex-dev` E2E | Bemor 24 soatlik havolani yoqadi, yangilaydi va bekor qiladi. Alohida brauzer faqat uchta kunlik hisobni ko‘radi. Muddati tugagan va bekor qilingan havolalar, yozish so‘rovlari va sessiyalar chegarasi sinovdan o‘tdi. |
 | [ ] **I · 22 noyabr. Topshirish** | Ochiq HTTPS veb-oqimi sinaldi · UzHack Platform topshirishi ochiq | Vercel `main` relizida yangi sintetik ish joylarida reja → «Dori tugadi» → aynan shu qaydning L4 tasdig‘i va bemorga javob, DoriMos va «Yaqinim» havolasini bekor qilish o‘tdi. Ikki demo roli, reset, benchmark, AI-use va hakam ssenariysi tayyor. [Topshirish paketi](tasks/task-2/PLATFORM_NOTES.md) |
 
-**Nazorat nuqtalari.** 20-noyabr yakunida D brauzerda yopilmasa, barcha qo‘shimchalar to‘xtaydi va jamoa shu oqimni tiklaydi. 21-noyabr oqshomida E real qurilmada tekshiriladi. Ommaga ochiq demo videosi uchun huquqi aniqlangan material yoki jamoaning namoyishga rozi bo‘lgan voyaga yetgan a’zosi tasviridan foydalaniladi. Jamoa to‘liq/chala takrorlarni qo‘lda sanab, yozuv bilan birga saqlaydi. 22-noyabr 15:00 MYT funksiyalarni muzlatish, 18:00 MYT Incognito sinovi va yuborishga tayyor nusxa. Codex `codex/dev` da reliz paketini tayyorlaydi, jamoa `main`ga birlashtirish, deploy va topshirishni bajaradi. Har bir pushdan oldin ikkala tekshiruv o‘tadi. Topshirilgan havola Grand Final yakunigacha ochiq turadi.
+**Nazorat nuqtalari.** 20-noyabr yakunida D brauzerda yopilmasa, barcha qo‘shimchalar to‘xtaydi va jamoa shu oqimni tiklaydi. 21-noyabr oqshomida E real qurilmada tekshiriladi. Ommaga ochiq demo videosi uchun huquqi aniqlangan material yoki jamoaning namoyishga rozi bo‘lgan voyaga yetgan a’zosi tasviridan foydalaniladi. Jamoa to‘liq/chala takrorlarni qo‘lda sanab, yozuv bilan birga saqlaydi. 22-noyabr 15:00 MYT funksiyalarni muzlatish, 18:00 MYT Incognito sinovi va yuborishga tayyor nusxa. Tekshirilgan o‘zgarishlar `main`ga birlashgach, Vercel va Railway reliz chiqaradi. Har bir pushdan oldin ikkala tekshiruv o‘tadi. Topshirilgan havola Grand Final yakunigacha ochiq turadi.
 
 **B · 19-noyabr tekshiruvi.** L0–L3, bosim va dori kunlari bo‘yicha 49 Vitest testi ajratilgan vaqtinchalik Node muhitida o‘tdi. Shu manbalar TypeScript `--strict` bilan tekshirildi. Repo darajasidagi `verify` va `e2e` A scaffold bilan ishga tushadi. [Modul kontraktlari](docs/INTERFACES.md)
 
@@ -96,7 +96,7 @@ Barcha vaqtlar MYT. Quyidagi sanalar jamoaning ichki nishonlari. `[x]` faqat kod
 
 **G/H/I · 20-noyabr tekshiruvi.** `npm run verify` typecheck, lint, 120 unit test va production builddan o‘tdi. Shu build ajratilgan Neon `codex-dev` da 12 ta Chromium E2E sinovidan o‘tdi. Jonli Gemini sinovida o‘qilmas rasm qayta urinishga, 10 mg quti bemor tasdig‘idan keyin shifokor navbatiga bordi. «Yaqinim» boshqa brauzerda ochildi, havola o‘chirilganda kirish bekor bo‘ldi. [Hakam va reliz qaydi](tasks/task-2/PLATFORM_NOTES.md)
 
-**Telegram · 20-noyabr tekshiruvi.** Alohida Python/aiogram servisining 18 ta unit testi o‘tdi. Next.js, Python va Neon `codex-dev` bilan E2E’da Telegram’ning 429 javobidan keyingi kutish, takroriy qayddan bitta xabar va eski `/stop` kelganda yangi ulanish saqlanishi tekshirildi. Jonli sinov uchun Railway Trial tanlandi. Webhookni ulash uchun yangilangan `@shifohalqa_bot` tokeni va Railway servisining HTTPS manzili kerak. [Telegram E2E](tests/e2e/telegram.spec.ts) · [Railway sozlamasi](README.md#railway-trial)
+**Telegram · 20-noyabr tekshiruvi.** Alohida Python/aiogram servisining 18 ta unit testi o‘tdi. Next.js, Python va o‘sha paytdagi Neon `codex-dev` bilan E2E’da 429 javobidan keyingi kutish, takroriy qayddan bitta xabar va eski `/stop` kelganda yangi ulanish saqlanishi tekshirildi. Railway HTTPS servisida sintetik `/bugun` buyrug‘i veb-demo havolasini qaytardi, Telegram `@shifohalqa_bot` webhookini tasdiqladi. [Telegram E2E](tests/e2e/telegram.spec.ts) · [Railway sozlamasi](README.md#railway-relizi)
 
 ## 6. Texnologiya va yangiliklardan qayerda foydalanamiz
 
@@ -128,13 +128,13 @@ Barcha vaqtlar MYT. Quyidagi sanalar jamoaning ichki nishonlari. `[x]` faqat kod
 
 ## 7. Papkalar va egalik
 
-Codex `codex/dev` ish daraxtida bitta ilovani quradi. Subagentga ish berilsa, yoziladigan fayllar oldindan kelishiladi. Scaffold, UI va DB egaligi foydalanuvchi tasdig‘i bilan `AGENTS.md` ga kiritildi.
+Codex `main`ga birlashtiriladigan bitta ilovani quradi. Subagentga ish berilsa, yoziladigan fayllar oldindan kelishiladi. Scaffold, UI va DB egaligi foydalanuvchi tasdig‘i bilan `AGENTS.md` ga kiritildi.
 
 | Joy | Nima turadi · egasi |
 |---|---|
 | `PLAN.md`, `docs/SPEC.md`, `docs/INTERFACES.md` | Mos ravishda ustuvorlik/holat, mahsulot qoidalari, amaldagi public export va integratsiya kontraktlari. Mahsulot qoidasi bo‘yicha ochiq qarorlar foydalanuvchi bilan kelishiladi. README kirish va ishga tushirishga yo‘naltiradi. |
 | `src/app/{patient,doctor,caregiver,api}/`, `src/components/` | Route, sessiya va sahifalar. Komponentni ikkinchi ekran ham ishlatsa umumlashtirish. |
-| `schema.sql`, `src/lib/db.ts`, `src/lib/seed.ts` | Bitta sxema va sintetik demo seed. Codex testlari faqat Neon `codex-dev` branchida. |
+| `schema.sql`, `src/lib/db.ts`, `src/lib/seed.ts` | Bitta sxema va sintetik demo seed. Bazali lokal testlar uchun alohida test ulanishi ishlatiladi. |
 | `src/lib/{rules,pose,ai,anticheat}/`, `public/models/` | Har modulda kichik typed kirish nuqtasi. Qoidalar DB, React yoki AI SDK import qilmaydi. SDK serverda, kamera brauzerda. SPEC’dagi eski tekis `pose.ts` / `rules.ts` yo‘llari shu chegaraga moslanadi. |
 | `tests/{unit,e2e,fixtures}/`, `scripts/benchmark*`, `scripts/e2e*`, `docs/BENCHMARK.md` | Codex. Fixture kelib chiqishi va kutilgan javob bilan saqlanadi. Benchmark hujjati birinchi haqiqiy run bilan yaratiladi. |
 | `brief/`, `competition/`, `tasks/task-1/`, `tasks/task-2/`, `archive/` | Rasmiy talab, baholash, topshirilgan material, topshirish paketi va tarix o‘z joyida. Codex `tasks/task-2/PLATFORM_NOTES.md`ni har ishlagan oqim bilan yangilaydi. |
@@ -166,11 +166,11 @@ Har promptga joriy commit SHA, tegishli karta, kerakli SPEC bandi va INTERFACES 
 
 **Codex · A, keyin C/D**
 
-> `codex/dev` da A kartaning ikkita rolini toza brauzerda tekshir. C/D da bitta sintetik bemor uchun reja → «Dori tugadi» → aniq log ko‘rigi → bemorga javobni ula. Engine kontraktini INTERFACES’dan ol. modern-web-guidance va frontend-ui-engineering bilan telefon holatlarini, neon-postgres bilan yozuv va ko‘rik tranzaksiyasini tekshir. Natijada o‘zgargan fayllar, tekshiruv buyrug‘i va kuzatilgan natijani ber.
+> A kartaning ikkita rolini toza brauzerda tekshir. C/D da bitta sintetik bemor uchun reja → «Dori tugadi» → aniq log ko‘rigi → bemorga javobni ula. Engine kontraktini INTERFACES’dan ol. modern-web-guidance va frontend-ui-engineering bilan telefon holatlarini, neon-postgres bilan yozuv va ko‘rik tranzaksiyasini tekshir. Natijada o‘zgargan fayllar, tekshiruv buyrug‘i va kuzatilgan natijani ber.
 
 **Codex · B**
 
-> `codex/dev` da B kartani ol. test-driven-development va api-and-interface-design bilan avval bir dori ikki kunda qoldirilgan, bir kunda ikki marta bosilgan va umuman xabar kelmagan holatlarni ajratadigan sinovlarni yoz. Shifokor chegarasiga teng qiymatni ham tekshir. Rules, tests va INTERFACES’ga yoz. Zod bilan tekshiriladigan typed exportni hujjatla. DB va sessiya integratsiyasi uchun ehtiyojni PLAN’da qayd et. Haqiqiy test natijasi va ulanadigan joyni topshir.
+> B kartani ol. test-driven-development va api-and-interface-design bilan avval bir dori ikki kunda qoldirilgan, bir kunda ikki marta bosilgan va umuman xabar kelmagan holatlarni ajratadigan sinovlarni yoz. Shifokor chegarasiga teng qiymatni ham tekshir. Rules, tests va INTERFACES’ga yoz. Zod bilan tekshiriladigan typed exportni hujjatla. DB va sessiya integratsiyasi uchun ehtiyojni PLAN’da qayd et. Haqiqiy test natijasi va ulanadigan joyni topshir.
 
 **Codex subagenti · E yoki G kartalaridan bittasi**
 
@@ -214,7 +214,7 @@ Bir vazifada natijaga ta’sir qiladigan skilllarni tanlang. `shadcn` va dizayn 
 | `geminiDocs` | Lokal Codex sozlamasi va repo ro‘yxatida bor. Interactions uchun rasmiy JS SDK qidiruvi va hujjatni olish ishladi. Bu tekshiruv modelga inference so‘rovi yuborishni o‘z ichiga olmadi. G boshida Decisions API hujjati va ayni SDK/kalit bilan sintetik smoke alohida tekshiriladi. [Interactions](https://ai.google.dev/gemini-api/docs/interactions) · [Decisions e’loni](https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/) |
 | GitHub | Codex GitHub ulanishi joriy repo metama’lumotini o‘qidi. PR diff, review va CI natijasi uchun ishlating. Lokal ish holati `git status` va `git diff` orqali ko‘riladi. |
 | Browser va Playwright | Brauzer boshqaruvi ushbu sessiyada bor, Playwright buyrug‘i PATH’da topildi. Qo‘lda oqimni kuzatish uchun brauzer, takrorlanadigan smoke uchun repodagi Playwright sinovlari. Skriptlar scaffold bilan keladi. Telefon kamerasi haqiqiy qurilmada alohida tekshiriladi. |
-| Neon va Vercel | CLI buyruqlari PATH’da. A uchun Neon metadata orqali ikkala URL `codex-dev` endpointiga bog‘langani tasdiqlandi va demo sxemasi shu branchda tekshirildi. Vercel deployini jamoa yuritadi. |
+| Neon va Vercel | CLI buyruqlari PATH’da. A uchun demo sxemasi o‘sha paytdagi ajratilgan `codex-dev` branchida tekshirildi. Joriy Vercel production GitHub `main`dan chiqadi va Neon `main`ga ulanadi. |
 | `shadcn`, `node_repl`, `opencode_console` | Uchalasining vositalari sessiyada ko‘rindi. `shadcn` komponent katalogi kerak bo‘lsa, `node_repl` vaqtinchalik lokal tekshiruvlar uchun. `opencode_console` OpenCode hisob boshqaruvi uchun. `21st` va Stitch MCP bu Codex sessiyasida ko‘rinmadi. |
 | Codex ilovasi, veb qidiruvi va boshqa ilovalar | Veb qidiruvi rasmiy musobaqa talablari va birlamchi hujjatlarni kuzatishga, Codex ilovasi chat yoki worktree boshqarish so‘ralganda yordam beradi. Google Drive va hujjat vositalari jamoa topshirish materiallarini u yerda yuritsa ishlatiladi. Gmail, Calendar, Contacts, Sites va media vositalari joriy engine kartalariga bog‘lanmagan. |
 
@@ -235,11 +235,11 @@ Bir vazifada natijaga ta’sir qiladigan skilllarni tanlang. `shadcn` va dizayn 
 - **Til va framework tanlovi.** Har komponent uchun vazifa, kutubxona ekotizimi, ishlash muhiti va jamoaning xizmatni yuritish imkonini solishtiring. ShifoHalqada veb-panel Next.js’da, Telegram Python/aiogram’da, native Android demo Kotlin/Compose’da. Komponentlar orasidagi kontraktni `docs/INTERFACES.md` da yuriting.
 
 - **Siz beradigan kontekst.** Bitta karta, boshlang‘ich SHA, muhim SPEC bandi va nimani ko‘rsangiz ishni qabul qilishingizni ayting. Real telefon sinovi uchun jamoada bor qurilma va ruxsatli namunani ko‘rsating. Xato bo‘lsa reproduksiya qadami va qisqa, maxfiy qiymatlari olib tashlangan logni yuboring. AI hujjatlari qidiruvi va namunalarga sintetik ma’lumot ishlating.
-- **Codex bajaradigan ish.** Mos skilllarni o‘zi tanlaydi, joriy holat va SDK hujjatini tekshiradi, test → kod → hujjat → qayta tekshiruv siklini olib boradi. Har tekshirilgan, mustaqil ish bo‘lagini `codex/dev` da keyingi bo‘lakka o‘tishdan oldin alohida commit qiladi. Integratsiya bog‘liqliklarini `PLAN.md` da yuritadi. Klinik qoida yoki scope o‘zgarishi kerak bo‘lsa, ochiq qarorni va uning sinovga ta’sirini ko‘rsatadi.
+- **Codex bajaradigan ish.** Mos skilllarni o‘zi tanlaydi, joriy holat va SDK hujjatini tekshiradi, test → kod → hujjat → qayta tekshiruv siklini olib boradi. Har tekshirilgan, mustaqil ish bo‘lagini keyingi bo‘lakka o‘tishdan oldin alohida commit qiladi. Integratsiya bog‘liqliklarini `PLAN.md` da yuritadi. Klinik qoida yoki scope o‘zgarishi kerak bo‘lsa, ochiq qarorni va uning sinovga ta’sirini ko‘rsatadi.
 - **Kartani topshirish.** Karta/SHA, o‘zgargan fayllar, `INTERFACES.md` dagi import, bajarilgan test buyruqlari va real natija, qolgan bog‘liqlik hamda egasini bitta xabarga jamlang. Bu ma’lumot bilan keyingi chatni davom ettirish mumkin. Review so‘roviga aynan revision yoki diffni biriktiring.
 - **`AGENTS.md` ni yaxshilash.** Milestone tugaganda yoki bir muammo qayta uchraganda, Codex doimiy qoida uchun qisqa diff va sababni taklif qiladi. Faqat o‘sha tahrir uchun foydalanuvchidan aniq tasdiq kelgach faylga yozadi. Bir martalik vazifa holati yoki bloklovchi dalil shu rejada yuritiladi.
 
-> `codex/dev` da PLAN §5 B kartasini davom ettir. SPEC §5 va §8 hamda INTERFACES’ni o‘qi. Shifokor chegarasiga teng BP, ikki kun qoldirilgan dori, javobsiz kun va takror bosish ajralsin. Qoidalar, Vitest va public kontraktni yakunla. Yakunda integratsiya qadamlarini, test buyruqlari va kuzatilgan natijani ber. AGENTS.md uchun diff bo‘lsa, avval menga ko‘rsat.
+> PLAN §5 B kartasini davom ettir. SPEC §5 va §8 hamda INTERFACES’ni o‘qi. Shifokor chegarasiga teng BP, ikki kun qoldirilgan dori, javobsiz kun va takror bosish ajralsin. Qoidalar, Vitest va public kontraktni yakunla. Yakunda integratsiya qadamlarini, test buyruqlari va kuzatilgan natijani ber. AGENTS.md uchun diff bo‘lsa, avval menga ko‘rsat.
 
 > [SHA yoki PR] ni D kartadagi qabul mezonlari bo‘yicha tekshir. Ikkita log uchun ko‘rik, bemor javobi va rollar ajralishini sintetik demo orqali kuzat. Har topilma uchun ta’sir, fayl yoki ekran, tekshirilgan holat va mas’ul egani ko‘rsat.
 

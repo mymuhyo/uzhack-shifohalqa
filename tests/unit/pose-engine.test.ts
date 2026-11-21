@@ -198,6 +198,20 @@ describe('sit-to-stand pose tracker', () => {
     feed(tracker, cycle(95).slice(17), nextTime + 500);
 
     expect(tracker.result()).toMatchObject({ validReps: 0, shallowReps: 0 });
+    expect(tracker.feedback()).toMatchObject({ interruptedCycles: 1, incompleteCycles: 0 });
+  });
+
+  it('waits for the starting pose and distinguishes an incomplete movement from lost tracking', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const constant = (angle: number) => Array<number>(7).fill(angle);
+    const seated = feed(tracker, constant(95));
+    expect(tracker.isTracking()).toBe(true);
+    expect(tracker.feedback().ready).toBe(false);
+    const standing = feed(tracker, constant(174), seated);
+    expect(tracker.feedback().ready).toBe(true);
+    feed(tracker, [...constant(145), ...constant(174)], standing);
+    expect(tracker.feedback()).toEqual({ ready: true, interruptedCycles: 0, incompleteCycles: 1 });
+    expect(tracker.cycles()).toHaveLength(0);
   });
 
   it('retains the quality penalty if the camera loses tracking before any completed rep', () => {

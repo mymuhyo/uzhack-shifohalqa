@@ -103,6 +103,8 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
   let minAngle: number | null = null;
   let validReps = 0;
   let shallowReps = 0;
+  let interruptedCycles = 0;
+  let incompleteCycles = 0;
   let motionSignature: number[] | null = null;
   const completed: MeasuredCycle[] = [];
 
@@ -111,6 +113,7 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     phase = 'waiting';
     trackedSide = null;
     standingSample = null;
+    if (cycle) interruptedCycles += 1;
     cycle = null;
     if (!measuring) {
       attemptedFrames = 0;
@@ -136,6 +139,8 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
 
     const duration = sample.time - cycle.samples[0].time;
     if (duration > maxCycleMs) {
+      incompleteCycles += 1;
+      cycle = null;
       resetSegment();
       return;
     }
@@ -154,6 +159,8 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
       completed.push({ fromMs: cycle.samples[0].time, toMs: sample.time, minAngle: cycle.minimum, reachesTarget });
       if (completed.length > 40) completed.shift();
       motionSignature ??= sampleSignature(cycle.samples);
+    } else {
+      incompleteCycles += 1;
     }
     phase = 'standing';
     standingSample = sample;
@@ -197,6 +204,11 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     update,
     cycles: () => completed.slice(),
     isTracking: () => recentAngles.length === angleWindow,
+    feedback: () => ({
+      ready: standingSample !== null,
+      interruptedCycles,
+      incompleteCycles: incompleteCycles + (cycle ? 1 : 0),
+    }),
     result: () => {
       // A person may step out of frame to stop the camera after a completed rep.
       const frames = liveCamera && (validReps > 0 || shallowReps > 0)

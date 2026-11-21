@@ -11,7 +11,7 @@ import { ExerciseAnalysisPanel } from './exercise-analysis-panel';
 import styles from './exercise-client.module.css';
 
 type Source = 'live_camera' | 'uploaded_video';
-type Framing = 'positioning' | 'tracking' | 'lost';
+type Framing = 'positioning' | 'waitingForStart' | 'ready' | 'lost';
 type Tracker = ReturnType<typeof createPoseTracker>;
 type Measurement = ReturnType<Tracker['result']>;
 
@@ -32,7 +32,7 @@ type Screen =
   | { phase: 'idle' }
   | { phase: 'starting' | 'retake'; message: string }
   | { phase: 'running'; source: Source; framing: Framing | null; currentAngle: number | null; validReps: number; shallowReps: number }
-  | { phase: 'result'; source: Source; measurement: Measurement; cycles: MeasuredCycle[]; fileSha256: string | null };
+  | { phase: 'result'; source: Source; measurement: Measurement; cycles: MeasuredCycle[]; feedback: ReturnType<Tracker['feedback']>; fileSha256: string | null };
 
 type Report = 'measurement' | 'manual' | 'pain';
 type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message: string };
@@ -47,7 +47,8 @@ const sourceLabel: Record<Source, string> = {
 };
 const framingMessage: Record<Framing, string> = {
   positioning: 'Tayyorlaning. Kameraga yon tomoningizni tuting. Son, tizza va to‘piq kadrga sig‘sin.',
-  tracking: 'Tayanch nuqtalar ko‘rinyapti. Tik turgan holatdan boshlang.',
+  waitingForStart: 'Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun tik turing.',
+  ready: 'Sanoq tayyor. O‘tirib yana tik turing.',
   lost: 'Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, yon tomoningiz bilan tik turing.',
 };
 
@@ -172,7 +173,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
         : 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.' });
       return;
     }
-    setScreen({ phase: 'result', source, measurement, cycles: tracker.cycles(), fileSha256 });
+    setScreen({ phase: 'result', source, measurement, cycles: tracker.cycles(), feedback: tracker.feedback(), fileSha256 });
   }
 
   function begin(source: Source, message: string): Capture | null {
@@ -217,9 +218,9 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
       }
       if (framing !== null) {
         if (tracker.isTracking()) {
-          framing = 'tracking';
+          framing = tracker.feedback().ready ? 'ready' : 'waitingForStart';
           lastTrackedTimestamp = timestampMs;
-        } else if (framing === 'tracking' && timestampMs - lastTrackedTimestamp >= framingLostDelayMs) {
+        } else if (lastTrackedTimestamp !== -Infinity && timestampMs - lastTrackedTimestamp >= framingLostDelayMs) {
           framing = 'lost';
         }
       }
@@ -458,6 +459,12 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
           {sample && <p>CDC namuna videosi</p>}
           <p className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.measurement.validReps} · Chala {screen.measurement.shallowReps}</p>
           <p>Eng kichik burchak {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr</p>
+          {screen.source === 'live_camera' && screen.feedback.interruptedCycles > 0 && (
+            <p>Kuzatuv {screen.feedback.interruptedCycles} ta harakat paytida uzildi. To‘liq oyoq kadrga sig‘ishini tekshiring.</p>
+          )}
+          {screen.source === 'live_camera' && screen.feedback.incompleteCycles > 0 && (
+            <p>{screen.feedback.incompleteCycles} ta harakatda o‘tirish yoki tik holatga qaytish to‘liq qayd etilmadi.</p>
+          )}
           {screen.cycles.length > 0 && (
             <table className={styles.cycles}>
               <caption>Sikllar · tizza burchagi maqsadi {targetAngle}°</caption>

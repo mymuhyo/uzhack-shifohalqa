@@ -2,6 +2,7 @@
 
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import type { ExerciseProvider } from '@/lib/exercise-analysis';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
 import { elbowSample, exerciseSample } from '@/lib/exercise-sample';
 import { createPoseTracker, type MeasuredCycle, type PoseMovement } from '@/lib/pose/engine';
@@ -122,10 +123,10 @@ function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
 
 const seconds = new Intl.NumberFormat('uz-Latn-UZ', { maximumFractionDigits: 1 });
 
-export function ExerciseClient({ targetAngle, preview = false, showGemini = false, movement = 'chair_stand' }: {
+export function ExerciseClient({ targetAngle, preview = false, analysisProviders = [], movement = 'chair_stand' }: {
   targetAngle: number;
   preview?: boolean;
-  showGemini?: boolean;
+  analysisProviders?: readonly ExerciseProvider[];
   movement?: PoseMovement;
 }) {
   const copy = movementCopy[movement];
@@ -417,7 +418,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
   const capturing = screen.phase === 'starting' || screen.phase === 'running';
   const saving = saveStatus?.state === 'saving';
   const sample = screen.phase === 'result' && screen.fileSha256 === example.sha256;
-  const poseCycles = sample ? screen.measurement.validReps + screen.measurement.shallowReps : undefined;
+  const poseCycles = sample ? screen.cycles : undefined;
   const showVideo = capturing && (screen.phase !== 'running' || screen.source === 'live_camera');
   return (
     <div className={styles.exercise}>
@@ -498,7 +499,9 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
           }>Natijani yuborish</button>}
         </div>
       )}
-      {reviewingSample && showGemini && <ExerciseAnalysisPanel poseCycles={poseCycles} />}
+      {reviewingSample && analysisProviders.map(provider => (
+        <ExerciseAnalysisPanel key={provider} provider={provider} poseCycles={poseCycles} />
+      ))}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
       {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
         <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>

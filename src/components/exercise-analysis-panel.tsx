@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { exerciseAnalysis, type ExerciseAnalysis } from '@/lib/exercise-analysis';
+import { useEffect, useId, useRef, useState } from 'react';
+import { exerciseAnalysis, type ExerciseAnalysis, type ExerciseProvider } from '@/lib/exercise-analysis';
+import type { MeasuredCycle } from '@/lib/pose/engine';
 import styles from './exercise-client.module.css';
 
 const viewLabels = {
@@ -10,7 +11,9 @@ const viewLabels = {
   unclear: 'Klipdan harakatni ishonchli ajratib bo‘lmadi.',
 };
 
-export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: number }) {
+export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: ExerciseProvider; poseCycles?: MeasuredCycle[] }) {
+  const name = provider === 'gemini' ? 'Gemini' : 'OpenRouter';
+  const headingId = useId();
   const [report, setReport] = useState<ExerciseAnalysis | null>(null);
   const [pending, setPending] = useState(false);
   const request = useRef<AbortController | null>(null);
@@ -26,7 +29,7 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: number }) {
       const response = await fetch('/api/demo/exercise-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ provider }),
         signal: controller.signal,
       });
       const parsed = exerciseAnalysis.safeParse(await response.json());
@@ -40,28 +43,31 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: number }) {
   }
 
   return (
-    <section className={styles.aiPanel} aria-labelledby="gemini-observation">
-      <h2 id="gemini-observation">Gemini kuzatuvi</h2>
-      <p>Gemini faqat shu ommaviy CDC klipidagi harakatni mustaqil ko‘radi.</p>
+    <section className={styles.aiPanel} aria-labelledby={headingId}>
+      <h2 id={headingId}>{name} kuzatuvi</h2>
+      <p>{provider === 'gemini' ? 'Gemini ommaviy CDC klipini mustaqil ko‘radi.' : 'OpenRouter CDC klipining yuzlar va ovoz olib tashlangan nusxasini ko‘radi.'}</p>
       {report?.status !== 'observed' && (
-        <button type="button" className={styles.primary} onClick={review} disabled={pending}>Namunani Gemini bilan tahlil qilish</button>
+        <button type="button" className={styles.primary} onClick={review} disabled={pending}>Namunani {name} bilan tahlil qilish</button>
       )}
-      {pending && <p role="status">Gemini klipni ko‘rib chiqmoqda…</p>}
-      {report?.status === 'unavailable' && <p role="status">Gemini tahlili hozir mavjud emas. MediaPipe o‘lchovlari yuqorida.</p>}
+      {pending && <p role="status">{name} klipni ko‘rib chiqmoqda…</p>}
+      {report?.status === 'unavailable' && <p role="status">{name} tahlili hozir mavjud emas. MediaPipe o‘lchovlari yuqorida.</p>}
       {report?.status === 'observed' && (
         <div className={styles.analysisResult} role="status">
           <p>{viewLabels[report.observation.view]}</p>
           {report.observation.view !== 'unclear' && (
             <>
               <p className={styles.counter}>
-                {poseCycles !== undefined && `MediaPipe: ${poseCycles} sikl · `}Gemini: {report.observation.seatedAtSeconds.length} sikl
+                {poseCycles && `MediaPipe: ${poseCycles.length} sikl · `}{name}: {report.observation.seatedAtSeconds.length} sikl
               </p>
               {report.observation.seatedAtSeconds.length > 0 && (
-                <p>Gemini bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
+                <p>{name} bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
               )}
-              {poseCycles !== undefined && (
-                <p>{poseCycles === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi. Kadrlarni qayta ko‘rib chiqing.'}</p>
-              )}
+              {poseCycles && <p>
+                {poseCycles.length === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi.'}
+                {poseCycles.length > 0 && ` MediaPipe topgan ${poseCycles.length} sikldan ${poseCycles.filter(({ fromMs, toMs }) =>
+                  report.observation.seatedAtSeconds.some(time => time * 1000 >= fromMs && time * 1000 <= toMs),
+                ).length} tasining vaqt oralig‘iga ${name} belgilagan o‘tirish vaqti tushdi.`}
+              </p>}
             </>
           )}
           <p className={styles.modelName}>{report.model} · Ommaviy namuna</p>

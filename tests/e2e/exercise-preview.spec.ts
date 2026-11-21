@@ -59,7 +59,7 @@ test('asks real Gemini to observe the fixed clip and leaves MediaPipe evidence s
   expect(response.status()).toBe(200);
   const report = await response.json();
   expect(report).toMatchObject({ status: 'observed' });
-  expect(response.request().postDataJSON()).toEqual({});
+  expect(response.request().postDataJSON()).toEqual({ provider: 'gemini' });
   const panel = page.getByRole('region', { name: 'Gemini kuzatuvi' });
   await expect(panel).toContainText('Ommaviy namuna');
   const result = page.getByRole('heading', { name: 'MediaPipe o‘lchovi' });

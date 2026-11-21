@@ -1,11 +1,23 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GoogleGenAI } from '@google/genai';
-import { type ExerciseAnalysis, videoObservation } from '../exercise-analysis';
+import { z } from 'zod';
+import { type ExerciseAnalysis, type ExerciseProvider, exerciseProvider, videoObservation } from '../exercise-analysis';
 import { exerciseSample } from '../exercise-sample';
 
-export function isExerciseAnalysisEnabled() {
-  return process.env.EXERCISE_GEMINI_DEMO === 'true' && Boolean(process.env.GEMINI_API_KEY?.trim());
+const observationPrompt = 'Observe this short public motion demonstration. Count complete standing → seated → standing cycles only. For each complete cycle report one approximate seated timestamp in seconds from the start of the clip, in increasing order. Ignore incomplete cycles. Classify the side view as side_visible when hip, knee and ankle are broadly visible, partly_visible when any joint is obscured, or unclear with an empty array if tracking is unreliable. Report only these observations. Do not infer joint angles, diagnose, or advise the performer.';
+const openRouterModel = () => process.env.OPENROUTER_EXERCISE_MODEL?.trim() || 'google/gemma-4-26b-a4b-it:free';
+
+function isProviderEnabled(provider: ExerciseProvider) {
+  if (provider === 'gemini') {
+    return process.env.EXERCISE_GEMINI_DEMO === 'true' && Boolean(process.env.GEMINI_API_KEY?.trim());
+  }
+  return process.env.EXERCISE_OPENROUTER_DEMO === 'true' &&
+    Boolean(process.env.OPENROUTER_API_KEY?.trim()) && openRouterModel().endsWith(':free');
+}
+
+export function availableExerciseProviders() {
+  return exerciseProvider.options.filter(isProviderEnabled);
 }
 
 const videoSchema = {
@@ -17,46 +29,98 @@ const videoSchema = {
   required: ['view', 'seatedAtSeconds'],
 };
 
-async function observeSample(): Promise<ExerciseAnalysis> {
+async function observeWithGemini(): Promise<ExerciseAnalysis> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return { status: 'unavailable' };
   const model = process.env.GEMINI_EXERCISE_MODEL?.trim() || 'gemini-3.5-flash-lite';
+  const fallbackModel = process.env.GEMINI_EXERCISE_FALLBACK_MODEL?.trim() || 'gemini-3.1-flash-lite';
   const ai = new GoogleGenAI({ apiKey, apiVersion: 'v1', vertexai: false });
   try {
-    const clip = await readFile(join(process.cwd(), 'public', exerciseSample.path));
-    const signal = AbortSignal.timeout(25_000);
-    const result = await ai.interactions.create({
-      model,
-      store: false,
-      automatic_continuation: false,
-      generation_config: { thinking_level: 'low' },
-      input: [{
-        type: 'user_input',
-        content: [{
-          type: 'text',
-          text: 'Observe this short public motion demonstration. Count complete standing → seated → standing cycles only. For each complete cycle report one approximate seated timestamp in seconds from the start of the clip, in increasing order. Ignore incomplete cycles. Classify the side view as side_visible when hip, knee and ankle are broadly visible, partly_visible when any joint is obscured, or unclear with an empty array if tracking is unreliable. Report only these observations. Do not infer joint angles, diagnose, or advise the performer.',
-        }, { type: 'video', data: clip.toString('base64'), mime_type: 'video/webm' }],
-      }],
-      response_format: { type: 'text', mime_type: 'application/json', schema: videoSchema },
-    }, { signal, maxRetries: 0 });
-    if (result.status !== 'completed' || !result.output_text) return { status: 'unavailable' };
-    const observation = videoObservation.parse(JSON.parse(result.output_text));
+    const video = (await readFile(join(process.cwd(), 'public', exerciseSample.path))).toString('base64');
+    const observe = async (selectedModel: string, signal: AbortSignal): Promise<ExerciseAnalysis> => {
+      const result = await ai.interactions.create({
+        model: selectedModel,
+        store: false,
+        automatic_continuation: false,
+        generation_config: { thinking_level: 'low' },
+        input: [{ type: 'user_input', content: [
+          { type: 'text', text: observationPrompt },
+          { type: 'video', data: video, mime_type: 'video/webm' },
+        ] }],
+        response_format: { type: 'text', mime_type: 'application/json', schema: videoSchema },
+      }, { signal, maxRetries: 0 });
+      if (result.status !== 'completed' || !result.output_text) return { status: 'unavailable' };
+      const observation = videoObservation.parse(JSON.parse(result.output_text));
+      return { status: 'observed', model: selectedModel, observation };
+    };
+    const deadline = AbortSignal.timeout(25_000);
+    if (model === fallbackModel) return await observe(model, deadline);
+    const primaryWindow = AbortSignal.any([deadline, AbortSignal.timeout(8_000)]);
+    try {
+      return await observe(model, primaryWindow);
+    } catch (error) {
+      const status = typeof error === 'object' && error && 'status' in error ? error.status : null;
+      const retryable = typeof status === 'number' && (status === 429 || status >= 500);
+      if (deadline.aborted || (!primaryWindow.aborted && !retryable)) throw error;
+      return await observe(fallbackModel, deadline);
+    }
+  } catch {
+    return { status: 'unavailable' };
+  }
+}
+
+const routerReply = z.object({
+  model: z.string().min(1),
+  choices: z.array(z.object({ finish_reason: z.literal('stop'), message: z.object({ content: z.string() }) })).min(1),
+});
+
+async function observeWithOpenRouter(): Promise<ExerciseAnalysis> {
+  const key = process.env.OPENROUTER_API_KEY?.trim();
+  if (!key) return { status: 'unavailable' };
+  try {
+    const clip = await readFile(join(process.cwd(), 'public/demo/pose-cdc-lower-body.mp4'));
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(25_000),
+      body: JSON.stringify({
+        model: openRouterModel(),
+        max_tokens: 512,
+        provider: { require_parameters: true },
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: observationPrompt },
+          { type: 'video_url', video_url: { url: `data:video/mp4;base64,${clip.toString('base64')}` } },
+        ] }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'exercise_observation', strict: true, schema: { ...videoSchema, additionalProperties: false } },
+        },
+      }),
+    });
+    if (!response.ok) return { status: 'unavailable' };
+    const { model, choices } = routerReply.parse(await response.json());
+    const observation = videoObservation.parse(JSON.parse(choices[0].message.content));
     return { status: 'observed', model, observation };
   } catch {
     return { status: 'unavailable' };
   }
 }
 
-let inFlight: Promise<ExerciseAnalysis> | undefined;
-let cached: { value: ExerciseAnalysis; until: number } | undefined;
+const inFlight = new Map<ExerciseProvider, Promise<ExerciseAnalysis>>();
+const cache = new Map<ExerciseProvider, { value: ExerciseAnalysis; until: number }>();
 
-/** All callers analyze the same bundled clip. Share one provider call per process. */
-export async function reviewExerciseSample(): Promise<ExerciseAnalysis> {
-  if (!isExerciseAnalysisEnabled()) return { status: 'unavailable' };
+/** Only bundled samples are sent. Share one concurrent call per provider and process. */
+export async function reviewExerciseSample(provider: ExerciseProvider): Promise<ExerciseAnalysis> {
+  if (!isProviderEnabled(provider)) return { status: 'unavailable' };
+  const cached = cache.get(provider);
   if (cached && cached.until > Date.now()) return cached.value;
-  inFlight ??= observeSample().then(value => {
-    cached = { value, until: Date.now() + (value.status === 'observed' ? 300_000 : 15_000) };
+  const pending = inFlight.get(provider);
+  if (pending) return pending;
+  const observer = provider === 'gemini' ? observeWithGemini : observeWithOpenRouter;
+  const request = observer().then(value => {
+    cache.set(provider, { value, until: Date.now() + (value.status === 'observed' ? 300_000 : 15_000) });
     return value;
-  }).finally(() => { inFlight = undefined; });
-  return inFlight;
+  }).finally(() => { inFlight.delete(provider); });
+  inFlight.set(provider, request);
+  return request;
 }

@@ -40,7 +40,8 @@ function verifyDatabase(local, expectedHost, name, database, pooled) {
 }
 
 async function main() {
-  const [action, ...args] = process.argv.slice(2);
+  const [action, ...options] = process.argv.slice(2);
+  const args = options[0] === '--' ? options.slice(1) : options;
   if (!action || action === '--help') {
     console.log('npm run lane -- check | dev [--live] | smoke [Playwright args] | e2e [Playwright args] | db-apply | emulator | android-test');
     return;

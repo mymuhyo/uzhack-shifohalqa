@@ -12,6 +12,23 @@
 
 **Lokal sinash.** `DEMO_MODE=true` va alohida `SESSION_SECRET` bilan ishga tushiring. `/demo/mashq` da **CDC namunasini sinash** ni bosing. Gemini tugmasi uchun `EXERCISE_GEMINI_DEMO=true` va serverdagi `GEMINI_API_KEY` kerak. Jonli provayder brauzer testini `SHIFO_E2E_EXERCISE_GEMINI=1 npm run e2e -- tests/e2e/exercise-preview.spec.ts --workers=1` bilan tanlang. [Video tahlili](https://aistudio.google.com/docs/video-understanding) · [Gemini foydalanish shartlari](https://aistudio.google.com/docs/terms)
 
+## Telefon sinovidan keyingi ketma-ketlik
+
+Vercel’dagi demo `ffdc850`dan chiqarilgan. Lokal `1c7ddd7` hisoblagich tuzatishi bilan loyiha egasi Android brauzerida 8 to‘liq va 2 chala takror hamda yashil tayanch chizig‘ini ko‘rdi. Bajarilgan takrorlarning etalon sanog‘i yozilmagan. Ushbu sinov kamera oqimi ishlaganini tasdiqlaydi. [Benchmark](BENCHMARK.md#jonli-kamerada-sekin-kadr-oqimi)
+
+| Tartib | Ish | Hajm va bog‘liqlik | Qabul mezoni |
+|---|---|---|---|
+| 1 | Web relizni yakunlash | Kichik. Kamera tuzatishi va egasi roziligi | Test ma’lumotlari bilan Chrome Android’da oldindan belgilangan takrorlar, kadrdan chiqish va qayta kirish tekshiriladi. Boshqa qurilmada, imkon bo‘lsa iOS Safari’da, CDC va kamera oqimi qaytariladi. Hakam yo‘riqnomasida kamera, CDC va Gemini qadamlarini ko‘rsating. Qabuldan keyin ikkala HTTPS domenda yangi reliz, demo rollari va Gemini namunasi ochiladi. |
+| 2 | O‘lchov sifatini yaxshilash | O‘rta. 1 va qo‘lda belgilangan test misollari | Kamera tayyorligini tik turgan holat aniqlangandan keyin ko‘rsating. Takror sanalmaganida kadr yetishmasligi va tugallanmagan siklni ajrating. Iloji boricha turli yorug‘lik, burchak va tezlikda qo‘lda belgilangan sikllar bo‘yicha o‘tkazib yuborilgan, ortiqcha va chala sanalgan takrorlarni yozing. Test natijasini o‘lchov ishonchidan alohida ko‘rsating. |
+| 3 | Telegram Mini App’da mashqni ochish | Kichik sinov. 1 va alohida test bot | Bot menyusi bor HTTPS mashq sahifasini Telegram ichida ochadi. CDC klipi Android va iOS’dagi Telegram klientida tekshiriladi. Jonli kamera shu muhitda tekshiriladi, ruxsat yoki API yetishmasa brauzerda ochish tugmasi ishlaydi. Birinchi versiya ommaviy namuna bilan ishlaydi. Mavjud bildirishnomalar saqlanadi. [Telegram Mini Apps](https://core.telegram.org/bots/webapps) |
+| 4 | Mashq bo‘yicha tahlil va ovoz | O‘rta. 2 va bir xil etalon sinovlar | Dastlab CV’dagi «kadrga qayting», sikl va tizza burchagi kabi kuzatuvlardan tushunarli yakun tuzing. Gemini Live’ni ommaviy namuna bilan alohida solishtiring. Ovozli yo‘l aniqroq fikr yoki tezroq qayta aloqa bersagina demo oqimiga qo‘shiladi. Shaxsiy kadrlar qurilmada qoladi. |
+| 5 | Android’da mashq sinov APKsi | O‘rta. 2 va bir xil tayanch nuqtalari testlari | Mavjud Compose ilovasiga bitta nativ mashq ekrani qo‘shiladi. CameraX va qurilmadagi pose modeli bilan takror, tayanch chizig‘i va tizza burchagi ko‘rinadi. Shu trayektoriyalar web bilan solishtiriladi. Debug APK, lint va ulangan qurilmadagi UI sinovi o‘tadi. Klinik qayd yuborishdan oldin mobil mashq API’si uchun alohida kontrakt kerak. [CameraX](https://developer.android.com/media/camera/camerax/analyze) |
+| 6 | Telegram bemor sessiyasi va Play sinov tarqatishi | Alohida ishlar. 3 yoki 5 natijasiga bog‘liq | Telegram sessiyasi kerak bo‘lsa server `initData`ni tekshiradi va tasdiqlangan bog‘lash orqali bemor rolini beradi. Android tarqatishda imzolangan build avval Play Internal Testing’da kichik guruhga beriladi. Hakam oqimi oddiy web havola orqali davom etadi. [Telegram sessiyasi](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app) · [Play sinov kanallari](https://support.google.com/googleplay/android-developer/answer/9845334) |
+
+Web, Telegram va Android bir xil vazifa va dalil kontraktiga ulanadi. Telegram birinchi bosqichda web interfeysni qayta ishlatadi. Android esa qurilmadagi kamera boshqaruvi va o‘lchov barqarorligi uchun alohida klient bo‘lib qoladi.
+
+**Git va reliz.** Har commit bitta mantiqiy o‘zgarishni saqlaydi. Kerakli paytda ish filialini GitHub’ga push qilish mumkin. `main` push Vercel va Railway’ni ishga tushirishi mumkin. Vercel `promote` esa tekshirilgan buildga production domenlarini o‘tkazadi. Eksperimentni `main`ga birlashtirish va production reliz uchun egasi tasdig‘i olinadi. [Vercel promote](https://vercel.com/docs/deployments/promoting-a-deployment)
+
 ## Oldingi V2 · Uy davosidagi to‘siqqa javob
 
 Hakam muvaffaqiyatni bitta natijadan ko‘ra oladi. Bemor dori tugaganini bildiradi, shifokor o‘sha yozuvga javob beradi, bemor javobni ko‘radi. Klinik natijani keyin bemor bilan tekshirish kerak. Task 2 uchun shu oqimdagi uzilishlarni tuzatamiz. [Audit](AUDIT.md) · [Uch mahsulot yo‘nalishi](FUTURE.md)

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import '@fontsource/golos-text/400.css';
 import '@fontsource/golos-text/600.css';
 import '@fontsource/literata/500.css';
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </header>
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );

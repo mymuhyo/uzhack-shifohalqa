@@ -10,7 +10,9 @@ test('opens the camera demo without a plan and measures the public clip in the b
   await expect(page.getByRole('heading', { name: 'O‘tirib-turish tahlili' })).toBeVisible();
   const requests: string[] = [];
   page.on('request', request => {
-    if (request.method() === 'POST') requests.push(new URL(request.url()).pathname);
+    const path = new URL(request.url()).pathname;
+    // Next's dev overlay resolves stack frames for MediaPipe's console output.
+    if (request.method() === 'POST' && path !== '/__nextjs_original-stack-frames') requests.push(path);
   });
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
   await expect(page.getByRole('heading', { name: 'MediaPipe o‘lchovi' })).toBeVisible({ timeout: 95_000 });

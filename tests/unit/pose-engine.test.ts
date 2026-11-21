@@ -169,6 +169,37 @@ describe('sit-to-stand pose tracker', () => {
     expect(tracker.result().analyzedFrames).toBe(10);
   });
 
+  it('keeps a clearly visible leg when the other leg has a higher visibility score', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    cycle(95).forEach((angle, index) => {
+      const points = landmarks(angle, landscape, 0.84);
+      const other = landmarks(angle, landscape, index >= 6 && index % 2 === 0 ? 0.99 : 0.79);
+      [23, 25, 27].forEach(joint => { points[joint + 1] = other[joint]; });
+      tracker.update(points, { ...landscape, timestampMs: index * 80 });
+    });
+
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+  });
+
+  it('keeps a supported bottom and return at four measured frames per second', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const angles = [174, 174, 174, 174, 174, 174, 152, 130, 95, 95, 130, 152, 174, 174];
+    angles.forEach((angle, index) => {
+      tracker.update(landmarks(angle, landscape), { ...landscape, timestampMs: index * 250 });
+    });
+
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(tracker.cycles()[0].minAngle).toBeCloseTo(95);
+  });
+
+  it('does not join an unfinished live cycle across a long pause in frame delivery', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const nextTime = feed(tracker, cycle(95).slice(0, 17));
+    feed(tracker, cycle(95).slice(17), nextTime + 500);
+
+    expect(tracker.result()).toMatchObject({ validReps: 0, shallowReps: 0 });
+  });
+
   it('retains the quality penalty if the camera loses tracking before any completed rep', () => {
     const tracker = createPoseTracker({ targetAngle, liveCamera: true });
     const end = feed(tracker, [172, 172, 172, 172, 172]);

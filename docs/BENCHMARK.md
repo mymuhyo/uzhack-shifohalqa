@@ -84,6 +84,12 @@ Uchala yo‘lda 1,2–4,2 s sikli 94°, 5,3–8,5 s sikli 88° bo‘ldi. Bir xil
 
 Yakuniy 360×800 brauzer sinovida CDC klipi ishga tushgach, CV tugashidan oldin alohida Gemini tugmasi bosildi. MediaPipe 37 145 ms da jadvalni ko‘rsatdi. Gemini so‘rovi 2 994 ms da, CV dan oldin tugadi va 2 s hamda 6 s ni qaytardi. Birinchi tugmadan ikkala natija ko‘rinishigacha 37 389 ms o‘tdi. Bu bitta brauzer urinishidagi tarmoq va qurilma natijasi.
 
+### Jonli kamerada sekin kadr oqimi
+
+21-noyabr 2026 (MYT). Sintetik tayanch nuqtalari testida eski hisoblagich ko‘rinish ballari almashganda yoki oqim 4 kadr/soniyaga tushganda 0 sikl qaytardi. Tuzatilgan hisoblagich har ikkala testda 1 ta to‘liq sikl topdi. Alohida test 400 ms dan uzoq uzilish ustidan sikl tuzilmasligini tekshirdi.
+
+Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniyada virtual kamera sifatida uzatdik. Ikki yurishda 2 sikl topildi, har safar 1 to‘liq va 1 chala. Birinchi siklning hisoblangan eng kichik burchagi 101° va 102° chiqdi, demo chegarasi 100°. Yozilgan klip rejimi 2 to‘liq va 0 chala sikl berdi. Virtual kamera to‘xtatilganda trek yopildi va POST so‘rovi kuzatilmadi. Jismoniy Android kamerasida tuzatilgan hisoblagich natijasi hali tasdiqlanmagan.
+
 Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
 
 Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 chala sikl chiqdi. Oldingi aylanuvchi klip urinishida 1 to‘liq va 4 chala bo‘lgan. Aylanma klip sikllari etalon sifatida ishlatilmadi. Alohida resurs sinovi 360×568 oqim saqlanishini, tayanch chizig‘i va joriy burchak chiqishini, «To‘xtatish» treklarni yakunlashini va POST bo‘lmasligini tekshirdi. USB orqali jismoniy telefon topilmadi. Jonli sikl aniqligi qurilma va kadr tezligi bilan alohida sinov talab qiladi.

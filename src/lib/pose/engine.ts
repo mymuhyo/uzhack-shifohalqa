@@ -13,6 +13,7 @@ const standingAngle = 160;
 const descendingAngle = 150;
 const meaningfulBottomAngle = 140;
 const angleWindow = 5;
+const liveAngleWindowMs = 400;
 const minimumVisibility = 0.4;
 const framingVisibility = 0.75;
 const maxFrameGapMs = 750;
@@ -57,13 +58,16 @@ function measureSide(landmarks: readonly Landmark[], frame: Frame, side: Side): 
   };
 }
 
-function measureFrame(landmarks: readonly Landmark[], frame: Frame, trackedSide: Side | null) {
+function measureFrame(landmarks: readonly Landmark[], frame: Frame, trackedSide: Side | null, liveCamera: boolean) {
   if (!Number.isFinite(frame.width) || !Number.isFinite(frame.height) || frame.width <= 0 || frame.height <= 0) return null;
   const left = measureSide(landmarks, frame, 'left');
   const right = measureSide(landmarks, frame, 'right');
   if (!left || !right) return left ?? right;
-  if (trackedSide && Math.abs(left.visibility - right.visibility) < 0.05) {
-    return trackedSide === 'left' ? left : right;
+  if (trackedSide) {
+    const tracked = trackedSide === 'left' ? left : right;
+    if ((liveCamera && tracked.visibility >= framingVisibility) || Math.abs(left.visibility - right.visibility) < 0.05) {
+      return tracked;
+    }
   }
   return left.visibility >= right.visibility ? left : right;
 }
@@ -85,7 +89,7 @@ function sampleSignature(samples: AngleSample[]): number[] {
 
 export function createPoseTracker(config: z.input<typeof trackerConfig>) {
   const { targetAngle, liveCamera } = trackerConfig.parse(config);
-  const recentAngles: number[] = [];
+  const recentAngles: AngleSample[] = [];
   let measuring = !liveCamera;
   let phase: Phase = 'waiting';
   let trackedSide: Side | null = null;
@@ -159,10 +163,10 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
   function update(landmarks: readonly Landmark[], frame: Frame) {
     const { timestampMs } = frame;
     if (!Number.isFinite(timestampMs) || timestampMs <= lastFrameTime) return;
-    if (timestampMs - lastFrameTime > maxFrameGapMs) resetSegment();
+    if (timestampMs - lastFrameTime > (liveCamera ? liveAngleWindowMs : maxFrameGapMs)) resetSegment();
     lastFrameTime = timestampMs;
 
-    const measurement = measureFrame(landmarks, frame, trackedSide);
+    const measurement = measureFrame(landmarks, frame, trackedSide, liveCamera);
     if (!measurement || (!measuring && measurement.visibility < framingVisibility)) {
       attemptedFrames += 1;
       trailingMissedFrames += 1;
@@ -176,11 +180,14 @@ export function createPoseTracker(config: z.input<typeof trackerConfig>) {
     analyzedFrames += 1;
     visibilitySum += measurement.visibility;
 
-    recentAngles.push(measurement.angle);
+    recentAngles.push({ angle: measurement.angle, time: timestampMs });
     if (recentAngles.length > angleWindow) recentAngles.shift();
     if (recentAngles.length < angleWindow) return;
+    const samples = liveCamera
+      ? recentAngles.filter(sample => timestampMs - sample.time <= liveAngleWindowMs)
+      : recentAngles;
     measuring = true;
-    const angle = recentAngles.reduce((total, value) => total + value, 0) / angleWindow;
+    const angle = samples.reduce((total, sample) => total + sample.angle, 0) / samples.length;
     minAngle = Math.min(minAngle ?? angle, angle);
     advance({ angle, time: timestampMs }, measurement.angle);
     return { angle, joints: indices[measurement.side].map(index => landmarks[index]) };

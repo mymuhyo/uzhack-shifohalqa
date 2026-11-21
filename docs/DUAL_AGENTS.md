@@ -30,7 +30,7 @@ npm run lane -- db-apply
 
 `smoke` bazasiz brauzer sinovi. `e2e` buildni yangilaydi va ajratilgan `shifo_e2e` bazasida ishlaydi. `db-apply` ikkala tayinlangan bazaga `schema.sql` ni qo‘llaydi. Launcher meros qolgan xizmat konfiguratsiyasini olib tashlaydi va lokal ulanish satrlarining hostname hamda baza nomini tekshiradi. `.env.lane` resurs identifikatorini, `.env.local` esa kalitlarni saqlaydi. Ikkalasi Git’dan chiqarilgan.
 
-Android sinovi uchun bir terminalda `npm run lane -- emulator` ni ishga tushiring, ikkinchisida `npm run lane -- android-test` ni ishlating. Launcher AVD nomini va serialini tekshiradi, o‘sha qurilmaga APK o‘rnatadi va Android ichidagi 3000 portni shu agentning dev portiga yo‘naltiradi. Emulyatorni o‘z terminalida Ctrl+C bilan yoping. Jismoniy telefon kerak bo‘lsa, egasi bilan navbatni kelishib, aniq serialdan foydalaning.
+Android sinovi uchun bir terminalda `npm run lane -- emulator` ni ishga tushiring, ikkinchisida `npm run lane -- android-test` ni ishlating. Launcher AVD nomini va serialini tekshiradi, o‘sha qurilmaga APK o‘rnatadi va Android ichidagi 3000 portni shu agentning dev portiga yo‘naltiradi. Birinchi yuklanishda AVD’larni navbat bilan ishga tushiring va bir paytda to‘liq brauzer testlarini yuritmang. Emulyatorni o‘z terminalida Ctrl+C bilan yoping. Jismoniy telefon kerak bo‘lsa, egasi bilan navbatni kelishib, aniq serialdan foydalaning.
 
 ## Kalitlar va yangi resurslar
 

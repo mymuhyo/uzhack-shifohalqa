@@ -73,6 +73,7 @@ async function main() {
     EXERCISE_OPENROUTER_DEMO: 'false',
     TELEGRAM_DATABASE_URL: '',
     TELEGRAM_BOT_TOKEN: '',
+    UV_NO_CACHE: '1',
     SHIFO_E2E_WEB_PORT: String(config.webTest),
     SHIFO_E2E_TELEGRAM_PORT: String(config.telegramTest),
   };
@@ -164,7 +165,7 @@ async function android({ action, config, serial, avd, env }) {
   env.ANDROID_AVD_HOME = join(root, '.lane/avd');
   if (action === 'emulator') {
     await launch(join(sdk, 'emulator/emulator'), [
-      `@${avd}`, '-port', String(config.emulator), '-no-snapshot', '-no-window', '-no-audio', '-gpu', 'swiftshader',
+      `@${avd}`, '-port', String(config.emulator), '-no-snapshot', '-no-boot-anim', '-no-window', '-no-audio', '-gpu', 'swiftshader',
     ], { env });
     return;
   }

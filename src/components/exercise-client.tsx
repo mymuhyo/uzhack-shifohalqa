@@ -3,8 +3,8 @@
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
-import { exerciseSample } from '@/lib/exercise-sample';
-import { createPoseTracker, type MeasuredCycle } from '@/lib/pose/engine';
+import { elbowSample, exerciseSample } from '@/lib/exercise-sample';
+import { createPoseTracker, type MeasuredCycle, type PoseMovement } from '@/lib/pose/engine';
 import { drawPoseOverlay } from '@/lib/pose/overlay';
 import { sampleRecordedFrames } from '@/lib/pose/recorded-frames';
 import { ExerciseAnalysisPanel } from './exercise-analysis-panel';
@@ -45,11 +45,9 @@ const sourceLabel: Record<Source, string> = {
   live_camera: 'Jonli kamera',
   uploaded_video: 'Yuklangan video',
 };
-const framingMessage: Record<Framing, string> = {
-  positioning: 'Tayyorlaning. Kameraga yon tomoningizni tuting. Son, tizza va to‘piq kadrga sig‘sin.',
-  waitingForStart: 'Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun tik turing.',
-  ready: 'Sanoq tayyor. O‘tirib yana tik turing.',
-  lost: 'Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, yon tomoningiz bilan tik turing.',
+const movementCopy = {
+  chair_stand: { joint: 'Tizza', points: 'Son, tizza va to‘piq', start: 'tik turing', cycle: 'O‘tirib yana tik turing.' },
+  elbow_bend: { joint: 'Tirsak', points: 'Yelka, tirsak va bilak', start: 'qo‘lingizni yozing', cycle: 'Tirsakni bukib, qo‘lingizni yana yozing.' },
 };
 
 function stopTracks(stream?: MediaStream) {
@@ -124,11 +122,20 @@ function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
 
 const seconds = new Intl.NumberFormat('uz-Latn-UZ', { maximumFractionDigits: 1 });
 
-export function ExerciseClient({ targetAngle, preview = false, showGemini = false }: {
+export function ExerciseClient({ targetAngle, preview = false, showGemini = false, movement = 'chair_stand' }: {
   targetAngle: number;
   preview?: boolean;
   showGemini?: boolean;
+  movement?: PoseMovement;
 }) {
+  const copy = movementCopy[movement];
+  const example = movement === 'elbow_bend' ? elbowSample : exerciseSample;
+  const framingMessage: Record<Framing, string> = {
+    positioning: `Kameraga yon tomoningizni tuting. ${copy.points} kadrga sig‘sin.`,
+    waitingForStart: `Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun ${copy.start}.`,
+    ready: `Sanoq tayyor. ${copy.cycle}`,
+    lost: `Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, ${copy.start}.`,
+  };
   const [screen, setScreen] = useState<Screen>({ phase: 'idle' });
   const [confirmed, setConfirmed] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
@@ -178,7 +185,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
 
   function begin(source: Source, message: string): Capture | null {
     if (!videoRef.current || activeCapture.current || request.current) return null;
-    const tracker = createPoseTracker({ targetAngle, liveCamera: source === 'live_camera' });
+    const tracker = createPoseTracker({ targetAngle, movement, liveCamera: source === 'live_camera' });
     const capture = { source, video: videoRef.current, tracker, controller: new AbortController(), fileSha256: null };
     activeCapture.current = capture;
     setConfirmed(false);
@@ -352,7 +359,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
     if (!capture) return;
     setReviewingSample(true);
     try {
-      const response = await fetch(exerciseSample.path, { signal: capture.controller.signal });
+      const response = await fetch(example.path, { signal: capture.controller.signal });
       if (!response.ok) throw new Error('Demo video is unavailable');
       await analyzeLocalVideo(capture, await response.blob());
     } catch {
@@ -409,15 +416,15 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
 
   const capturing = screen.phase === 'starting' || screen.phase === 'running';
   const saving = saveStatus?.state === 'saving';
-  const sample = screen.phase === 'result' && screen.fileSha256 === exerciseSample.sha256;
+  const sample = screen.phase === 'result' && screen.fileSha256 === example.sha256;
   const poseCycles = sample ? screen.measurement.validReps + screen.measurement.shallowReps : undefined;
   const showVideo = capturing && (screen.phase !== 'running' || screen.source === 'live_camera');
   return (
     <div className={styles.exercise}>
-      <p>Kadrda son, tizza va to‘piq bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
+      <p>{copy.points} kadrda bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
       <div>
         <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
-        <p>Oldindan yozilgan klip. {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={exerciseSample.source}>Video manbasi</a></p>
+        <p>{movement === 'elbow_bend' ? 'CDC videosidan qirqilgan klip.' : 'Oldindan yozilgan klip.'} {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={example.source}>Video manbasi</a></p>
       </div>
       <div className={styles.actions}>
         {!capturing ? (
@@ -442,7 +449,7 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
         <div>
           {screen.framing && <p role="status">{framingMessage[screen.framing]}</p>}
           <output className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.validReps} · Chala {screen.shallowReps}</output>
-          {screen.currentAngle !== null && <p>Tizza burchagi taxminan {screen.currentAngle}°</p>}
+          {screen.currentAngle !== null && <p>{copy.joint} burchagi taxminan {screen.currentAngle}°</p>}
         </div>
       )}
       <div className={styles.preview} hidden={!showVideo}>
@@ -460,14 +467,14 @@ export function ExerciseClient({ targetAngle, preview = false, showGemini = fals
           <p className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.measurement.validReps} · Chala {screen.measurement.shallowReps}</p>
           <p>Eng kichik burchak {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr</p>
           {screen.source === 'live_camera' && screen.feedback.interruptedCycles > 0 && (
-            <p>Kuzatuv {screen.feedback.interruptedCycles} ta harakat paytida uzildi. To‘liq oyoq kadrga sig‘ishini tekshiring.</p>
+            <p>Kuzatuv {screen.feedback.interruptedCycles} ta harakat paytida uzildi. Tayanch nuqtalar kadrga sig‘ishini tekshiring.</p>
           )}
           {screen.source === 'live_camera' && screen.feedback.incompleteCycles > 0 && (
-            <p>{screen.feedback.incompleteCycles} ta harakatda o‘tirish yoki tik holatga qaytish to‘liq qayd etilmadi.</p>
+            <p>{screen.feedback.incompleteCycles} ta harakatda bukilish yoki boshlang‘ich holatga qaytish to‘liq qayd etilmadi.</p>
           )}
           {screen.cycles.length > 0 && (
             <table className={styles.cycles}>
-              <caption>Sikllar · tizza burchagi maqsadi {targetAngle}°</caption>
+              <caption>Sikllar · {copy.joint.toLowerCase()} burchagi maqsadi {targetAngle}°</caption>
               <thead><tr><th scope="col">Vaqt</th><th scope="col">Min. burchak</th><th scope="col">Natija</th></tr></thead>
               <tbody>
                 {screen.cycles.map(cycle => (

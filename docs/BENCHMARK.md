@@ -92,6 +92,10 @@ Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniy
 
 Jismoniy Android telefonida loyiha egasi lokal `1c7ddd7` tuzatishini sinab, ekranda **8 to‘liq, 2 chala** takror hamda tizza va to‘piq ustidagi yashil chiziq ko‘ringanini bildirdi. Bajarilgan takrorlarning qo‘lda belgilangan soni va burchaklari qayd etilmagan, shuning uchun aniqlik hisoblanmadi.
 
+### Tirsak demo klipi
+
+21-noyabr 2026 (MYT). 360×800 Chromium sinovida real MediaPipe CDC klipining bir to‘liq tirsak bukish va yozish siklini topdi. Natija 1 to‘liq, 0 chala. Namuna CDC videosining 46.2 soniyasidan olingan, 8.7 soniyaga kesilgan, bitta ijrochi atrofi qirqilgan va audio olib tashlangan. Bu bitta yozilgan klip natijasi. Tirsak uchun jismoniy kamera aniqligi hali o‘lchanmagan. [CDC klipi va litsenziya](https://commons.wikimedia.org/wiki/File:Muscle_Strengthening_at_Home_-_Bicep_Curls.webm)
+
 Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
 
 Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 chala sikl chiqdi. Oldingi aylanuvchi klip urinishida 1 to‘liq va 4 chala bo‘lgan. Aylanma klip sikllari etalon sifatida ishlatilmadi. Alohida resurs sinovi 360×568 oqim saqlanishini, tayanch chizig‘i va joriy burchak chiqishini, «To‘xtatish» treklarni yakunlashini va POST bo‘lmasligini tekshirdi. USB orqali jismoniy telefon topilmadi. Jonli sikl aniqligi qurilma va kadr tezligi bilan alohida sinov talab qiladi.

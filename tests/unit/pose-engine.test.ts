@@ -37,6 +37,19 @@ function cycle(bottom: number) {
 }
 
 describe('sit-to-stand pose tracker', () => {
+  it('counts elbow bending with arm landmarks and ignores knee movement', () => {
+    const tracker = createPoseTracker({ movement: 'elbow_bend', targetAngle: 80 });
+    const kneeEnd = feed(tracker, cycle(70));
+    expect(tracker.result()).toMatchObject({ validReps: 0, analyzedFrames: 0 });
+    cycle(70).forEach((angle, index) => {
+      const points = landmarks(angle, landscape);
+      [11, 13, 15].forEach((joint, offset) => { points[joint] = points[23 + 2 * offset]; });
+      tracker.update(points, { ...landscape, timestampMs: kneeEnd + index * 50 });
+    });
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(tracker.cycles()[0].minAngle).toBeCloseTo(70);
+  });
+
   it('requires five usable consecutive frames and does not count repeated timestamps', () => {
     const tracker = createPoseTracker({ targetAngle });
     const timestampMs = feed(tracker, [172, 172, 172, 172]);

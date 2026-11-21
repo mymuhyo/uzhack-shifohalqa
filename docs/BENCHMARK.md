@@ -2,7 +2,7 @@
 
 ## Android Full va Heavy
 
-21-noyabr 2026 (MYT), Codex Android emulyatori. Galereya yo‘liga ommaviy 8,8 soniyalik CDC WebM kontent URI orqali berildi. Heavy **60,9 soniyada** 88 ta kadrdan **2 ta to‘liq, 0 ta chala takror** topdi. Eng kichik burchak 93,5°. Bu emulyatorda bitta klip natijasi. Full jonli kameradan kadr olish yo‘li emulyatorda tekshirildi. Full va Heavy tezligi jismoniy telefonlarda alohida o‘lchanadi. ARM64 debug APK **69,4 MiB**. [Android video sinovi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)
+21-noyabr 2026 (MYT), Codex Android emulyatori. Galereya yo‘liga ommaviy 8,8 soniyalik CDC WebM kontent URI orqali berildi. Heavy **60,9 soniyada** 88 ta kadrdan **2 ta to‘liq, 0 ta chala takror** topdi. Eng kichik burchak 93,5°. Tarmoq uzilgan takroriy yurishda ayni klip **23,4 soniyada 2 ta to‘liq, 0 ta chala takror** berdi. Full jonli kameradan kadr olish yo‘li ham emulyatorda tekshirildi va Android to‘plamidagi 6 ta test o‘tdi. Full va Heavy tezligi jismoniy telefonlarda alohida o‘lchanadi. ARM64 debug APK **69,4 MiB**. [Android video sinovi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)
 
 Androidga o‘rnatilgan model paketlari nuqtalar hisobini internetga chiqmasdan bajaradi. [Full float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task) · [Heavy float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task) · [Model kartasi](https://developers.google.com/ml-kit/images/vision/pose-detection/pose_model_card.pdf)
 

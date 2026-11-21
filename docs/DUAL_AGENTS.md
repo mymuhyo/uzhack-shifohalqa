@@ -7,14 +7,14 @@
 | Papka | `~/Projects/shifohalqa-codex` | `~/Projects/shifohalqa-antigravity` |
 | Git branch | `exp/dual-codex` | `exp/dual-antigravity` |
 | Veb | `http://codex.localhost:3030` | `http://antigravity.localhost:3130` |
-| Host port rezervi | 3000–3099 | 3100–3199 |
+| Host port rezervi | 3030–3099 | 3100–3199 |
 | Playwright web / Telegram mock | 3040 / 3041 | 3140 / 3141 |
 | Neon branch | `dual-codex-20261121` | `dual-antigravity-20261121` |
 | Dev / E2E bazasi | `neondb` / `shifo_e2e` | `neondb` / `shifo_e2e` |
 | Android AVD / ADB serial | `Shifo-codex` / `emulator-5580` | `Shifo-antigravity` / `emulator-5582` |
 | Android host portlari | 5580–5581 | 5582–5583 |
 
-Brauzerda jadvaldagi hostnamelardan foydalaning. Cookie portga qarab ajralmaydi. Build natijalari, `node_modules`, Python venv, Gradle’ning loyiha papkalari va AVD disklari alohida saqlanadi. Global paket yuklama keshlari umumiy bo‘lishi mumkin.
+Hostdagi 3000 port asl loyiha uchun qoladi. Brauzerda jadvaldagi hostnamelardan foydalaning. Cookie portga qarab ajralmaydi. Build natijalari, `node_modules`, Python venv, Gradle’ning loyiha papkalari va AVD disklari alohida saqlanadi. Global paket yuklama keshlari umumiy bo‘lishi mumkin.
 
 ## Boshlash
 

@@ -1,6 +1,6 @@
 # V2 · Androidda uy reabilitatsiyasi
 
-**Joriy yo‘nalish.** Bemor Kotlin va Compose ilovasida uy mashqini bajaradi. Kamera va MediaPipe Lite telefonda ishlaydi. Klinik reja va urinishga javob web panelda. Hakam Android o‘rnatmasdan CDC klipi, sintetik og‘riq xabari va javob oqimini brauzerda o‘tadi. Telegram yordamchi bildirishnoma va havola kanali.
+**Joriy yo‘nalish.** Bemor Kotlin va Compose ilovasida uy mashqini bajaradi. Jonli kamera MediaPipe Full, galereya videosi MediaPipe Heavy bilan telefonda ishlaydi. Ommaviy CDC namunasida Androiddan ham serverdagi AI tahlilchini ochish mumkin. Klinik reja va urinishga javob web panelda. Hakam Android o‘rnatmasdan CDC klipi, sintetik og‘riq xabari va javob oqimini brauzerda o‘tadi. Telegram yordamchi bildirishnoma va havola kanali.
 
 | Bosqich | Qabul mezoni |
 |---|---|

@@ -117,7 +117,9 @@ Railway Variables ichidagi `TELEGRAM_DATABASE_URL` Neon `shifohalqa/main` dagi c
 
 `android/` ni Android Studio’da alohida loyiha sifatida oching. Mustaqil demo oqimida «Bugun» → «Icha olmadim» → «Dori tugadi» → «Qaydni saqlash» → «Qaydni ko‘rish» → «Namuna javobni ochish» ishlaydi. «Ichdim» yo‘li ham bor. Mahalliy qayd qurilmada saqlanadi. «Javoblar» bo‘limidagi «Demoni qayta boshlash» tasdiqdan keyin uni o‘chiradi.
 
-«O‘tirib-turish mashqi» Android kamerasida qurilmaga qo‘shilgan MediaPipe Lite modeli bilan ishlaydi. Mustaqil namuna internet talab qilmaydi. Kamera to‘xtatilgach, o‘lchovni saqlash, qayta urinish yoki qo‘lda kiritish mumkin. «Og‘riq bor» kamerani darhol yopadi. «Tez yordam · 103» telefon terish ekranini ochadi.
+«O‘tirib-turish mashqi» Android jonli kamerasida **MediaPipe Full** ishlaydi. «Video tanlash va tahlil qilish» galereyadagi ikki daqiqagacha bo‘lgan klipni telefonda **MediaPipe Heavy** bilan tahlil qiladi. O‘lchovni tasdiqlasangiz, panelga L2 xulosasi yuboriladi. Kamera xulosasi L3 sifatida baholanadi. Ikkala model APK tarkibida. Kamera to‘xtatilgach, o‘lchovni saqlash, qayta urinish yoki qo‘lda kiritish mumkin. «Og‘riq bor» kamerani darhol yopadi. «Tez yordam · 103» telefon terish ekranini ochadi.
+
+«AI tahlilchi · CDC namunasi» ulangan demo ish joyida serverda yoqilgan Gemini yoki OpenRouter bilan ommaviy namunani mustaqil tahlil qiladi. Heavy o‘lchovi mavjud bo‘lsa, Baidu solishtiruvni o‘zbekcha izohlaydi. Galereya videosi va kadrlar telefonda qoladi.
 
 JDK 17 yoki undan yangirog‘i, Android SDK API 37 va Build Tools 36.0.0 kerak. Demo Android 8.0 (API 26) yoki undan yangi qurilmaga o‘rnatiladi. Emulyator yoki test qurilmasi ulanganida ikkinchi buyruq UI oqimlarini tekshiradi.
 

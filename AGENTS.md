@@ -29,7 +29,7 @@ Use [V2_PLAN](docs/V2_PLAN.md), [SPEC](docs/SPEC.md), [INTERFACES](docs/INTERFAC
 | Task types | `schema.sql`, `src/lib/clinical-types.ts`, `clinical-inputs.ts` and `clinical-store.ts` define the current flow. The schema currently admits one medication and one vitals item per plan. Exercise and steps have separate stores. |
 | Rules and evidence | `src/lib/rules`, `prepareEvidence` and the doctor queue handle flags and review. Scheduled days use `Asia/Tashkent`. Completed, reported missed and unanswered have distinct meanings. |
 | AI and devices | Pose and motion comparison live in `src/lib/pose` and `anticheat`. DoriMos and exercise model adapters are in `src/lib/ai`. Android calls `/api/mobile/v1`. Python Telegram runs independently in `services/telegram_bot`. |
-| Rehabilitation | The browser and Kotlin chair-stand counters share test traces. Android saves pending summaries in Room and syncs them with WorkManager. Exercise replies bind to one attempt in `src/lib/exercise-store.ts`. Apply `schema.sql` to the assigned databases before running exercise integrations. |
+| Rehabilitation | The browser and Kotlin chair-stand counters share test traces. Android uses Full for live pose and Heavy for selected videos. Its sample AI API accepts only public CDC requests. Android saves pending summaries in Room and syncs them with WorkManager. Exercise replies bind to one attempt in `src/lib/exercise-store.ts`. Apply `schema.sql` to the assigned databases before running exercise integrations. |
 
 ## Safety and evidence
 

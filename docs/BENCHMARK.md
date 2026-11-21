@@ -1,5 +1,13 @@
 # ShifoHalqa · Demo benchmarklari
 
+## Android Full va Heavy
+
+21-noyabr 2026 (MYT), Codex Android emulyatori. Galereya yo‘liga ommaviy 8,8 soniyalik CDC WebM kontent URI orqali berildi. Heavy **60,9 soniyada** 88 ta kadrdan **2 ta to‘liq, 0 ta chala takror** topdi. Eng kichik burchak 93,5°. Bu emulyatorda bitta klip natijasi. Full jonli kameradan kadr olish yo‘li emulyatorda tekshirildi. Full va Heavy tezligi jismoniy telefonlarda alohida o‘lchanadi. ARM64 debug APK **69,4 MiB**. [Android video sinovi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)
+
+Androidga o‘rnatilgan model paketlari nuqtalar hisobini internetga chiqmasdan bajaradi. [Full float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task) · [Heavy float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task) · [Model kartasi](https://developers.google.com/ml-kit/images/vision/pose-detection/pose_model_card.pdf)
+
+Ommaviy CDC AI tahlili uchun mobil API sessiya chegarasi, shaxsiy video yoki matnni rad etish va kalitsiz holat Playwright’da tekshirildi. Provayderlarning jonli chaqiruvlari bu Android sinoviga kiritilmadi. [AI va L2 integratsiya sinovi](../tests/e2e/rehabilitation.spec.ts)
+
 ## Android uy reabilitatsiyasi · Codex worktree
 
 21-noyabr 2026 (MYT), sintetik ish joyi. Web va Kotlin sanoqlari beshta umumiy test izida mos keldi. Ular to‘liq, chala, 4 kadr/soniya, kadr uzilishi va tayanch nuqtalari past ko‘rinishini qamrab oldi. Emulator-5580 da beshta Android UI sinovi o‘tdi. Kamera sinovi CameraX va MediaPipe’dan birinchi kadr kelishini, kamerani yopishni va qo‘lda qaydga o‘tishni tekshirdi.

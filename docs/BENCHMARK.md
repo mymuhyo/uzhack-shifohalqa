@@ -109,3 +109,9 @@ Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 ch
 21-noyabr 2026 (MYT) · Chromium, 360×800. Ochiq `ffdc850` relizida MediaPipe CDC klipini 11,1 soniyada o‘lchadi: 2 to‘liq, 0 chala sikl. Brauzer kamerani so‘ramadi va o‘lchov paytida POST yubormadi. Alohida Gemini tugmasi HTTP 503 qaytardi. Shu relizda sintetik dori qaydi shifokor tasdig‘idan keyin L4 va javobni oldi, bosim qaydi L0 bo‘lib qoldi.
 
 Lokal `exp/mashq-ishonchliligi` filialida haqiqiy Gemini brauzer sinovi zaxira `gemini-3.1-flash-lite` modelidan 4,4 soniyada 2 s va 6 s javobini oldi. HTTP 408, 429, 503 hamda bo‘sh va yaroqsiz natijadan tiklanish unit-testlarda alohida tekshirildi.
+
+### Baidu matnli izohi
+
+21-noyabr 2026 (MYT) · lokal production build · Chromium 360×800. MediaPipe ommaviy CDC klipida 2 to‘liq va 0 chala sikl ko‘rsatdi. Haqiqiy `baidu/ernie-5.5-flash-preview:free` bu natijani 1 894 ms da izohladi. Video modeli sinov javobida 2 s va 6 s kuzatilganda, Baidu haqiqiy API orqali moslikni 2 412 ms da izohladi. Vaqtlar tugma bosilgach server javobini kutishdan boshlab o‘lchandi. Brauzer yuborgan JSON faqat izoh toifasini o‘z ichiga oldi.
+
+Shu akkaunt bilan jonli OpenRouter video so‘rovlari Nemotron va Gemma 4 26B uchun HTTP 402 qaytardi. Xizmat video kirishi uchun kamida 1 AQSh dollari balans talab qildi. Baidu matn so‘rovlari HTTP 200 qaytardi.

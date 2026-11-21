@@ -2,6 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { exerciseAnalysis, type ExerciseAnalysis, type ExerciseProvider } from '@/lib/exercise-analysis';
+import {
+  compareExerciseObservations, exerciseExplanation, type ExerciseComparison, type ExerciseExplanation,
+} from '@/lib/exercise-explanation';
 import type { MeasuredCycle } from '@/lib/pose/engine';
 import styles from './exercise-client.module.css';
 
@@ -11,6 +14,51 @@ const viewLabels = {
   unclear: 'Klipdan harakatni ishonchli ajratib bo‘lmadi.',
 };
 
+function BaiduExplanation({ comparison }: { comparison: ExerciseComparison }) {
+  const [result, setResult] = useState<ExerciseExplanation | null>(null);
+  const [pending, setPending] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
+
+  async function explain() {
+    if (request.current || result?.status === 'explained') return;
+    const controller = new AbortController();
+    request.current = controller;
+    setPending(true);
+    setResult(null);
+    try {
+      const response = await fetch('/api/demo/exercise-explanation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comparison }),
+        signal: controller.signal,
+      });
+      const parsed = exerciseExplanation.safeParse(await response.json());
+      if (!controller.signal.aborted) setResult(parsed.success ? parsed.data : { status: 'unavailable' });
+    } catch {
+      if (!controller.signal.aborted) setResult({ status: 'unavailable' });
+    } finally {
+      request.current = null;
+      if (!controller.signal.aborted) setPending(false);
+    }
+  }
+
+  return (
+    <div className={styles.analysisResult}>
+      <button type="button" className={styles.primary} onClick={explain} aria-disabled={pending || result?.status === 'explained'}>
+        {pending ? 'Baidu izoh tayyorlamoqda…' : 'Natijani Baidu bilan izohlash'}
+      </button>
+      <div role="status">
+        {result?.status === 'unavailable' && <p>Baidu izohi hozir mavjud emas. Keyinroq qayta urinib ko‘ring.</p>}
+        {result?.status === 'explained' && <>
+          <p>{result.summary}</p>
+          <p className={styles.modelName}>{result.model} · Namuna izohi</p>
+        </>}
+      </div>
+    </div>
+  );
+}
+
 export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: ExerciseProvider; poseCycles?: MeasuredCycle[] }) {
   const name = provider === 'gemini' ? 'Gemini' : 'OpenRouter';
   const headingId = useId();
@@ -18,6 +66,10 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
   const [pending, setPending] = useState(false);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
+
+  const comparison = poseCycles && compareExerciseObservations(
+    poseCycles, report?.status === 'observed' ? report.observation : undefined,
+  );
 
   async function review() {
     if (request.current) return;
@@ -62,16 +114,17 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
               {report.observation.seatedAtSeconds.length > 0 && (
                 <p>{name} bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
               )}
-              {poseCycles && <p>
+              {poseCycles && comparison && <p>
                 {poseCycles.length === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi.'}
-                {poseCycles.length > 0 && ` MediaPipe topgan ${poseCycles.length} sikldan ${poseCycles.filter(({ fromMs, toMs }) =>
-                  report.observation.seatedAtSeconds.some(time => time * 1000 >= fromMs && time * 1000 <= toMs),
-                ).length} tasining vaqt oralig‘iga ${name} belgilagan o‘tirish vaqti tushdi.`}
+                {poseCycles.length > 0 && ` MediaPipe topgan ${poseCycles.length} sikldan ${comparison.alignedCycles} tasining vaqt oralig‘iga ${name} belgilagan o‘tirish vaqti tushdi.`}
               </p>}
             </>
           )}
           <p className={styles.modelName}>{report.model} · Ommaviy namuna</p>
         </div>
+      )}
+      {provider === 'openrouter' && comparison && (
+        <BaiduExplanation key={comparison.comparison} comparison={comparison.comparison} />
       )}
     </section>
   );

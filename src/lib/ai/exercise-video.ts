@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GoogleGenAI } from '@google/genai';
-import { z } from 'zod';
 import { type ExerciseAnalysis, type ExerciseProvider, exerciseProvider, videoObservation } from '../exercise-analysis';
 import { exerciseSample } from '../exercise-sample';
+import { requestOpenRouterCompletion } from './openrouter';
 
 const observationPrompt = 'Observe this short public motion demonstration. Count complete standing → seated → standing cycles only. For each complete cycle report one approximate seated timestamp in seconds from the start of the clip, in increasing order. Ignore incomplete cycles. Classify the side view as side_visible when hip, knee and ankle are broadly visible, partly_visible when any joint is obscured, or unclear with an empty array if tracking is unreliable. Report only these observations. Do not infer joint angles, diagnose, or advise the performer.';
-const openRouterModel = () => process.env.OPENROUTER_EXERCISE_MODEL?.trim() || 'google/gemma-4-26b-a4b-it:free';
+const openRouterModel = () => process.env.OPENROUTER_EXERCISE_MODEL?.trim() || 'nvidia/nemotron-3.5-super-vl:free';
 
 function isProviderEnabled(provider: ExerciseProvider) {
   if (provider === 'gemini') {
@@ -78,38 +78,32 @@ async function observeWithGemini(): Promise<ExerciseAnalysis> {
   }
 }
 
-const routerReply = z.object({
-  model: z.string().min(1),
-  choices: z.array(z.object({ finish_reason: z.literal('stop'), message: z.object({ content: z.string() }) })).min(1),
-});
-
 async function observeWithOpenRouter(): Promise<ExerciseAnalysis> {
   const key = process.env.OPENROUTER_API_KEY?.trim();
   if (!key) return { status: 'unavailable' };
+  const model = openRouterModel();
+  // These Gemma endpoints support JSON mode without enforcing a schema.
+  const usesJsonMode = model === 'google/gemma-4-26b-a4b-it:free' || model === 'google/gemma-4-31b-it:free';
+  const schema = { ...videoSchema, additionalProperties: false };
+  const prompt = usesJsonMode
+    ? `${observationPrompt} Return a JSON object matching this schema: ${JSON.stringify(schema)}`
+    : observationPrompt;
+  const responseFormat = usesJsonMode
+    ? { type: 'json_object' }
+    : { type: 'json_schema', json_schema: { name: 'exercise_observation', strict: true, schema } };
   try {
     const clip = await readFile(join(process.cwd(), 'public/demo/pose-cdc-lower-body.mp4'));
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(25_000),
-      body: JSON.stringify({
-        model: openRouterModel(),
-        max_tokens: 512,
-        provider: { require_parameters: true },
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: observationPrompt },
-          { type: 'video_url', video_url: { url: `data:video/mp4;base64,${clip.toString('base64')}` } },
-        ] }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'exercise_observation', strict: true, schema: { ...videoSchema, additionalProperties: false } },
-        },
-      }),
-    });
-    if (!response.ok) return { status: 'unavailable' };
-    const { model, choices } = routerReply.parse(await response.json());
-    const observation = videoObservation.parse(JSON.parse(choices[0].message.content));
-    return { status: 'observed', model, observation };
+    const { model: routedModel, content } = await requestOpenRouterCompletion(key, {
+      model,
+      max_tokens: 512,
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: prompt },
+        { type: 'video_url', video_url: { url: `data:video/mp4;base64,${clip.toString('base64')}` } },
+      ] }],
+      response_format: responseFormat,
+    }, AbortSignal.timeout(25_000));
+    const observation = videoObservation.parse(JSON.parse(content));
+    return { status: 'observed', model: routedModel, observation };
   } catch {
     return { status: 'unavailable' };
   }

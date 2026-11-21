@@ -22,7 +22,8 @@
 .primary { background: var(--action); color: var(--on-action); }
 .primary:hover { background: var(--action-hover); }
 .pain { border: 1px solid currentColor; color: var(--urgent); }
-.exercise button:disabled { opacity: 0.55; cursor: default; }
+.exercise button:disabled,
+.aiPanel button[aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .exercise summary:focus-visible,
 .exercise input:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 

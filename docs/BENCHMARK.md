@@ -103,3 +103,9 @@ Jismoniy Android telefonida loyiha egasi lokal `1c7ddd7` tuzatishini sinab, ekra
 Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
 
 Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 chala sikl chiqdi. Oldingi aylanuvchi klip urinishida 1 to‘liq va 4 chala bo‘lgan. Aylanma klip sikllari etalon sifatida ishlatilmadi. Alohida resurs sinovi 360×568 oqim saqlanishini, tayanch chizig‘i va joriy burchak chiqishini, «To‘xtatish» treklarni yakunlashini va POST bo‘lmasligini tekshirdi. USB orqali jismoniy telefon topilmadi. Jonli sikl aniqligi qurilma va kadr tezligi bilan alohida sinov talab qiladi.
+
+### Gemini zaxira modeli · ochiq reliz va lokal sinov
+
+21-noyabr 2026 (MYT) · Chromium, 360×800. Ochiq `ffdc850` relizida MediaPipe CDC klipini 11,1 soniyada o‘lchadi: 2 to‘liq, 0 chala sikl. Brauzer kamerani so‘ramadi va o‘lchov paytida POST yubormadi. Alohida Gemini tugmasi HTTP 503 qaytardi. Shu relizda sintetik dori qaydi shifokor tasdig‘idan keyin L4 va javobni oldi, bosim qaydi L0 bo‘lib qoldi.
+
+Lokal `exp/mashq-ishonchliligi` filialida haqiqiy Gemini brauzer sinovi zaxira `gemini-3.1-flash-lite` modelidan 4,4 soniyada 2 s va 6 s javobini oldi. HTTP 408, 429, 503 hamda bo‘sh va yaroqsiz natijadan tiklanish unit-testlarda alohida tekshirildi.

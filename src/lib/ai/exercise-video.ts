@@ -30,14 +30,15 @@ const videoSchema = {
 };
 
 async function observeWithGemini(): Promise<ExerciseAnalysis> {
+  const unavailable = { status: 'unavailable' } as const;
   const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { status: 'unavailable' };
+  if (!apiKey) return unavailable;
   const model = process.env.GEMINI_EXERCISE_MODEL?.trim() || 'gemini-3.5-flash-lite';
   const fallbackModel = process.env.GEMINI_EXERCISE_FALLBACK_MODEL?.trim() || 'gemini-3.1-flash-lite';
   const ai = new GoogleGenAI({ apiKey, apiVersion: 'v1', vertexai: false });
   try {
     const video = (await readFile(join(process.cwd(), 'public', exerciseSample.path))).toString('base64');
-    const observe = async (selectedModel: string, signal: AbortSignal): Promise<ExerciseAnalysis> => {
+    const observe = async (selectedModel: string, signal: AbortSignal): Promise<ExerciseAnalysis | null> => {
       const result = await ai.interactions.create({
         model: selectedModel,
         store: false,
@@ -49,23 +50,31 @@ async function observeWithGemini(): Promise<ExerciseAnalysis> {
         ] }],
         response_format: { type: 'text', mime_type: 'application/json', schema: videoSchema },
       }, { signal, maxRetries: 0 });
-      if (result.status !== 'completed' || !result.output_text) return { status: 'unavailable' };
-      const observation = videoObservation.parse(JSON.parse(result.output_text));
-      return { status: 'observed', model: selectedModel, observation };
+      if (result.status !== 'completed') return unavailable;
+      if (!result.output_text) return null;
+      try {
+        const observation = videoObservation.parse(JSON.parse(result.output_text));
+        return { status: 'observed', model: selectedModel, observation };
+      } catch {
+        // A completed call without a valid observation can be retried on the fallback model.
+        return null;
+      }
     };
     const deadline = AbortSignal.timeout(25_000);
-    if (model === fallbackModel) return await observe(model, deadline);
+    if (model === fallbackModel) return (await observe(model, deadline)) ?? unavailable;
     const primaryWindow = AbortSignal.any([deadline, AbortSignal.timeout(8_000)]);
     try {
-      return await observe(model, primaryWindow);
+      const primary = await observe(model, primaryWindow);
+      if (primary) return primary;
     } catch (error) {
       const status = typeof error === 'object' && error && 'status' in error ? error.status : null;
-      const retryable = typeof status === 'number' && (status === 429 || status >= 500);
-      if (deadline.aborted || (!primaryWindow.aborted && !retryable)) throw error;
-      return await observe(fallbackModel, deadline);
+      const retryable = typeof status === 'number' && (status === 408 || status === 429 || status >= 500);
+      if (!primaryWindow.aborted && !retryable) return unavailable;
     }
+    if (deadline.aborted) return unavailable;
+    return (await observe(fallbackModel, deadline)) ?? unavailable;
   } catch {
-    return { status: 'unavailable' };
+    return unavailable;
   }
 }
 

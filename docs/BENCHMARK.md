@@ -88,7 +88,9 @@ Yakuniy 360×800 brauzer sinovida CDC klipi ishga tushgach, CV tugashidan oldin 
 
 21-noyabr 2026 (MYT). Sintetik tayanch nuqtalari testida eski hisoblagich ko‘rinish ballari almashganda yoki oqim 4 kadr/soniyaga tushganda 0 sikl qaytardi. Tuzatilgan hisoblagich har ikkala testda 1 ta to‘liq sikl topdi. Alohida test 400 ms dan uzoq uzilish ustidan sikl tuzilmasligini tekshirdi.
 
-Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniyada virtual kamera sifatida uzatdik. Ikki yurishda 2 sikl topildi, har safar 1 to‘liq va 1 chala. Birinchi siklning hisoblangan eng kichik burchagi 101° va 102° chiqdi, demo chegarasi 100°. Yozilgan klip rejimi 2 to‘liq va 0 chala sikl berdi. Virtual kamera to‘xtatilganda trek yopildi va POST so‘rovi kuzatilmadi. Jismoniy Android kamerasida tuzatilgan hisoblagich natijasi hali tasdiqlanmagan.
+Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniyada virtual kamera sifatida uzatdik. Ikki yurishda 2 sikl topildi, har safar 1 to‘liq va 1 chala. Birinchi siklning hisoblangan eng kichik burchagi 101° va 102° chiqdi, demo chegarasi 100°. Yozilgan klip rejimi 2 to‘liq va 0 chala sikl berdi. Virtual kamera to‘xtatilganda trek yopildi va POST so‘rovi kuzatilmadi.
+
+Jismoniy Android telefonida loyiha egasi lokal `1c7ddd7` tuzatishini sinab, ekranda **8 to‘liq, 2 chala** takror hamda tizza va to‘piq ustidagi yashil chiziq ko‘ringanini bildirdi. Bajarilgan takrorlarning qo‘lda belgilangan soni va burchaklari qayd etilmagan, shuning uchun aniqlik hisoblanmadi.
 
 Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
 

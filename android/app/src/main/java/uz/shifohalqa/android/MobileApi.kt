@@ -33,7 +33,7 @@ internal data class MobileTask(
 internal data class MobileRecord(val id: String, val reason: MissedReason?, val reply: MobileReview?)
 internal data class MobileReview(val body: String, val needsRetake: Boolean, val reviewedAt: String)
 internal data class MobileReply(val recordId: String, val taskTitle: String, val date: String, val review: MobileReview)
-internal data class MobileCredentials(val token: String, val expiresAt: Instant)
+internal data class MobileCredentials(val token: String, val expiresAt: Instant, val workspaceId: String)
 
 internal enum class MobileFailureKind {
     InvalidAddress, InvalidCode, Expired, Offline, NotFound, Rejected, Service,
@@ -42,6 +42,7 @@ internal enum class MobileFailureKind {
 internal class MobileFailure(val kind: MobileFailureKind) : Exception()
 
 internal class MobileApi private constructor(private val origin: URI) {
+    val address: String get() = origin.toASCIIString()
     suspend fun pair(code: String): MobileCredentials = request("pair", body = JSONObject().put("code", code)) {
         val token = getString("token").takeIf { it.matches(Regex("[0-9a-f]{64}")) }
             ?: throw MobileFailure(MobileFailureKind.Service)
@@ -50,7 +51,11 @@ internal class MobileApi private constructor(private val origin: URI) {
         } catch (_: DateTimeParseException) {
             throw MobileFailure(MobileFailureKind.Service)
         }
-        MobileCredentials(token, expiresAt)
+        val workspaceId = getString("workspaceId")
+        if (!workspaceId.matches(Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"))) {
+            throw MobileFailure(MobileFailureKind.Service)
+        }
+        MobileCredentials(token, expiresAt, workspaceId)
     }
 
     suspend fun today(token: String): MobileDay = request("today", token = token) {
@@ -89,6 +94,15 @@ internal class MobileApi private constructor(private val origin: URI) {
         }
     }
 
+    suspend fun exercise(token: String): ExerciseView = request("exercise", token) {
+        ExerciseView.parse(this)
+    }
+
+    suspend fun sendExercise(token: String, payload: JSONObject) = request("exercise", token, payload) {
+        if (getString("status") != "saved") throw MobileFailure(MobileFailureKind.Service)
+        getString("id")
+    }
+
     private suspend fun <T> request(
         endpoint: String,
         token: String? = null,
@@ -118,7 +132,8 @@ internal class MobileApi private constructor(private val origin: URI) {
                     if (endpoint == "pair") MobileFailureKind.InvalidCode else MobileFailureKind.Expired,
                 )
                 HttpURLConnection.HTTP_NOT_FOUND -> throw MobileFailure(MobileFailureKind.NotFound)
-                HttpURLConnection.HTTP_BAD_REQUEST -> throw MobileFailure(MobileFailureKind.Rejected)
+                HttpURLConnection.HTTP_BAD_REQUEST, HttpURLConnection.HTTP_CONFLICT, 422 ->
+                    throw MobileFailure(MobileFailureKind.Rejected)
                 else -> throw MobileFailure(MobileFailureKind.Service)
             }
             val response = connection.inputStream.use { stream ->
@@ -156,7 +171,9 @@ internal class MobileApi private constructor(private val origin: URI) {
             if (!validOrigin || (origin.scheme?.lowercase() != "https" && !debugLoopback)) {
                 throw MobileFailure(MobileFailureKind.InvalidAddress)
             }
-            return MobileApi(origin)
+            val scheme = origin.scheme.lowercase()
+            val port = if (scheme == "https" && origin.port == 443) -1 else origin.port
+            return MobileApi(URI(scheme, null, origin.host.lowercase(), port, null, null, null))
         }
     }
 }

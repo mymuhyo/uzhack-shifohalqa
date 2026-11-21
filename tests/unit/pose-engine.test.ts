@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createPoseTracker } from '../../src/lib/pose/engine';
 
@@ -35,6 +36,20 @@ function cycle(bottom: number) {
     120, 130, 140, 150, 160, 174, 174, 174, 174, 174, 174,
   ];
 }
+
+const sharedTraces = readFileSync(new URL('../fixtures/chair-stand/live.tsv', import.meta.url), 'utf8')
+  .trim().split('\n').slice(1).map(row => row.split('\t'));
+
+it.each(sharedTraces)('matches the Android live trace %s', (_name, step, gapAt, gap, visibility, valid, shallow, angles) => {
+  const tracker = createPoseTracker({ targetAngle: 100, liveCamera: true });
+  angles.split(' ').forEach((angle, index) => {
+    tracker.update(landmarks(Number(angle), landscape, Number(visibility)), {
+      ...landscape,
+      timestampMs: index * Number(step) + (Number(gapAt) >= 0 && index >= Number(gapAt) ? Number(gap) : 0),
+    });
+  });
+  expect(tracker.result()).toMatchObject({ validReps: Number(valid), shallowReps: Number(shallow) });
+});
 
 describe('sit-to-stand pose tracker', () => {
   it('counts elbow bending with arm landmarks and ignores knee movement', () => {

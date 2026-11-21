@@ -50,7 +50,7 @@ import java.time.format.DateTimeParseException
 private data class MobileSheetRequest(val task: MobileTask, val sheet: MedicationSheet)
 
 @Composable
-internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel) {
+internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () -> Unit) {
     val state = mobile.state
     var tab by rememberSaveable { mutableStateOf(PatientTab.Today) }
     var focusedReplyId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -81,6 +81,7 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel) {
                 }
                 TextButton(onClick = mobile::refresh, enabled = !busy) { Text("Yangilash") }
                 if (tab == PatientTab.Today) {
+                    PrimaryAction("O‘tirib-turish mashqi", onClick = onExercise)
                     TextButton(onClick = mobile::disconnect, enabled = !busy) { Text("Ulanishni uzish") }
                 }
             }

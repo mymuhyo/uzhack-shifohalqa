@@ -1,12 +1,18 @@
 package uz.shifohalqa.android
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -14,6 +20,7 @@ import kotlinx.coroutines.launch
 
 internal data class MobileWorkspaceState(
     val connected: Boolean = false,
+    val restoring: Boolean = false,
     val pairing: Boolean = false,
     val refreshing: Boolean = false,
     val saving: Boolean = false,
@@ -21,18 +28,102 @@ internal data class MobileWorkspaceState(
     val message: String? = null,
 )
 
-internal class MobileWorkspaceModel : ViewModel() {
-    private data class WorkspaceSession(val api: MobileApi, val credentials: MobileCredentials) {
-        val token get() = credentials.token
-    }
+internal data class ExerciseUi(
+    val planLoaded: Boolean = false,
+    val plan: ExercisePlan? = null,
+    val attempts: List<ExerciseAttempt> = emptyList(),
+    val outbox: List<ExerciseOutbox> = emptyList(),
+    val loading: Boolean = false,
+    val saving: Boolean = false,
+    val message: String? = null,
+)
 
-    private var session: WorkspaceSession? = null
+internal class MobileWorkspaceModel(application: Application) : AndroidViewModel(application) {
+    private val connections = DemoConnectionStore(application)
+    private val repository = ExerciseRepository(application)
+    private var session: DemoConnection? = null
     private var expiration: Job? = null
-    var state by mutableStateOf(MobileWorkspaceState())
+    private var exerciseObserver: Job? = null
+    var state by mutableStateOf(MobileWorkspaceState(restoring = true))
+        private set
+    var exercise by mutableStateOf(ExerciseUi())
         private set
 
+    init {
+        viewModelScope.launch {
+            val restored = withContext(Dispatchers.IO) { connections.read() }
+            when {
+                restored == null -> state = MobileWorkspaceState()
+                restored.expired -> expire()
+                else -> activate(restored)
+            }
+        }
+    }
+
+    private fun activate(current: DemoConnection) {
+        session = current
+        state = MobileWorkspaceState(connected = true, refreshing = true)
+        expiration = viewModelScope.launch {
+            val remaining = Duration.between(Instant.now(), current.credentials.expiresAt).toMillis()
+            delay(remaining.coerceAtLeast(1))
+            if (session === current) expire()
+        }
+        exerciseObserver = viewModelScope.launch {
+            repository.dao.snapshot(current.scope).combine(repository.dao.outbox(current.scope)) { cached, outbox ->
+                val view = cached?.let { ExerciseView.parse(JSONObject(it)) }
+                view to outbox
+            }.collect { (view, outbox) ->
+                exercise = exercise.copy(planLoaded = view != null, plan = view?.plan, attempts = view?.attempts.orEmpty(), outbox = outbox)
+            }
+        }
+        viewModelScope.launch { repository.resume(current) }
+        viewModelScope.launch { refresh(current) }
+    }
+
+    fun refreshExercise() {
+        val current = session ?: return
+        if (exercise.loading) return
+        exercise = exercise.copy(loading = true, message = null)
+        viewModelScope.launch {
+            try {
+                repository.resume(current)
+                repository.refresh(current)
+            } catch (failure: MobileFailure) {
+                if (session !== current) return@launch
+                if (failure.kind == MobileFailureKind.Expired) expire()
+                else exercise = exercise.copy(message = "Mashq rejasini yangilab bo‘lmadi. Ulanishni tekshirib qayta urinib ko‘ring.")
+            } finally {
+                if (session === current) exercise = exercise.copy(loading = false)
+            }
+        }
+    }
+
+    fun queueExercise(evidence: JSONObject, label: String, date: LocalDate, onSaved: () -> Unit) {
+        val current = session ?: return
+        val plan = exercise.plan ?: return
+        if (exercise.saving) return
+        exercise = exercise.copy(saving = true, message = null)
+        viewModelScope.launch {
+            try {
+                repository.queue(current, plan, evidence, label, date)
+                if (session === current) onSaved()
+            } catch (_: IllegalStateException) {
+                if (session === current) exercise = exercise.copy(message = "Qayd holatini tekshiring va qayta urinib ko‘ring.")
+            } catch (_: android.database.sqlite.SQLiteException) {
+                if (session === current) exercise = exercise.copy(message = "Qayd telefonga saqlanmadi. Qayta urinib ko‘ring.")
+            } finally {
+                if (session === current) exercise = exercise.copy(saving = false)
+            }
+        }
+    }
+
+    fun discardExercise(id: String) {
+        val current = session ?: return
+        viewModelScope.launch { repository.dao.discard(id, current.scope) }
+    }
+
     fun pair(address: String, code: String) {
-        if (state.pairing || state.connected) return
+        if (state.restoring || state.pairing || state.connected) return
         val normalizedCode = code.trim().lowercase()
         if (!normalizedCode.matches(Regex("[0-9a-f]{32}"))) {
             state = state.copy(message = "Veb-paneldagi 32 belgili ulash kodini kiriting.")
@@ -47,15 +138,13 @@ internal class MobileWorkspaceModel : ViewModel() {
         state = state.copy(pairing = true, message = null)
         viewModelScope.launch {
             try {
-                val current = WorkspaceSession(api, api.pair(normalizedCode))
-                session = current
-                state = MobileWorkspaceState(connected = true, refreshing = true)
-                expiration = viewModelScope.launch {
-                    val remaining = Duration.between(Instant.now(), current.credentials.expiresAt).toMillis()
-                    delay(remaining.coerceAtLeast(0))
-                    if (session === current) expire()
+                val current = DemoConnection(api, api.pair(normalizedCode))
+                val saved = withContext(Dispatchers.IO) { connections.save(current) }
+                if (!saved) {
+                    state = MobileWorkspaceState(message = "Ulanishni telefonda saqlab bo‘lmadi. Yangi kod bilan qayta urinib ko‘ring.")
+                    return@launch
                 }
-                refresh(current)
+                activate(current)
             } catch (failure: MobileFailure) {
                 state = MobileWorkspaceState(message = failure.kind.explanation())
             }
@@ -120,7 +209,7 @@ internal class MobileWorkspaceModel : ViewModel() {
         }.await()
     }
 
-    private suspend fun refresh(current: WorkspaceSession) {
+    private suspend fun refresh(current: DemoConnection) {
         try {
             val day = current.api.today(current.token)
             if (session === current) state = state.copy(day = day, refreshing = false)
@@ -140,6 +229,10 @@ internal class MobileWorkspaceModel : ViewModel() {
         session = null
         expiration?.cancel()
         expiration = null
+        exerciseObserver?.cancel()
+        exerciseObserver = null
+        exercise = ExerciseUi()
+        connections.clear()
     }
 }
 

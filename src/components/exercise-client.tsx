@@ -499,9 +499,7 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
           }>Natijani yuborish</button>}
         </div>
       )}
-      {reviewingSample && analysisProviders.map(provider => (
-        <ExerciseAnalysisPanel key={provider} provider={provider} poseCycles={poseCycles} />
-      ))}
+      {reviewingSample && analysisProviders.includes('openrouter') && <ExerciseAnalysisPanel poseCycles={poseCycles} />}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
       {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
         <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>

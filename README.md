@@ -24,7 +24,7 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 - **Production:** https://shifohalqa.vercel.app (Vercel `shifohalqa`, faqat `main` dan)
 - **DB:** Neon `shifohalqa/main` · UzHack sintetik demosi
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
-- **AI:** Hybrid — on-device MediaPipe Pose (L3) + `gemini-4-hydrogen` (OCR/extract) + `gemini-decision-1` (calibrated gate/score, Decisions API `v1beta`)
+- **AI:** Hybrid — on-device MediaPipe Pose (L3) + OpenRouter (synthetic label OCR, public sample observation and Uzbek explanation) + `gemini-decision-1` (quality checks via Decisions API `v1beta`)
 
 ## O'qish tartibi
 | Fayl | Maqsad |
@@ -72,7 +72,7 @@ Playwright lokal serverda alohida sessiya kaliti bilan ishlaydi. Standart brauze
 
 Ma’lumotlar bazasi bilan E2E Python servisini ham ishga tushiradi. Avval `uv sync --project services/telegram_bot --locked` bilan uning bog‘liqliklarini o‘rnating. Python unit testlari uchun `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests` ishlating. E2E Telegramga chiqmasdan, bitta sintetik chatga bog‘langan navbatni haqiqiy Neon’da sinaydi.
 
-Jonli DoriMos brauzer testini qo‘shish uchun `SHIFO_E2E_LIVE_GEMINI=1` va `GEMINI_API_KEY` belgilang. Standart E2E tashqi Gemini so‘rovlarisiz ishlaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
+Jonli DoriMos brauzer sinovi uchun `SHIFO_E2E_LIVE_DORIMOS=1`, `GEMINI_API_KEY` va `OPENROUTER_API_KEY` kerak. Standart E2E tashqi AI provayderlarini chaqirmaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
 
 ```bash
 node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/dorimos-benchmark.ts
@@ -119,7 +119,7 @@ Railway Variables ichidagi `TELEGRAM_DATABASE_URL` Neon `shifohalqa/main` dagi c
 
 «O‘tirib-turish mashqi» Android jonli kamerasida **MediaPipe Full** ishlaydi. «Video tanlash va tahlil qilish» galereyadagi ikki daqiqagacha bo‘lgan klipni telefonda **MediaPipe Heavy** bilan tahlil qiladi. O‘lchovni tasdiqlasangiz, panelga L2 xulosasi yuboriladi. Kamera xulosasi L3 sifatida baholanadi. Ikkala model APK tarkibida. Kamera to‘xtatilgach, o‘lchovni saqlash, qayta urinish yoki qo‘lda kiritish mumkin. «Og‘riq bor» kamerani darhol yopadi. «Tez yordam · 103» telefon terish ekranini ochadi.
 
-«AI tahlilchi · CDC namunasi» ulangan demo ish joyida serverda yoqilgan Gemini yoki OpenRouter bilan ommaviy namunani mustaqil tahlil qiladi. Heavy o‘lchovi mavjud bo‘lsa, Baidu solishtiruvni o‘zbekcha izohlaydi. Galereya videosi va kadrlar telefonda qoladi.
+«AI tahlilchi · CDC namunasi» ulangan demo ish joyida serverda `EXERCISE_OPENROUTER_DEMO=true` va `OPENROUTER_API_KEY` bilan ommaviy namunani tahlil qiladi. MP4 so‘roviga OpenRouter 402 qaytarsa, ayni namunaning 9 kadridan foydalanadi va UI buni ko‘rsatadi. Heavy o‘lchovi mavjud bo‘lsa, OpenRouter orqali Baidu solishtiruvni o‘zbekcha izohlaydi. Galereya videosi va kadrlar telefonda qoladi.
 
 JDK 17 yoki undan yangirog‘i, Android SDK API 37 va Build Tools 36.0.0 kerak. Demo Android 8.0 (API 26) yoki undan yangi qurilmaga o‘rnatiladi. Emulyator yoki test qurilmasi ulanganida ikkinchi buyruq UI oqimlarini tekshiradi.
 

@@ -65,28 +65,17 @@ Indekslar: `evidence_logs(file_sha256)` unique (dup bloklash), `task_instances(p
 
 ## 7. AI pipeline kontraktlari (Codex egaligi: `src/lib/ai/`)
 
-### 7.1 Extract — Interactions API, `gemini-4-hydrogen` (fallback `gemini-3.5-flash-lite`)
-- `client.interactions.create({ model: env.GEMINI_MODEL, store: false, ... })` — bemor media'si **hech qachon saqlanmaydi**.
-- Client: rasm 1600px JPEG downscale; server: 6MB limit, 12s timeout, zod schema, 10 req/min/IP rate limit.
-- Dori quti: `{ drug_name, strength_mg, raw_text, language }`. Tonometr: `{ systolic, diastolic, pulse }`.
-- Xato/kalit yo'q → `{ mode: 'manual' }` → L0, **soxta qiymat yo'q**.
+### 7.1 DoriMos · OpenRouter OCR
+Brauzer tayyor namuna ID sini yuboradi. Server sintetik PNG yoki JPEG faylidan dori nomi, kuchi va birligini OpenRouter orqali o‘qiydi. Bemorning tasdig‘i L2 qaydini yaratadi. Kalit yoki xizmat muammosida L0 uchun qo‘lda qayd yo‘li bor. Dori qutisi tekshiruvi dori qabul qilinganligi qaydidan mustaqil. [DoriMos kontrakti](INTERFACES.md#dorimos-va-yaqinim)
 
-G demo DoriMos uchun brauzerdan faqat tayyor namuna ID sini qabul qiladi. Rasm serverdagi sintetik PNG to‘plamidan olinadi. IP yoki media yuborish mumkin bo‘lgan bemor yuklamasi bu oqimga kirmaydi. Model so‘rovlari bir demo ish joyi uchun daqiqasiga 10 ta va butun demo bo‘yicha daqiqasiga 30 ta bilan cheklangan. Quti kuchi reja bandida alohida saqlanadi. Dori qutisi qaydi «Ichdim» va «Icha olmadim» qaydidan mustaqil.
+### 7.2 DoriMos · Gemini Decisions
+`gemini-decision-1` quti ko‘rinishi, yozuv o‘qilishi, demo nomi va doza toifasini tekshiradi. Ilova 0.80 chegarasini qo‘llaydi va o‘qilmas tasvir uchun qayta urinishni ko‘rsatadi. Reja bilan solishtirish va bayroq chiqarish deterministik qoidalarga asoslanadi.
 
-### 7.2 Gate — Decisions API, `gemini-decision-1` (`apiVersion: 'v1beta'`)
-Bitta chaqiruvda parallel savollar (0 output token, kalibrlangan `confidence`):
-- **DoriMos:** `is_packaging_visible` (noul), `is_label_legible` (noul), `matches_prescribed_drug` (noul, instructions'da shifokor yozgan dori nomi), `detected_dose_bucket` (choice: `2.5mg|5mg|10mg|20mg|50mg|100mg|other`).
-- **Tonometr:** `is_tonometer_screen` (noul), `is_display_legible` (noul).
-- **Teach-Back:** `comprehension_score` (score: 0=xavfli/noto'g'ri doza yoki vaqt, 1=qisman, 2=to'liq to'g'ri), `shows_confusion_or_distress` (noul). Audio to'g'ridan-to'g'ri beriladi (transkripsiya shart emas).
-- **Gate qoidasi:** barcha `confidence ≥ 0.80` → extract qiymatlari bemorga ko'rsatiladi → **bemor tasdiqlaydi** → L2. Aks holda → aniq "qayta rasmga oling yoki qo'lda kiriting" (L0 manual). Teach-Back `score < 1` yoki distress ≥ 0.80 → sariq bayroq.
+### 7.3 Rejadagi AI funksiyalar
+Tonometr OCR, Teach-Back va AI yozadigan yetti kunlik klinik brief loyiha takliflari.
 
-### 7.3 Xulosa — `gemini-4-hydrogen`
-Shifokor 7-kunlik brief: loglar+flaglar JSON (matn sifatida) → ≤3 jumla o'zbekcha, **faqat faktlar**, tashxis yo'q, `store:false`.
-
-### 7.4 Mashq — MediaPipe ONLY
-LLM ishlatilmaydi. `@mediapipe/tasks-vision` PoseLandmarker, self-hosted WASM + `pose_landmarker_lite.task` (`public/models/`). Burchak = hip–knee–ankle (yaxshi ko'ringan tomon), 5-frame moving average, hysteresis: `WAITING→STANDING→DESCENDING→BOTTOM→ASCENDING→STANDING`. Chiqish: `{ validReps, shallowReps, minAngle, confidence, motionSignature[20] }`.
-
-CDC ochiq demo klipi video tahlil yo‘lini ko‘rsatadi. U `sample` sifatida yorliqlanadi va kunlik asosiy urinishga kirmaydi. Brauzer tarmoq siyosati MediaPipe telemetriyasining tashqi endpointiga ulanishni bloklaydi. [Benchmark](BENCHMARK.md)
+### 7.4 Mashq · MediaPipe va ochiq namuna
+Mashq burchagi va sikllari qurilmadagi MediaPipe bilan o‘lchanadi. Android jonli kamera uchun Full, tanlangan video uchun Heavy ishlatadi. Web o‘lchovi Lite modelini ishlatadi. OpenRouter CDC ochiq klipi yoki undan olingan 9 kadrni tahlil qiladi. Baidu OpenRouter orqali tayyor taqqoslash toifasini o‘zbekcha izohlaydi. Shaxsiy kadrlar qurilmada qoladi. [Benchmark](BENCHMARK.md)
 
 ## 8. Deterministik qoidalar (`src/lib/rules.ts` — Codex)
 Kirish: log + plan (shifokor chegaralari). Chiqish: `flag | null` + `rule_key`.

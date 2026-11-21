@@ -11,14 +11,14 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 
 internal enum class SampleAiProvider(val value: String, val label: String) {
-    Gemini("gemini", "Gemini bilan tahlil"),
     OpenRouter("openrouter", "OpenRouter bilan tahlil"),
     Baidu("baidu", "Baidu bilan izohlash"),
 }
 
 internal sealed interface SampleAiReport {
     val model: String
-    data class Observation(override val model: String, val view: String, val seatedAtSeconds: List<Double>) : SampleAiReport
+    data class Observation(override val model: String, val view: String, val seatedAtSeconds: List<Double>,
+        val usesSampleFrames: Boolean = false) : SampleAiReport
     data class Explanation(override val model: String, val summary: String) : SampleAiReport
 }
 
@@ -45,7 +45,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
         SectionTitle("AI tahlilchi · CDC namunasi")
         Text("Mustaqil AI kuzatuvi faqat ommaviy CDC videosiga ishlatiladi.")
         if (mobile == null) {
-            Text("Gemini, OpenRouter yoki Baidu uchun veb-panelga ulang.")
+            Text("OpenRouter va Baidu uchun veb-panelga ulang.")
         } else {
             val providers = if (cycles == null) SampleAiProvider.entries.filter { it != SampleAiProvider.Baidu }
                 else SampleAiProvider.entries
@@ -79,6 +79,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
         if (busy) PatientNotice("AI namunani tahlil qilmoqda…")
         observation?.let {
             Text(it.model)
+            if (it.usesSampleFrames) Text("Ommaviy namunadan 9 kadr")
             if (it.view == "unclear") Text("Video modeli harakatni yetarli ko‘rmadi.")
             else Text("Topilgan sikllar · ${it.seatedAtSeconds.size}")
             if (it.seatedAtSeconds.isNotEmpty()) Text("Taxminiy o‘tirish vaqtlari · ${it.seatedAtSeconds.joinToString { time -> "$time s" }}")

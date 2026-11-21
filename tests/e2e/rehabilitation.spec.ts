@@ -95,7 +95,7 @@ test('judge completes the browser exercise story without camera permission', asy
 test('Android saves a confirmed local video summary and restricts cloud analysis to the bundled sample', async ({ page }) => {
   test.setTimeout(60_000);
   const ai = '/api/mobile/v1/exercise/sample-ai';
-  expect((await page.request.post(ai, { data: { provider: 'gemini' } })).status()).toBe(401);
+  expect((await page.request.post(ai, { data: { provider: 'openrouter' } })).status()).toBe(401);
   await enter(page, 'doctor');
   await page.getByRole('button', { name: 'Mashqni biriktirish' }).click();
   await expect(page.getByText(/Reja: 5 takror/)).toBeVisible();
@@ -104,9 +104,9 @@ test('Android saves a confirmed local video summary and restricts cloud analysis
   const paired = await page.request.post('/api/mobile/v1/pair', { data: { code: (await pairing.json()).code } });
   const headers = { Authorization: `Bearer ${(await paired.json()).token}` };
   const cloud = (data: object) => page.request.post(ai, { headers, data });
-  expect((await cloud({ provider: 'gemini', video: 'content://private/clip' })).status()).toBe(400);
+  expect((await cloud({ provider: 'openrouter', video: 'content://private/clip' })).status()).toBe(400);
   expect((await cloud({ provider: 'baidu', comparison: 'pose_only', summary: 'private measurement' })).status()).toBe(400);
-  expect((await cloud({ provider: 'gemini' })).status()).toBe(404);
+  expect((await cloud({ provider: 'openrouter' })).status()).toBe(404);
 
   const { date, plan } = await (await page.request.get(mobile, { headers })).json();
   const record = { clientAttemptId: randomUUID(), prescriptionId: plan.id, scheduledDate: date, evidence: {

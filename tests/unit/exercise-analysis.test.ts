@@ -5,7 +5,6 @@ import { exerciseAnalysisRequest } from '../../src/lib/exercise-analysis';
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  vi.doUnmock('@google/genai');
   vi.resetModules();
 });
 
@@ -19,16 +18,22 @@ function enableFreeRouter() {
 function enableGemini() {
   vi.stubEnv('EXERCISE_GEMINI_DEMO', 'true');
   vi.stubEnv('GEMINI_API_KEY', 'test-token');
-  vi.stubEnv('GEMINI_EXERCISE_MODEL', '');
-  vi.stubEnv('GEMINI_EXERCISE_FALLBACK_MODEL', '');
 }
 
 it('accepts a provider choice without accepting caller-supplied media or models', () => {
-  expect(exerciseAnalysisRequest.parse({})).toEqual({ provider: 'gemini' });
+  expect(exerciseAnalysisRequest.parse({})).toEqual({ provider: 'openrouter' });
   expect(exerciseAnalysisRequest.parse({ provider: 'openrouter' })).toEqual({ provider: 'openrouter' });
   expect(exerciseAnalysisRequest.safeParse({ provider: 'unknown' }).success).toBe(false);
   expect(exerciseAnalysisRequest.safeParse({ provider: 'openrouter', model: 'other' }).success).toBe(false);
   expect(exerciseAnalysisRequest.safeParse({ provider: 'openrouter', video: 'other' }).success).toBe(false);
+});
+
+it('keeps the Gemini key scoped to Decisions, even with a legacy exercise flag', async () => {
+  enableGemini();
+  vi.stubEnv('EXERCISE_OPENROUTER_DEMO', 'false');
+  const { availableExerciseProviders, reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
+  expect(availableExerciseProviders()).toEqual([]);
+  await expect(reviewExerciseSample('gemini')).resolves.toEqual({ status: 'unavailable' });
 });
 
 it('sends only the bundled cropped clip and shares concurrent OpenRouter calls', async () => {
@@ -41,7 +46,7 @@ it('sends only the bundled cropped clip and shares concurrent OpenRouter calls',
   vi.stubGlobal('fetch', fetch);
   const { availableExerciseProviders, reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
   expect(availableExerciseProviders()).toEqual(['openrouter']);
-  const expected = { status: 'observed', model, observation };
+  const expected = { status: 'observed', model, observation, input: 'video' };
   expect(await Promise.all([reviewExerciseSample('openrouter'), reviewExerciseSample('openrouter')])).toEqual([expected, expected]);
   expect(await reviewExerciseSample('openrouter')).toEqual(expected);
   expect(fetch).toHaveBeenCalledTimes(1);
@@ -69,7 +74,7 @@ it.each(['google/gemma-4-26b-a4b-it:free', 'google/gemma-4-31b-it:free'])(
     }));
     vi.stubGlobal('fetch', fetch);
     const { reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
-    expect(await reviewExerciseSample('openrouter')).toEqual({ status: 'observed', model, observation });
+    expect(await reviewExerciseSample('openrouter')).toEqual({ status: 'observed', model, observation, input: 'video' });
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
       model,
       response_format: { type: 'json_object' },
@@ -99,59 +104,34 @@ it('does not run a paid model and rejects a malformed observation from a free mo
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
-it.each([408, 429, 503])('tries a second Gemini model when the primary returns HTTP %i', async (status) => {
-  enableGemini();
+it('uses only the bundled contact sheet when OpenRouter requires credits for video', async () => {
+  enableFreeRouter();
+  const model = 'nvidia/nemotron-3.5-super-vl:free';
   const observation = { view: 'side_visible', seatedAtSeconds: [2, 6] };
-  const create = vi.fn()
-    .mockRejectedValueOnce({ status })
-    .mockResolvedValueOnce({ status: 'completed', output_text: JSON.stringify(observation) });
-  vi.doMock('@google/genai', () => ({
-    GoogleGenAI: class { interactions = { create }; },
-  }));
+  const fetch = vi.fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(new Response(null, { status: 402 }))
+    .mockResolvedValueOnce(Response.json({ model, choices: [
+      { finish_reason: 'stop', message: { content: JSON.stringify(observation) } },
+    ] }));
+  vi.stubGlobal('fetch', fetch);
   const { reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
-  expect(await reviewExerciseSample('gemini')).toEqual({ status: 'observed', model: 'gemini-3.1-flash-lite', observation });
-  expect(create.mock.calls.map(([request]) => [request.model, request.store])).toEqual([
-    ['gemini-3.5-flash-lite', false], ['gemini-3.1-flash-lite', false],
-  ]);
+  await expect(reviewExerciseSample('openrouter')).resolves.toEqual({
+    status: 'observed', model, input: 'frames', observation,
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  const sheet = (await readFile('public/demo/pose-cdc-contact-sheet.jpg')).toString('base64');
+  expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toMatchObject({
+    reasoning: { enabled: false },
+    messages: [{ content: [expect.any(Object), { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${sheet}` } }] }],
+    response_format: { type: 'json_object' },
+  });
 });
 
-it.each([
-  ['empty text', null],
-  ['invalid JSON', '{'],
-  ['out-of-order timestamps', '{"view":"side_visible","seatedAtSeconds":[6,2]}'],
-])('tries a second Gemini model when a completed response contains %s', async (_label, outputText) => {
-  enableGemini();
-  const observation = { view: 'side_visible', seatedAtSeconds: [2, 6] };
-  const create = vi.fn()
-    .mockResolvedValueOnce({ status: 'completed', output_text: outputText })
-    .mockResolvedValueOnce({ status: 'completed', output_text: JSON.stringify(observation) });
-  vi.doMock('@google/genai', () => ({
-    GoogleGenAI: class { interactions = { create }; },
-  }));
-
+it('does not send frames if a video request fails for another reason', async () => {
+  enableFreeRouter();
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 429 }));
+  vi.stubGlobal('fetch', fetch);
   const { reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
-
-  expect(await reviewExerciseSample('gemini')).toEqual({ status: 'observed', model: 'gemini-3.1-flash-lite', observation });
-  expect(create.mock.calls.map(([request]) => [request.model, request.store])).toEqual([
-    ['gemini-3.5-flash-lite', false], ['gemini-3.1-flash-lite', false],
-  ]);
-});
-
-it('does not retry an unfinished interaction or a non-transient provider error', async () => {
-  enableGemini();
-  const create = vi.fn()
-    .mockResolvedValueOnce({ status: 'failed', output_text: null })
-    .mockRejectedValueOnce({ status: 403 });
-  vi.doMock('@google/genai', () => ({
-    GoogleGenAI: class { interactions = { create }; },
-  }));
-
-  let { reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
-  expect(await reviewExerciseSample('gemini')).toEqual({ status: 'unavailable' });
-  expect(create).toHaveBeenCalledTimes(1);
-
-  vi.resetModules();
-  ({ reviewExerciseSample } = await import('../../src/lib/ai/exercise-video'));
-  expect(await reviewExerciseSample('gemini')).toEqual({ status: 'unavailable' });
-  expect(create).toHaveBeenCalledTimes(2);
+  await expect(reviewExerciseSample('openrouter')).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).toHaveBeenCalledOnce();
 });

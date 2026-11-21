@@ -112,7 +112,7 @@ internal class MobileApi private constructor(private val origin: URI) {
                     val observation = getJSONObject("observation")
                     val seated = observation.getJSONArray("seatedAtSeconds")
                     SampleAiReport.Observation(getString("model"), observation.getString("view"),
-                        List(seated.length()) { seated.getDouble(it) })
+                        List(seated.length()) { seated.getDouble(it) }, usesSampleFrames = optString("input") == "frames")
                 }
                 "explained" -> SampleAiReport.Explanation(getString("model"), getString("summary"))
                 else -> throw MobileFailure(MobileFailureKind.Service)

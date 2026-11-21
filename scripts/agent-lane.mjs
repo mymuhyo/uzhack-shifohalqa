@@ -69,7 +69,6 @@ async function main() {
     DATABASE_URL: '',
     GEMINI_API_KEY: '',
     OPENROUTER_API_KEY: '',
-    EXERCISE_GEMINI_DEMO: 'false',
     EXERCISE_OPENROUTER_DEMO: 'false',
     TELEGRAM_DATABASE_URL: '',
     TELEGRAM_BOT_TOKEN: '',
@@ -88,6 +87,21 @@ async function main() {
     verifyDatabase(local, laneConfig.SHIFO_NEON_HOST, 'SHIFO_E2E_DATABASE_URL_UNPOOLED', 'shifo_e2e', false);
   };
 
+  const runLive = async ([command, ...commandArgs]) => {
+    for (const key of ['GEMINI_API_KEY', 'GEMINI_DECISION_MODEL', 'OPENROUTER_API_KEY', 'OPENROUTER_OCR_MODEL',
+      'OPENROUTER_OCR_FALLBACK_MODEL', 'EXERCISE_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL']) {
+      if (local[key] !== undefined) env[key] = local[key];
+    }
+    if (laneConfig.SHIFO_LIVE_ISOLATED === 'true') return launch(command, commandArgs, { env });
+    const commonGitDir = (await launch('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { capture: true })).trim();
+    try {
+      await launch('flock', ['-n', '-E', '74', join(commonGitDir, 'shifohalqa-live-api.lock'), command, ...commandArgs], { env });
+    } catch (error) {
+      if (error.message === 'flock exited with 74') throw new Error('The other lane already holds the live API quota lock');
+      throw error;
+    }
+  };
+
   switch (action) {
     case 'check':
       checkDevDb();
@@ -102,25 +116,14 @@ async function main() {
       console.log(url);
       if (args[0] === '--live') {
         if (!local.GEMINI_API_KEY && !local.OPENROUTER_API_KEY) throw new Error('Add this lane’s own API key to .env.local');
-        for (const key of ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'EXERCISE_GEMINI_DEMO', 'EXERCISE_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL']) {
-          if (local[key] !== undefined) env[key] = local[key];
-        }
-        if (laneConfig.SHIFO_LIVE_ISOLATED !== 'true') {
-          const commonGitDir = (await launch('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { capture: true })).trim();
-          try {
-            await launch('flock', ['-n', '-E', '74', join(commonGitDir, 'shifohalqa-live-api.lock'), ...command], { env });
-          } catch (error) {
-            if (error.message === 'flock exited with 74') throw new Error('The other lane already holds the live API quota lock');
-            throw error;
-          }
-          break;
-        }
+        await runLive(command);
+      } else {
+        await launch(command[0], command.slice(1), { env });
       }
-      await launch(command[0], command.slice(1), { env });
       break;
     }
     case 'smoke':
-    case 'e2e':
+    case 'e2e': {
       env.NEXT_PUBLIC_APP_URL = `http://127.0.0.1:${config.webTest}`;
       env.SHIFO_E2E_DATABASE_URL = '';
       if (action === 'e2e') {
@@ -129,8 +132,21 @@ async function main() {
         env.SHIFO_E2E_DATABASE_URL = local.SHIFO_E2E_DATABASE_URL;
         await launch('npm', ['run', 'build'], { env });
       }
-      await launch('npm', ['run', 'e2e', '--', ...args], { env });
+      const command = ['npm', 'run', 'e2e', '--', ...args];
+      const liveOcr = action === 'e2e' && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
+      const liveExercise = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
+      if (liveOcr || liveExercise) {
+        if (!local.OPENROUTER_API_KEY || (liveOcr && !local.GEMINI_API_KEY)) {
+          throw new Error('Add the required lane-specific API keys to .env.local');
+        }
+        if (liveOcr) env.SHIFO_E2E_LIVE_DORIMOS = '1';
+        if (liveExercise) env.SHIFO_E2E_EXERCISE_OPENROUTER = '1';
+        await runLive(command);
+      } else {
+        await launch(command[0], command.slice(1), { env });
+      }
       break;
+    }
     case 'db-apply':
       checkDevDb();
       checkTestDb();

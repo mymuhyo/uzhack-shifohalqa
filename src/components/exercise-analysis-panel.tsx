@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { exerciseAnalysis, type ExerciseAnalysis, type ExerciseProvider } from '@/lib/exercise-analysis';
+import { exerciseAnalysis, type ExerciseAnalysis } from '@/lib/exercise-analysis';
 import {
   compareExerciseObservations, exerciseExplanation, type ExerciseComparison, type ExerciseExplanation,
 } from '@/lib/exercise-explanation';
@@ -59,8 +59,8 @@ function BaiduExplanation({ comparison }: { comparison: ExerciseComparison }) {
   );
 }
 
-export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: ExerciseProvider; poseCycles?: MeasuredCycle[] }) {
-  const name = provider === 'gemini' ? 'Gemini' : 'OpenRouter';
+export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: MeasuredCycle[] }) {
+  const name = 'OpenRouter';
   const headingId = useId();
   const [report, setReport] = useState<ExerciseAnalysis | null>(null);
   const [pending, setPending] = useState(false);
@@ -72,7 +72,7 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
   );
 
   async function review() {
-    if (request.current) return;
+    if (request.current || report?.status === 'observed') return;
     const controller = new AbortController();
     request.current = controller;
     setPending(true);
@@ -81,7 +81,7 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
       const response = await fetch('/api/demo/exercise-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify({ provider: 'openrouter' }),
         signal: controller.signal,
       });
       const parsed = exerciseAnalysis.safeParse(await response.json());
@@ -97,11 +97,10 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
   return (
     <section className={styles.aiPanel} aria-labelledby={headingId}>
       <h2 id={headingId}>{name} kuzatuvi</h2>
-      <p>{provider === 'gemini' ? 'Gemini ommaviy CDC klipini mustaqil ko‘radi.' : 'OpenRouter CDC klipining yuzlar va ovoz olib tashlangan nusxasini ko‘radi.'}</p>
-      {report?.status !== 'observed' && (
-        <button type="button" className={styles.primary} onClick={review} disabled={pending}>Namunani {name} bilan tahlil qilish</button>
-      )}
-      {pending && <p role="status">{name} klipni ko‘rib chiqmoqda…</p>}
+      <p>OpenRouter ommaviy CDC klipining tahrirlangan nusxasi yoki undan olingan kadrlarni kuzatadi.</p>
+      <button type="button" className={styles.primary} onClick={review} aria-disabled={pending || report?.status === 'observed'}>
+        {pending ? 'OpenRouter tahlil qilmoqda…' : report?.status === 'observed' ? 'Namuna tahlil qilindi' : 'Namunani OpenRouter bilan tahlil qilish'}
+      </button>
       {report?.status === 'unavailable' && <p role="status">{name} tahlili hozir mavjud emas. MediaPipe o‘lchovlari yuqorida.</p>}
       {report?.status === 'observed' && (
         <div className={styles.analysisResult} role="status">
@@ -120,10 +119,10 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: { provider: Exer
               </p>}
             </>
           )}
-          <p className={styles.modelName}>{report.model} · Ommaviy namuna</p>
+          <p className={styles.modelName}>{report.model} · {report.input === 'frames' ? 'Ommaviy namunadan 9 kadr' : 'Ommaviy namuna videosi'}</p>
         </div>
       )}
-      {provider === 'openrouter' && comparison && (
+      {comparison && (
         <BaiduExplanation key={comparison.comparison} comparison={comparison.comparison} />
       )}
     </section>

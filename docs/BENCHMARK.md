@@ -1,5 +1,18 @@
 # ShifoHalqa · Demo benchmarklari
 
+## OpenRouter va Gemini Decisions · joriy yo‘l
+
+21-noyabr 2026 (MYT) · Codex worktree · Chromium, 390 × 844 px · haqiqiy API kalitlari va sintetik ish joyi. Har biri bir martalik kuzatuv.
+
+| Sinov | Kuzatilgan natija | Vaqt |
+|---|---|---:|
+| DoriMos · xira sintetik quti | Gemini Decisions qayta urinishni qaytardi. | 1,52 s |
+| DoriMos · tiniq 10 mg sintetik quti | Gemini Decisions sifat tekshiruvidan o‘tdi. OpenRouter’dagi Nemotron «NAMUNA DORI 10 mg»ni qaytardi. Bemor tasdig‘i L2 ni saqladi. | Tasdiq so‘ralguncha 3,01 s |
+| CDC · OpenRouter | MP4 kirishi bu hisobda HTTP 402 qaytardi. Nemotron 9 kadrli zaxirada `unclear` qaytardi. MediaPipe o‘lchovi mavjud. | 2,41 s |
+| CDC · OpenRouter orqali Baidu | `pose_only` toifasiga o‘zbekcha izoh qaytdi. | 1,47 s |
+
+9 kadrli JPEG serverdagi yuzsiz va ovozsiz CDC klipidan olinadi. Uni `ffmpeg -i public/demo/pose-cdc-lower-body.mp4 -vf 'fps=1:start_time=0,scale=180:-2,tile=3x3' -frames:v 1 -q:v 3 public/demo/pose-cdc-contact-sheet.jpg` orqali qayta hosil qilish mumkin. 9 kadrning sanoq aniqligi o‘lchanmagan. [API kontrakti](INTERFACES.md)
+
 ## Android Full va Heavy
 
 21-noyabr 2026 (MYT), Codex Android emulyatori. Galereya yo‘liga ommaviy 8,8 soniyalik CDC WebM kontent URI orqali berildi. Heavy **60,9 soniyada** 88 ta kadrdan **2 ta to‘liq, 0 ta chala takror** topdi. Eng kichik burchak 93,5°. Tarmoq uzilgan takroriy yurishda ayni klip **23,4 soniyada 2 ta to‘liq, 0 ta chala takror** berdi. Full jonli kameradan kadr olish yo‘li ham emulyatorda tekshirildi va Android to‘plamidagi 6 ta test o‘tdi. Full va Heavy tezligi jismoniy telefonlarda alohida o‘lchanadi. ARM64 debug APK **69,4 MiB**. [Android video sinovi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)

@@ -13,8 +13,8 @@ const webPort = readPort('SHIFO_E2E_WEB_PORT', 3419);
 const baseURL = `http://127.0.0.1:${webPort}`;
 const databaseUrl = process.env.SHIFO_E2E_DATABASE_URL ?? '';
 const serverScript = databaseUrl ? 'start' : 'dev';
-const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_GEMINI === '1';
-const useExerciseGemini = process.env.SHIFO_E2E_EXERCISE_GEMINI === '1';
+const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
+const useExerciseOpenRouter = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
 const telegramPort = readPort('SHIFO_E2E_TELEGRAM_PORT', 3420);
 const telegramChatId = (process.env.SHIFO_E2E_TELEGRAM_CHAT_ID ??= String(randomInt(100_000_000_000, 900_000_000_000)));
 
@@ -30,8 +30,9 @@ export default defineConfig({
       DATABASE_URL: databaseUrl,
       DEMO_MODE: 'true',
       DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
-      ...(useLiveOcr || useExerciseGemini ? {} : { GEMINI_API_KEY: '' }),
-      EXERCISE_GEMINI_DEMO: String(useExerciseGemini),
+      ...(useLiveOcr ? {} : { GEMINI_API_KEY: '' }),
+      ...(useLiveOcr || useExerciseOpenRouter ? {} : { OPENROUTER_API_KEY: '' }),
+      EXERCISE_OPENROUTER_DEMO: String(useExerciseOpenRouter),
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       NEXT_TELEMETRY_DISABLED: '1',
       SESSION_SECRET: randomBytes(32).toString('hex'),

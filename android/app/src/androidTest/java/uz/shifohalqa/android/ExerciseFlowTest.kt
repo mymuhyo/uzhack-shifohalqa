@@ -42,7 +42,7 @@ class ExerciseFlowTest {
         compose.onNodeWithText("Qo‘lda qayd saqlash").performScrollTo().performClick()
         compose.onNodeWithText("Namuna qaydi. Shifokorga yuborish uchun veb-panelga ulang.").assertExists()
         compose.onNodeWithText("AI tahlilchi · CDC namunasi").performScrollTo().performClick()
-        compose.onNodeWithText("Gemini, OpenRouter yoki Baidu uchun veb-panelga ulang.").assertExists()
+        compose.onNodeWithText("OpenRouter va Baidu uchun veb-panelga ulang.").assertExists()
     }
 
     @Test fun painStopsCameraAndKeepsEmergencyAccess() {

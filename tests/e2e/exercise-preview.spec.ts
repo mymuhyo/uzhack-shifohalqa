@@ -35,16 +35,16 @@ test('measures the public elbow demo using the arm joints', async ({ page }) => 
   const cycles = page.getByRole('table', { name: /tirsak burchagi/ });
   await expect(cycles.getByRole('row')).toHaveCount(2);
   await expect(page.getByText(/Yuklangan video · To‘liq/)).toContainText('To‘liq 1 · Chala 0');
-  await expect(page.getByRole('heading', { name: 'Gemini kuzatuvi' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'OpenRouter kuzatuvi' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Natijani yuborish' })).toHaveCount(0);
 });
 
-test('asks real Gemini to observe the fixed clip and leaves MediaPipe evidence separate', async ({ page, baseURL }) => {
-  test.skip(process.env.SHIFO_E2E_EXERCISE_GEMINI !== '1', 'Enable the live synthetic video provider test');
+test('asks real OpenRouter to observe the fixed clip and leaves MediaPipe evidence separate', async ({ page, baseURL }) => {
+  test.skip(process.env.SHIFO_E2E_EXERCISE_OPENROUTER !== '1', 'Enable the live synthetic video provider test');
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/demo/mashq');
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
-  await expect(page.getByRole('button', { name: 'Namunani Gemini bilan tahlil qilish' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Namunani OpenRouter bilan tahlil qilish' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'MediaPipe o‘lchovi' })).toHaveCount(0);
   const poseResult = page.getByText(/Yuklangan video · To‘liq/);
   const rejected = await page.request.post('/api/demo/exercise-analysis', {
@@ -54,17 +54,18 @@ test('asks real Gemini to observe the fixed clip and leaves MediaPipe evidence s
   const started = performance.now();
   const observed = page.waitForResponse(response => response.url().endsWith('/api/demo/exercise-analysis') &&
     response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Namunani Gemini bilan tahlil qilish' }).click();
+  await page.getByRole('button', { name: 'Namunani OpenRouter bilan tahlil qilish' }).click();
   const response = await observed;
   expect(response.status()).toBe(200);
   const report = await response.json();
   expect(report).toMatchObject({ status: 'observed' });
-  expect(response.request().postDataJSON()).toEqual({ provider: 'gemini' });
-  const panel = page.getByRole('region', { name: 'Gemini kuzatuvi' });
-  await expect(panel).toContainText('Ommaviy namuna');
+  expect(response.request().postDataJSON()).toEqual({ provider: 'openrouter' });
+  const panel = page.getByRole('region', { name: 'OpenRouter kuzatuvi' });
+  expect(['video', 'frames']).toContain(report.input);
+  await expect(panel).toContainText(report.input === 'frames' ? 'Ommaviy namunadan 9 kadr' : 'Ommaviy namuna videosi');
   const result = page.getByRole('heading', { name: 'MediaPipe o‘lchovi' });
   await expect(result).toBeVisible({ timeout: 95_000 });
   await expect(poseResult).toHaveText('Yuklangan video · To‘liq 2 · Chala 0');
   expect(await page.locator('body').evaluate(body => body.scrollWidth)).toBeLessThanOrEqual(360);
-  console.log('Gemini public clip:', Math.round(performance.now() - started), 'ms;', JSON.stringify(report));
+  console.log('OpenRouter public clip:', Math.round(performance.now() - started), 'ms;', JSON.stringify(report));
 });

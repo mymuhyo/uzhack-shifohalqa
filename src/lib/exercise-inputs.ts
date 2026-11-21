@@ -27,18 +27,26 @@ const liveCamera = z.strictObject({ ...measuredFields, source: z.literal('live_c
 const manual = z.strictObject({ source: z.literal('self_report'), reason: z.literal('manual'), reps });
 const pain = z.strictObject({ source: z.literal('self_report'), reason: z.literal('pain') });
 
-export const exerciseInput = z.union([
-  z.strictObject({ ...measuredFields, source: z.literal('uploaded_video'), fileSha256: z.string().regex(/^[a-f0-9]{64}$/i) }),
-  liveCamera, manual, pain,
-]);
+const uploadedVideo = z.strictObject({
+  ...measuredFields, source: z.literal('uploaded_video'), fileSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+});
+export const exerciseInput = z.union([uploadedVideo, liveCamera, manual, pain]);
+
+const confirmedMeasurement = {
+  patientConfirmed: z.literal(true), analyzedFrames: z.int().min(5).max(20_000),
+};
+const countedARep = ({ validReps, shallowReps }: { validReps: number; shallowReps: number }) =>
+  validReps + shallowReps > 0;
 
 export const mobileExerciseInput = z.strictObject({
   clientAttemptId: z.uuid(),
   prescriptionId: z.uuid(),
   scheduledDate: z.iso.date(),
-  evidence: z.union([liveCamera.extend({
-    patientConfirmed: z.literal(true), fileSha256: z.null(), analyzedFrames: z.int().min(5).max(20_000),
-  }).refine(({ validReps, shallowReps }) => validReps + shallowReps > 0), manual, pain]),
+  evidence: z.union([
+    liveCamera.extend(confirmedMeasurement).refine(countedARep),
+    uploadedVideo.extend(confirmedMeasurement).refine(countedARep),
+    manual, pain,
+  ]),
 });
 
 export const exerciseReviewForm = z.strictObject({

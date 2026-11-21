@@ -105,7 +105,7 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
 async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, hash: string) {
   const [row] = await requireDatabase()`
     SELECT id, level, is_primary AS "primary", similar_motion AS "similarMotion",
-      false AS sample, client_request_hash AS hash
+      file_sha256 IS NOT DISTINCT FROM ${exerciseSample.sha256} AS sample, client_request_hash AS hash
     FROM shifohalqa.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${mobile.prescriptionId}
       AND client_attempt_id = ${mobile.clientAttemptId}
@@ -156,7 +156,9 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
     ORDER BY (file_sha256 = ${fileSha256}) DESC NULLS LAST, created_at DESC LIMIT 100
   `) : [];
   const { duplicateFile, similarMotion } = compareAttempt({ fileSha256, motionSignature: sample ? null : motionSignature, previous });
-  if (duplicateFile) return { status: 'duplicate' } as const;
+  if (duplicateFile) {
+    return (mobile && hash ? await readReceipt(actor, mobile, hash) : null) ?? { status: 'duplicate' } as const;
+  }
 
   const flag = sample ? null : reason === 'pain' ? plan.painColor
     : similarMotion || (measured && measured.shallowReps > plan.maxShallow) ? 'yellow' : null;

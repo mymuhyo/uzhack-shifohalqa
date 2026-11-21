@@ -91,3 +91,37 @@ test('judge completes the browser exercise story without camera permission', asy
   await expect(page.getByText('Og‘riq haqidagi xabaringizni ko‘rdim.')).toBeVisible();
   console.log(`Browser judge journey: ${Math.round(performance.now() - started)} ms (automated, synthetic).`);
 });
+
+test('Android saves a confirmed local video summary and restricts cloud analysis to the bundled sample', async ({ page }) => {
+  test.setTimeout(60_000);
+  const ai = '/api/mobile/v1/exercise/sample-ai';
+  expect((await page.request.post(ai, { data: { provider: 'gemini' } })).status()).toBe(401);
+  await enter(page, 'doctor');
+  await page.getByRole('button', { name: 'Mashqni biriktirish' }).click();
+  await expect(page.getByText(/Reja: 5 takror/)).toBeVisible();
+  const origin = new URL(page.url()).origin;
+  const pairing = await page.request.post('/api/demo/android/pairing', { headers: { Origin: origin } });
+  const paired = await page.request.post('/api/mobile/v1/pair', { data: { code: (await pairing.json()).code } });
+  const headers = { Authorization: `Bearer ${(await paired.json()).token}` };
+  const cloud = (data: object) => page.request.post(ai, { headers, data });
+  expect((await cloud({ provider: 'gemini', video: 'content://private/clip' })).status()).toBe(400);
+  expect((await cloud({ provider: 'baidu', comparison: 'pose_only', summary: 'private measurement' })).status()).toBe(400);
+  expect((await cloud({ provider: 'gemini' })).status()).toBe(404);
+
+  const { date, plan } = await (await page.request.get(mobile, { headers })).json();
+  const record = { clientAttemptId: randomUUID(), prescriptionId: plan.id, scheduledDate: date, evidence: {
+    source: 'uploaded_video', patientConfirmed: true, fileSha256: 'c'.repeat(64), analyzedFrames: 30,
+    validReps: 2, shallowReps: 0, minAngle: 86, confidence: 0.96, motionSignature: null,
+  } };
+  const send = (data: object) => page.request.post(mobile, { headers, data });
+  expect((await send({ ...record, evidence: { ...record.evidence, patientConfirmed: false } })).status()).toBe(400);
+  expect((await send({ ...record, evidence: { ...record.evidence, uri: 'content://private/clip' } })).status()).toBe(400);
+  const responses = await Promise.all([send(record), send(record)]);
+  const [saved, retry] = await Promise.all(responses.map(response => response.json()));
+  expect(saved).toMatchObject({ status: 'saved', level: 2, primary: true, sample: false });
+  expect(retry).toEqual(saved);
+  expect((await send({ ...record, clientAttemptId: randomUUID() })).status()).toBe(409);
+  await page.reload();
+  const entry = page.getByRole('article', { name: 'Yuklangan video · L2' });
+  await expect(entry).toContainText('Android ilovasi');
+});

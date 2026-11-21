@@ -106,7 +106,10 @@ test('Android saves a confirmed local video summary and restricts cloud analysis
   const cloud = (data: object) => page.request.post(ai, { headers, data });
   expect((await cloud({ provider: 'openrouter', video: 'content://private/clip' })).status()).toBe(400);
   expect((await cloud({ provider: 'baidu', comparison: 'pose_only', summary: 'private measurement' })).status()).toBe(400);
-  expect((await cloud({ provider: 'openrouter' })).status()).toBe(404);
+  expect((await cloud({ provider: 'gemini' })).status()).toBe(404);
+  if (process.env.SHIFO_E2E_EXERCISE_OPENROUTER !== '1') {
+    expect((await cloud({ provider: 'openrouter' })).status()).toBe(404);
+  }
 
   const { date, plan } = await (await page.request.get(mobile, { headers })).json();
   const record = { clientAttemptId: randomUUID(), prescriptionId: plan.id, scheduledDate: date, evidence: {

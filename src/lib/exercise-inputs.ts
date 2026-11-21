@@ -23,12 +23,32 @@ const measuredFields = {
   patientConfirmed: z.boolean(),
 };
 
+const liveCamera = z.strictObject({ ...measuredFields, source: z.literal('live_camera'), fileSha256: z.null() });
+const manual = z.strictObject({ source: z.literal('self_report'), reason: z.literal('manual'), reps });
+const pain = z.strictObject({ source: z.literal('self_report'), reason: z.literal('pain') });
+
 export const exerciseInput = z.union([
   z.strictObject({ ...measuredFields, source: z.literal('uploaded_video'), fileSha256: z.string().regex(/^[a-f0-9]{64}$/i) }),
-  z.strictObject({ ...measuredFields, source: z.literal('live_camera'), fileSha256: z.null() }),
-  z.strictObject({ source: z.literal('self_report'), reason: z.literal('manual'), reps }),
-  z.strictObject({ source: z.literal('self_report'), reason: z.literal('pain') }),
+  liveCamera, manual, pain,
 ]);
+
+export const mobileExerciseInput = z.strictObject({
+  clientAttemptId: z.uuid(),
+  prescriptionId: z.uuid(),
+  scheduledDate: z.iso.date(),
+  evidence: z.union([liveCamera.extend({
+    patientConfirmed: z.literal(true), fileSha256: z.null(), analyzedFrames: z.int().min(5).max(20_000),
+  }).refine(({ validReps, shallowReps }) => validReps + shallowReps > 0), manual, pain]),
+});
+
+export const exerciseReviewForm = z.strictObject({
+  attemptId: z.uuid(),
+  decision: z.enum(['reviewed', 'retake']),
+  reply: z.string().trim().min(1).max(500),
+});
+
+export type MobileExerciseInput = z.infer<typeof mobileExerciseInput>;
+export type ExerciseReview = z.infer<typeof exerciseReviewForm>;
 
 export type ExercisePlan = z.infer<typeof exercisePlanForm>;
 export type ExerciseInput = z.infer<typeof exerciseInput>;

@@ -179,6 +179,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS exercise_attempt_primary_idx
 CREATE UNIQUE INDEX IF NOT EXISTS exercise_attempt_file_idx
   ON shifohalqa.exercise_attempts (workspace_id, prescription_id, file_sha256) WHERE file_sha256 IS NOT NULL;
 
+ALTER TABLE shifohalqa.exercise_attempts
+  ADD COLUMN IF NOT EXISTS client_attempt_id uuid,
+  ADD COLUMN IF NOT EXISTS client_request_hash text,
+  ADD COLUMN IF NOT EXISTS review_decision text CHECK (review_decision IN ('reviewed', 'retake')),
+  ADD COLUMN IF NOT EXISTS review_reply text CHECK (char_length(review_reply) BETWEEN 1 AND 500),
+  ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+
+CREATE UNIQUE INDEX IF NOT EXISTS exercise_attempt_client_idx
+  ON shifohalqa.exercise_attempts (workspace_id, prescription_id, client_attempt_id)
+  WHERE client_attempt_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS shifohalqa.daily_step_counts (
   workspace_id uuid NOT NULL,
   patient_id uuid NOT NULL,

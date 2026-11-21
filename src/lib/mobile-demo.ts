@@ -47,9 +47,9 @@ export async function redeemAndroidPairing(code: string) {
     SET pairing_hash = NULL, pairing_expires_at = NULL,
         session_hash = ${hash(token)}, session_expires_at = CURRENT_TIMESTAMP + interval '8 hours'
     WHERE pairing_hash = ${hash(code)} AND pairing_expires_at > CURRENT_TIMESTAMP
-    RETURNING to_char(session_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "expiresAt"
+    RETURNING workspace_id AS "workspaceId", to_char(session_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "expiresAt"
   `;
-  return row ? { token, ...expiryRow.parse(row) } : null;
+  return row ? { token, ...expiryRow.extend({ workspaceId: z.uuid() }).parse(row) } : null;
 }
 
 export async function androidPatient(request: Request): Promise<(ClinicalActor & { patientName: string }) | null> {

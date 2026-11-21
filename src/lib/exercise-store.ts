@@ -9,7 +9,6 @@ import { deriveEvidenceLevel } from './rules/evidence-level';
 
 const exercisePlanRow = z.object({
   id: z.uuid(), targetAngle: z.int(), targetReps: z.int(), maxShallow: z.int(), painColor: z.enum(['red', 'yellow']),
-  startDate: z.iso.date(),
 });
 const reviewRow = z.object({
   decision: z.enum(['reviewed', 'retake']), body: z.string(), reviewedAt: z.iso.datetime(),
@@ -63,8 +62,7 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
 export async function readExercisePlan(actor: ClinicalActor) {
   const sql = requireDatabase();
   const [row] = await sql`
-    SELECT id, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor",
-      to_char(created_at AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS "startDate"
+    SELECT id, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
     FROM shifohalqa.exercise_prescriptions
     WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
   `;
@@ -128,7 +126,7 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
   if (mobile && hash) {
     const existing = await readReceipt(actor, mobile, hash);
     if (existing) return existing;
-    if (mobile.scheduledDate > today || mobile.scheduledDate < plan.startDate) {
+    if (mobile.scheduledDate > today) {
       return { status: 'stale' } as const;
     }
   }

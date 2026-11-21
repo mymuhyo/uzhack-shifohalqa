@@ -41,10 +41,12 @@ internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<Exe
             val attempts = data.getJSONArray("attempts")
             val history = List(attempts.length()) { index ->
                 val entry = attempts.getJSONObject(index)
+                val level = entry.getInt("level")
                 val title = when {
                     entry.getBoolean("sample") -> "CDC namuna videosi"
                     entry.getString("reason") == "pain" -> "Og‘riq xabari"
                     entry.getString("reason") == "manual" -> "Qo‘lda qayd"
+                    level == 2 -> "Video o‘lchovi"
                     else -> "Kamera o‘lchovi"
                 }
                 val review = entry.optJSONObject("review")?.let {
@@ -52,7 +54,7 @@ internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<Exe
                 }
                 ExerciseAttempt(entry.getString("id"), entry.getString("scheduledDate"), title,
                     entry.optInt("validReps", -1).takeIf { it >= 0 },
-                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, entry.getInt("level"), review)
+                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review)
             }
             return ExerciseView(plan, history, data.toString())
         }

@@ -1,6 +1,14 @@
 # ShifoHalqa engineering guide
 
-Work in `~/Projects/uzhack` on local `main` for submission fixes. The public demo uses synthetic data. A push to remote `main` triggers Vercel and Railway. Get the owner's OK before releasing or merging an `exp/<idea>` experiment. Keep private environment files, user records, share links and service credentials out of Git and logs.
+Submission fixes use `~/Projects/uzhack` on local `main`. Agents on the parallel experiment use the assigned worktree and branch below. The public demo uses synthetic data. A push to remote `main` triggers Vercel and Railway. Get the owner's OK before releasing or merging an `exp/<idea>` experiment. Keep private environment files, user records, share links and service credentials out of Git and logs.
+
+## Parallel Codex and Antigravity work
+
+- Codex owns `~/Projects/shifohalqa-codex` on `exp/dual-codex`. Antigravity owns `~/Projects/shifohalqa-antigravity` on `exp/dual-antigravity`. Start a fresh session in your assigned folder. Run `npm run lane -- check` before using local services. Keep edits, commits and cleanup within that worktree. The owner handles merging, pushing and deployment.
+- Use the lane launcher for web, E2E, database schema and Android commands. Codex owns host ports 3000–3099 plus emulator ports 5580–5581. Antigravity owns 3100–3199 plus 5582–5583. Keep the lane’s own web hostname in the browser so session cookies stay separate. Use the assigned emulator serial for all device operations.
+- Keep all database writes on your assigned Neon branch. Development uses `neondb` and browser tests use `shifo_e2e`. Use `npm run lane -- db-apply` for the two assigned schemas. Use the lane’s own ignored environment and synthetic fixtures. Playwright uses offline providers and a mock Telegram transport. Ask the owner for lane-specific credentials when a task needs a live service.
+- Before adding a resource, check both agents’ reservations in [DUAL_AGENTS](docs/DUAL_AGENTS.md), verify the resource is free and record its owner, endpoint/port, data scope and cleanup command in your local `.lane/resources.md`. Name new external resources `shifo-codex-*` or `shifo-antigravity-*`. If a tool cannot isolate its data, credentials or device, coordinate exclusive use with the owner. Keep credentials out of the registry.
+- At handoff, report your branch and commit, what changed, test and benchmark results, and resources or migrations the owner must reproduce. Use the common start tag in the comparison guide.
 
 Read [V2_PLAN](docs/V2_PLAN.md) for current work, [SPEC](docs/SPEC.md) for the product contract and [INTERFACES](docs/INTERFACES.md) before changing an engine. [SUBMISSION](tasks/task-2/SUBMISSION.md) is the judge's browser walkthrough.
 

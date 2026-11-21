@@ -1,12 +1,21 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { defineConfig } from 'playwright/test';
 
-const baseURL = 'http://127.0.0.1:3419';
+function readPort(name: string, fallback: number) {
+  const value = process.env[name] ?? String(fallback);
+  if (!/^\d{1,5}$/.test(value) || Number(value) < 1 || Number(value) > 65535) {
+    throw new Error(`${name} must be a valid TCP port`);
+  }
+  return Number(value);
+}
+
+const webPort = readPort('SHIFO_E2E_WEB_PORT', 3419);
+const baseURL = `http://127.0.0.1:${webPort}`;
 const databaseUrl = process.env.SHIFO_E2E_DATABASE_URL ?? '';
 const serverScript = databaseUrl ? 'start' : 'dev';
 const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_GEMINI === '1';
 const useExerciseGemini = process.env.SHIFO_E2E_EXERCISE_GEMINI === '1';
-const telegramPort = 3420;
+const telegramPort = readPort('SHIFO_E2E_TELEGRAM_PORT', 3420);
 const telegramChatId = (process.env.SHIFO_E2E_TELEGRAM_CHAT_ID ??= String(randomInt(100_000_000_000, 900_000_000_000)));
 
 export default defineConfig({
@@ -15,7 +24,7 @@ export default defineConfig({
   testIgnore: useLiveOcr ? [] : '**/dorimos-live.spec.ts',
   use: { baseURL, trace: 'retain-on-failure' },
   webServer: [{
-    command: `npm run ${serverScript} -- --hostname 127.0.0.1 --port 3419`,
+    command: `npm run ${serverScript} -- --hostname 127.0.0.1 --port ${webPort}`,
     url: baseURL,
     env: {
       DATABASE_URL: databaseUrl,

@@ -7,6 +7,7 @@
 Har yakuniy relizda toza Incognito oynada ushbu ketma-ketlikni bajaring. 20-noyabrdagi mavjud ommaviy reliz shu oqimdan o‘tdi. Lokal V2 natijalari [V2 rejasida](../../docs/V2_PLAN.md).
 
 - [ ] HTTPS bosh sahifasi va «Demo haqida» ochiladi. APK, parol, kamera yoki Telegram so‘ralmasdan ikkala demo roli ishlaydi. Shifokor va bemorni bir xil oynada almashtiring.
+- [ ] Mashq demosida **CDC namunasini sinash** tugmasi real MediaPipe natijasini chiqaradi. Gemini’ni yoqilgan bo‘lsa alohida ishga tushiring va taxminiy vaqtlarni MediaPipe sikllari bilan solishtiring. Kamera ruxsati talab qilinadigan jonli sinovdan oldin yozilgan klipni ko‘rsatish mumkin. Tirsak yo‘li chiqarilgan bo‘lsa, uning CDC namunasi ham ochiladi.
 - [ ] **Shifokor sifatida kirish** → «Dori tugadi» bandi yoqilganini tekshirish → **Rejani biriktirish**.
 - [ ] **Bemor sifatida kirish** → **Icha olmadim** → **Dori tugadi** → **Sababni yuborish**. Alohida ikkinchi qayd uchun faqat sintetik misol sifatida bosimni rejaning kuzatuv chegarasida kiriting.
 - [ ] **Shifokor** → «Dori tugadi» → **Ko‘rib chiqish** → **Bemorga javob** → **Qaydni tasdiqlash**. **Bemor** rolida o‘sha dori qaydida javob va L4 bor. Ikkinchi bosim qaydi L0 bo‘lib qolgan.

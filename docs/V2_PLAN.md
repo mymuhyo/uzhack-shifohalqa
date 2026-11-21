@@ -27,6 +27,8 @@ Vercel’dagi demo `ffdc850`dan chiqarilgan. Lokal `1c7ddd7` hisoblagich tuzatis
 
 Web, Telegram va Android bir xil vazifa va dalil kontraktiga ulanadi. Telegram birinchi bosqichda web interfeysni qayta ishlatadi. Android esa qurilmadagi kamera boshqaruvi va o‘lchov barqarorligi uchun alohida klient bo‘lib qoladi.
 
+**Mashq prototipi.** `exp/mashq-cv-ai` da kamera boshlang‘ich holat tasdiqlanganda «Sanoq tayyor»ni ko‘rsatadi va yakunda kuzatuv uzilgan sikllarni tugallanmagan harakatlardan ajratadi. `/demo/mashq/tirsak` da CDC klipi, jonli kamera va lokal video bor. O‘tirib-turish sahifasida AI va MediaPipe vaqt oraliqlari solishtiriladi. OpenRouter’ning bepul video modeli ixtiyoriy va server kaliti bilan yoqiladi. Mashqning asosiy o‘lchovi MediaPipe’da ishlaydi. [Benchmark](BENCHMARK.md)
+
 **Git va reliz.** Har commit bitta mantiqiy o‘zgarishni saqlaydi. Kerakli paytda ish filialini GitHub’ga push qilish mumkin. `main` push Vercel va Railway’ni ishga tushirishi mumkin. Vercel `promote` esa tekshirilgan buildga production domenlarini o‘tkazadi. Eksperimentni `main`ga birlashtirish va production reliz uchun egasi tasdig‘i olinadi. [Vercel promote](https://vercel.com/docs/deployments/promoting-a-deployment)
 
 ## Oldingi V2 · Uy davosidagi to‘siqqa javob

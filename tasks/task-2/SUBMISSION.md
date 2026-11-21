@@ -13,7 +13,7 @@ Open the link in a private browser window. The demo uses synthetic patient and d
 3. Switch back to the doctor role. Open **Dori tugadi → Ko‘rib chiqish**, write a reply under **Bemorga javob**, and select **Qaydni tasdiqlash**.
 4. Return to the patient role. The reply and the reviewed evidence level, L4, appear on that medication report. L4 records the doctor's approval of this report. The patient's clinical outcome is unknown.
 
-The demo also includes manual blood pressure and step entries, daily and weekly plan progress, the revocable **Yaqinim** daily summary link, and a chair-stand exercise. For a camera-free exercise demo, assign **Mashqni biriktirish** as the doctor, then select **O‘tirib-turish mashqi → CDC namunasini sinash** as the patient. The public sample has two complete repetitions. A confirmed sample is labeled L2. MediaPipe processes the video in the browser.
+Select **Mashq demosini ochish → CDC namunasini sinash** on the home page to try chair-stand measurement without signing in or granting camera access. MediaPipe shows the repetitions and knee angles. Select **Namunani Gemini bilan tahlil qilish** to compare the model’s approximate seated timestamps with the CV result. In the patient workflow, a confirmed chair-stand sample is labeled L2. The demo also includes manual blood pressure and step entries, daily and weekly plan progress, and the revocable **Yaqinim** daily summary link.
 
 ## What is simulated
 
@@ -21,4 +21,4 @@ The accounts, care plans and DoriMos package images use synthetic examples. The 
 
 ## AI use
 
-We used Codex to implement, review and test the software. MediaPipe Pose measures movement in the browser. Gemini Decisions checks image and text quality, and Gemini Interactions extracts the name and strength from synthetic medication packages. Deterministic application rules compare the confirmed result with the plan and place exceptions in the review queue. The doctor decides how to respond to the selected record.
+We used Codex to implement, review and test the software. MediaPipe Pose measures movement in the browser. Gemini independently observes the bundled public chair-stand sample. Camera frames and personal video uploads stay on the device. Gemini Decisions checks image and text quality, and Gemini Interactions extracts the name and strength from synthetic medication packages. Deterministic application rules compare the confirmed result with the plan and place exceptions in the review queue. The doctor decides how to respond to the selected record.

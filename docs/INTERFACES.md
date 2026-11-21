@@ -28,11 +28,19 @@ Yo‘llar `DEMO_ANDROID_ENABLED=true` va veb-demo sessiyasi yoqilganda ishlaydi.
 | So‘rov | Kontrakt |
 |---|---|
 | `POST /api/demo/android/pairing` | Shu saytdan kelgan shifokor brauzer sessiyasi bilan `{code, expiresAt}` qaytaradi. Kod 32 ta hex belgi, 10 daqiqa amal qiladi. Yangi kod shu ish joyining oldingi Android sessiyasini tugatadi. |
-| `POST /api/mobile/v1/pair` | JSON `{code}` yuboriladi. Kod atomar ravishda bir marta sarflanadi. `{token, expiresAt}` 8 soatlik bemor sessiyasi. Baza kod va tokenning SHA-256 xeshini saqlaydi. |
+| `POST /api/mobile/v1/pair` | JSON `{code}` yuboriladi. Kod atomar ravishda bir marta sarflanadi. `{token, expiresAt, workspaceId}` 8 soatlik bemor sessiyasi va qurilmadagi keshni ajratish identifikatori. Baza kod va tokenning SHA-256 xeshini saqlaydi. |
 | `GET /api/mobile/v1/today` | `Authorization: Bearer <token>` bilan `{patientName, date, tasks, replies}`. `date` Toshkent sanasi. `tasks` bugungi dori vazifalarini `{id, title, time, record}` bilan beradi. `record` `null` yoki `{id, status, reason, reply}`. `reply` `null` yoki `{body, decision, reviewedAt}`. `replies` joriy va oldingi olti kundagi vazifalar javoblarini, shuningdek shu davrda ko‘rilgan eski dori qaydlari javoblarini `{recordId, taskTitle, date, body, decision, reviewedAt}` bilan qaytaradi. |
 | `POST /api/mobile/v1/evidence` | Ayni bearer token bilan `{taskId, medicationStatus: 'taken'}` yoki `{taskId, medicationStatus: 'missed', reason}`. `reason` `out_of_supply`, `side_effects`, `forgot`, `other` dan biri. `{result: 'saved' \| 'already_saved'}` dan keyin klient `today` ni qayta o‘qiydi. Server mavjud klinik qoidalar bilan qaydga L0, `self_report` va `ai_mode: 'none'` beradi. |
 
 Xatolar `{error}` shaklida. `400 invalid` tanasi yaroqsiz, `401 invalid_code` kod ishlatilgan yoki eskirgan, `401 unauthorized` sessiya yo‘q yoki tugagan, `404 not_found` variant o‘chiq yoki vazifa ish joyiga tegishli emas, `503 unavailable` vaqtinchalik xato. Brauzerdagi juftlash so‘rovi boshqa saytdan kelsa `403 unauthorized` qaytadi. Android bearer token veb-shifokor rolini bermaydi. [Playwright sinovi](../tests/e2e/android-api.spec.ts)
+
+## Android reabilitatsiya
+
+- `GET /api/mobile/v1/exercise` bemor bearer sessiyasida `{date, plan, attempts}` qaytaradi. Reja `null` yoki `{id, targetAngle, targetReps}`. So‘nggi qaydlarda `id, scheduledDate, reason, validReps, shallowReps, level, sample, review` bor. Ko‘rik `null` yoki `{decision, body, reviewedAt}`.
+- `POST /api/mobile/v1/exercise` `{clientAttemptId, prescriptionId, scheduledDate, evidence}` qabul qiladi. `evidence` Android kamerasi o‘lchovining tasdiqlangan xulosasi yoki `manual` / `pain` sababli `self_report`. Noma’lum maydon va media rad etiladi. Server reja va bemor vakolatini tekshiradi, L0 yoki L3 va bayroqni hisoblaydi. Og‘riq mustaqil qayd bo‘lib qoladi.
+- Bir xil ID va bir xil mazmun ayni javobni qaytaradi. Bir xil ID, boshqa mazmun `409 conflict`. Noaniq o‘lchov `422 retake`. Qaydning Toshkent kuni saqlanadi. Reja biriktirilgan kundan bugungacha bo‘lgan sana qabul qilinadi. Shu oraliqdan tashqarida `422 stale` qaytadi. Ilova rad etilgan qaydni ko‘rsatadi va uni olib tashlashga ruxsat beradi.
+- `POST /api/demo/exercise-review` shu origin va shifokor sessiyasida `{attemptId, decision: 'reviewed' | 'retake', reply}` qabul qiladi. Birinchi javob saqlanadi, asl dalil darajasi saqlanadi. Og‘riq xabarlari shifokor ro‘yxati boshida ustuvorlik va kelgan vaqt bo‘yicha turadi. Android va web bemor shu qaydning javobini o‘qiydi.
+- Room navbati URL va ish joyiga bog‘langan. WorkManager tarmoqqa ulanganida bir xil ID bilan jo‘natadi. Qayd server tasdig‘igacha kutilayotgan holatda ko‘rinadi. Sessiya yaroqsiz bo‘lsa, navbat ayni ish joyiga qayta ulangach davom etadi. Modelni ishlatishda kadrlar qurilmada qoladi. [Integratsiya sinovi](../tests/e2e/rehabilitation.spec.ts)
 
 ## Amaldagi eksportlar
 

@@ -117,17 +117,21 @@ Railway Variables ichidagi `TELEGRAM_DATABASE_URL` Neon `shifohalqa/main` dagi c
 
 `android/` ni Android Studio’da alohida loyiha sifatida oching. Mustaqil demo oqimida «Bugun» → «Icha olmadim» → «Dori tugadi» → «Qaydni saqlash» → «Qaydni ko‘rish» → «Namuna javobni ochish» ishlaydi. «Ichdim» yo‘li ham bor. Mahalliy qayd qurilmada saqlanadi. «Javoblar» bo‘limidagi «Demoni qayta boshlash» tasdiqdan keyin uni o‘chiradi.
 
+«O‘tirib-turish mashqi» Android kamerasida qurilmaga qo‘shilgan MediaPipe Lite modeli bilan ishlaydi. Mustaqil namuna internet talab qilmaydi. Kamera to‘xtatilgach, o‘lchovni saqlash, qayta urinish yoki qo‘lda kiritish mumkin. «Og‘riq bor» kamerani darhol yopadi. «Tez yordam · 103» telefon terish ekranini ochadi.
+
 JDK 17 yoki undan yangirog‘i, Android SDK API 37 va Build Tools 36.0.0 kerak. Demo Android 8.0 (API 26) yoki undan yangi qurilmaga o‘rnatiladi. Emulyator yoki test qurilmasi ulanganida ikkinchi buyruq UI oqimlarini tekshiradi.
 
 ```bash
 cd android
-./gradlew :app:assembleDebug :app:lintDebug
+./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-Debug APK `android/app/build/outputs/apk/debug/app-debug.apk` faylida hosil bo‘ladi.
+Debug APK `android/app/build/outputs/apk/debug/app-debug.apk` faylida hosil bo‘ladi. ARM64 telefon uchun `./gradlew :app:assembleDebug -PshifoAbi=arm64-v8a` bitta arxitekturali kichikroq APK beradi. Emulyator sinovi uchun parametrsiz build ishlating.
 
 ### Androidni veb-panelga ulash
+
+Ajratilgan worktree’da `npm run lane -- dev` va `npm run lane -- android-test` ishlating. Launcher emulyatorning lokal 3000 portini tegishli worktree portiga ulaydi.
 
 Lokal server `DEMO_MODE=true`, `DEMO_ANDROID_ENABLED=true`, `SESSION_SECRET` va ajratilgan test bazasi bilan ishlashi kerak. Debug APK uchun ADB orqali serverni telefonga yo‘naltiring. Bir nechta qurilma ulangan bo‘lsa, `adb -s SERIAL` bilan sinov telefonini tanlang.
 
@@ -143,7 +147,9 @@ adb reverse tcp:3000 tcp:3000
 2. Androidda «Veb-panelga ulash»ni bosing va bir martalik kodni kiriting. Debug manzil `http://127.0.0.1:3000`. Ommaviy muhitda HTTPS manzil talab qilinadi.
 3. Androidda dori sababini saqlang. Shifokor brauzerda aynan shu qaydni ochib javob beradi. Androiddagi «Javoblar» orqali yoki «Yangilash»ni bosib javobni ko‘ring.
 
-Sessiya 8 soat amal qiladi va ilova jarayoni tugaganda qurilmada qayta ulash kerak bo‘ladi. Yangi juftlash kodi shu ish joyidagi oldingi Android sessiyasini tugatadi. [Android API kontrakti](docs/INTERFACES.md#android-demo-api)
+Mashq uchun shifokor veb-panelda «Mashqni biriktirish»ni bosadi. Androidda «O‘tirib-turish mashqi»ni oching va reja chiqqach kamera yoki qo‘lda qayd yo‘lini tanlang. Internet uzilganda ilova «Telefonda saqlandi, hali yuborilmadi»ni ko‘rsatadi. Aloqa tiklangach qayd yuboriladi. Shifokor «Mashq qaydlari»dan aynan shu yozuvga javob beradi. Androidda mashq ekranidagi «Yangilash» orqali javob ko‘rinadi.
+
+Sessiya 8 soat amal qiladi. Android uni Keystore orqali shifrlab saqlaydi. Yangi juftlash kodi eski sessiyani tugatadi. Muddati o‘tgan sessiyadagi jo‘natilmagan qayd ayni demo ish joyiga qayta ulangach yuboriladi. [Android API kontrakti](docs/INTERFACES.md#android-demo-api)
 
 ## Halollik qoidasi (muzokaraga yopiq)
 **AI o'lchaydi → kod qoidalari bayroq ko'taradi → shifokor qaror qiladi.** Hech qachon "AI isbotladi/tashxis qo'ydi" yozilmaydi; simulyatsiya qismlar ochiq belgilanadi; har submission bilan "what works / what's simulated" + AI-use note keladi.

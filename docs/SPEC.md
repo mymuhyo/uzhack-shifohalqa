@@ -114,7 +114,7 @@ Kirish: log + plan (shifokor chegaralari). Chiqish: `flag | null` + `rule_key`.
 Har demo ish joyida Dr. Sardor va Anvar aka ismli sintetik shifokor va bemor yaratiladi. Reja, qayd va tarix demo oqimida hosil bo‘ladi. To‘qqiz bemorli oldindan tayyorlangan to‘plam keyingi mahsulot sinovi uchun rejalashtirilgan.
 
 ## 12. Non-goals (MVP'da YO'Q — ochiq roadmap)
-Task 2 topshiriladigan mahsulot veb-demo. Alohida Android debug APK sintetik dori oqimini sinash uchun ishlaydi. Android ommaviy relizi, Telegram Mini App, DMED FHIR eksporti, to‘liq native CV, ML anti-cheat, to‘lovlar va Play Store keyingi bosqichda. Individual roli ixtiyoriy T4.3.
+Task 2 topshiriladigan mahsulot brauzer demosidir. Android debug APK dori va uy mashqini sinaydi. Native o‘tirib-turish kamera oqimi qurilmada ishlaydi. Mashq natijasi va og‘riq xabari shifokor web panelida alohida ko‘rinadi. Ommaviy Android relizi, Telegram Mini App, DMED FHIR eksporti, boshqa native mashqlar, ML anti-cheat, to‘lovlar va Play Store keyingi bosqichda. Individual roli ixtiyoriy T4.3.
 
 ## 13. Telegram bot (MVP qo‘shimchasi)
 

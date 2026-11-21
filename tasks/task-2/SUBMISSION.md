@@ -6,6 +6,10 @@ https://shifohalqa.vercel.app/
 
 Open the link in a private browser window. The demo uses synthetic patient and doctor profiles. Select **Shifokor sifatida kirish** for the doctor role or **Bemor sifatida kirish** for the patient role. Both roles in the same browser share a demo workspace. For a fresh workspace, disable any active **Yaqinim** share in the patient role, then select **Demo haqida → Yangi demo ish joyini boshlash**.
 
+## Rehabilitation walkthrough for the next verified release
+
+As the doctor, assign the chair-stand exercise. In the same browser, switch to the patient and open **O‘tirib-turish mashqi**. Run the public CDC sample, confirm the result and save it. Use **Og‘riq bor** for the synthetic pain scenario. Switch back to the doctor, open that pain report and write a reply. The patient sees the reply on the exercise page. Verify these steps on the submission URL after the owner approves the release.
+
 ## What works
 
 1. As the doctor, check that the **Dori tugadi** notification is enabled in the sample plan and select **Rejani biriktirish**.

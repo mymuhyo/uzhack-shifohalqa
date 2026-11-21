@@ -1,5 +1,15 @@
 # ShifoHalqa · Demo benchmarklari
 
+## Android uy reabilitatsiyasi · Codex worktree
+
+21-noyabr 2026 (MYT), sintetik ish joyi. Web va Kotlin sanoqlari beshta umumiy test izida mos keldi. Ular to‘liq, chala, 4 kadr/soniya, kadr uzilishi va tayanch nuqtalari past ko‘rinishini qamrab oldi. Emulator-5580 da beshta Android UI sinovi o‘tdi. Kamera sinovi CameraX va MediaPipe’dan birinchi kadr kelishini, kamerani yopishni va qo‘lda qaydga o‘tishni tekshirdi.
+
+Tarmoq va ADB yo‘naltirishi uzilganida og‘riq xabari Room’da qoldi. Android jarayoni to‘xtatilib ilova qayta ochilgach ham «Telefonda saqlandi, hali yuborilmadi» ko‘rindi. Tarmoq tiklangach web panelida **919 ms** ichida bitta xabar chiqdi. Shifokorning javobi Androidda o‘sha qayd bilan ochildi. Bu bitta emulyator sinovida tarmoqni tiklashdan web panelida qayd ko‘rinishigacha o‘lchov.
+
+360 × 800 px Chromium’da hakamning namuna mashqi → og‘riq xabari → shifokor javobi → bemor javobni ko‘rishi ssenariysi avtomatlashtirilgan yurishda **6,2 soniya** oldi. MediaPipe bir xil ommaviy CDC namunasida ikki to‘liq siklni ko‘rsatdi. ARM64 debug APK hajmi **37,0 MiB**. [Umumiy test izlari](../tests/fixtures/chair-stand/live.tsv) · [Web sinovi](../tests/e2e/rehabilitation.spec.ts)
+
+Qabul sinovi uchun arzon Android va ikkinchi telefonda kamida 24 ta urinishni kuzatuvchi qo‘lda belgilaydi. Qurilma, yoritish, ko‘rinish, to‘liq va chala takror, qayta urinish sababi va o‘lchov vaqtini yozing. Yaroqli urinishlarda sanash mosligi va qayta urinish ulushini alohida hisoblang. Fizioterapevtning to‘g‘ri javobgacha faol vaqtini eski va yangi oqimda almashtirilgan sintetik holatlar bilan o‘lchang. 90% moslik va 10× faraz uchun jismoniy telefon hamda xodim ishtirokidagi natija hali olinmagan.
+
 ## MediaPipe
 
 20-noyabr 2026 (MYT) · `codex/dev` ish daraxti · lokal production build · Chromium 159.0.8154.6, Linux x64, 360 px viewport · `@mediapipe/tasks-vision` 1.2.3, Lite, CPU. Natija vaqti video tanlash yoki namuna tugmasini bosishdan boshlab o‘lchandi. Vaqt model yuklanishi va real vaqt rejimidagi video ijrosini ham o‘z ichiga oladi.

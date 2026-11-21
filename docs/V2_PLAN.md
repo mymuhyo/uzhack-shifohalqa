@@ -1,4 +1,17 @@
-# V2 · Mashqni kamera va AI bilan tekshirish
+# V2 · Androidda uy reabilitatsiyasi
+
+**Joriy yo‘nalish.** Bemor Kotlin va Compose ilovasida uy mashqini bajaradi. Kamera va MediaPipe Lite telefonda ishlaydi. Klinik reja va urinishga javob web panelda. Hakam Android o‘rnatmasdan CDC klipi, sintetik og‘riq xabari va javob oqimini brauzerda o‘tadi. Telegram yordamchi bildirishnoma va havola kanali.
+
+| Bosqich | Qabul mezoni |
+|---|---|
+| Android kamera va qo‘lda qayd | Kadrda tayanch nuqtalari yetarli bo‘lsa holat va takror sanog‘i ko‘rinadi. Yetarli bo‘lmasa qayta urinish yoki qo‘lda qayd ochiladi. To‘xtatish, og‘riq va fon rejimi kamerani yopadi. |
+| Klinik halqa | Mashq rejasi, urinish, alohida og‘riq xabari va aynan shu qaydga shifokor javobi bir demo ish joyida ishlaydi. Android va web javobni ko‘rsatadi. |
+| Sust aloqa | Oldingi reja telefondan ochiladi. Yuborilmagan xabar va server olgan xabar turli holatda ko‘rinadi. Qayta yuborish ikki yozuv yaratmaydi. |
+| Sifat o‘lchovi | Arzon Android va nazorat telefonida qo‘lda belgilangan 24 urinish. Yaroqli namunalarning kamida 90 foizida takror soni mos. Fizioterapevtning to‘g‘ri javobgacha faol vaqti uchun 10× faraz alohida tajribada tekshiriladi. |
+
+Keyingi native ishlar qo‘lda bosim, DoriMos, «Yaqinim» va qadam qaydi. Ular uchun navbatdagi mahsulot bo‘laklari tanlanadi.
+
+## Avvalgi V2 · Brauzerda mashq o‘lchovi va ommaviy klip tahlili
 
 **Joriy ustuvorlik.** Hakam «Mashq demosini ochish»dan tayyor klipni ishga tushiradi. Jonli kamerada MediaPipe kadr ustida o‘lchanayotgan son–tizza–to‘piq chizig‘ini va joriy burchakni ko‘rsatadi. Kadrlar tahlilidan to‘liq sikllar sanaladi. Natija har bir sikl vaqti, eng kichik burchagi va demo maqsadiga yetganini beradi. Gemini o‘sha ommaviy klipni mustaqil ko‘radi. Hakam ikki sanoqni solishtiradi. Ma’lumotlar bazasi yoki akkaunt mashq demosini ochish uchun kerak emas.
 

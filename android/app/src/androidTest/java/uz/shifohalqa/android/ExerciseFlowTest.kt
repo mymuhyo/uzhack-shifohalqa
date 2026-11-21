@@ -13,11 +13,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ExerciseFlowTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0) val standalone: TestRule = StandaloneDemoRule()
+    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
 
     @Before fun allowCamera() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -39,6 +41,8 @@ class ExerciseFlowTest {
         compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("3")
         compose.onNodeWithText("Qo‘lda qayd saqlash").performScrollTo().performClick()
         compose.onNodeWithText("Namuna qaydi. Shifokorga yuborish uchun veb-panelga ulang.").assertExists()
+        compose.onNodeWithText("AI tahlilchi · CDC namunasi").performScrollTo().performClick()
+        compose.onNodeWithText("Gemini, OpenRouter yoki Baidu uchun veb-panelga ulang.").assertExists()
     }
 
     @Test fun painStopsCameraAndKeepsEmergencyAccess() {

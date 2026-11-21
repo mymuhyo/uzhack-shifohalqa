@@ -80,6 +80,13 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
         viewModelScope.launch { refresh(current) }
     }
 
+    suspend fun analyzePublicSample(provider: SampleAiProvider, comparison: String): SampleAiReport {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val report = current.api.sampleAi(current.token, provider, comparison)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        return report
+    }
+
     fun refreshExercise() {
         val current = session ?: return
         if (exercise.loading) return

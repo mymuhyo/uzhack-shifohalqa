@@ -175,8 +175,9 @@ class ExerciseSyncWorker(context: Context, params: WorkerParameters) : Coroutine
 
 internal fun exerciseToday(): LocalDate = LocalDate.now(ZoneId.of("Asia/Tashkent"))
 
-internal fun ChairStandResult.asEvidence(): JSONObject = JSONObject()
-    .put("source", "live_camera").put("patientConfirmed", true).put("fileSha256", JSONObject.NULL)
+internal fun ChairStandResult.asEvidence(fileSha256: String? = null): JSONObject = JSONObject()
+    .put("source", if (fileSha256 == null) "live_camera" else "uploaded_video")
+    .put("patientConfirmed", true).put("fileSha256", fileSha256 ?: JSONObject.NULL)
     .put("validReps", validReps).put("shallowReps", shallowReps)
     .put("minAngle", minAngle ?: JSONObject.NULL).put("confidence", confidence ?: JSONObject.NULL)
     .put("analyzedFrames", analyzedFrames)

@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -43,6 +44,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
 private val samplePlan = ExercisePlan("sample", 100, 5)
@@ -60,10 +62,49 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     var runDate by remember { mutableStateOf(exerciseToday()) }
     var notice by rememberSaveable { mutableStateOf<String?>(null) }
     var manual by rememberSaveable { mutableStateOf(false) }
+    var clip by remember { mutableStateOf<ExerciseClip?>(null) }
+    var videoResult by remember { mutableStateOf<ExerciseVideoResult?>(null) }
+    var videoProgress by remember { mutableStateOf(0) }
+    var showSampleAi by rememberSaveable { mutableStateOf(false) }
+
+    fun startVideo(input: ExerciseClip) {
+        finished = null
+        notice = null
+        videoResult = null
+        videoProgress = 0
+        showSampleAi = input.isPublic
+        clip = input
+    }
+
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { startVideo(ExerciseClip.fromPicker(it)) }
+    }
+
+    LaunchedEffect(clip) {
+        val selected = clip ?: return@LaunchedEffect
+        try {
+            videoResult = analyzeExerciseVideo(context, selected, plan?.targetAngle ?: samplePlan.targetAngle) {
+                videoProgress = it
+            }
+            if (videoResult?.measurement?.savable != true) {
+                notice = "Videodan yetarli o‘lchov olinmadi. Boshqa video tanlang yoki takrorlarni qo‘lda kiriting."
+                manual = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: ExerciseVideoTooLong) {
+            notice = "Ikki daqiqagacha bo‘lgan video tanlang."
+        } catch (_: Exception) {
+            notice = "Videoni tahlil qilib bo‘lmadi. Boshqa video tanlang yoki takrorlarni qo‘lda kiriting."
+            manual = true
+        }
+        if (clip == selected) clip = null
+    }
 
     fun startCamera() {
         frame = null
         finished = null
+        videoResult = null
         notice = null
         runDate = exerciseToday()
         running = true
@@ -88,6 +129,8 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     }
 
     fun reportPain() {
+        clip = null
+        videoResult = null
         running = false
         finished = null
         frame = null
@@ -95,6 +138,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     }
 
     fun emergency() {
+        clip = null
         running = false
         frame = null
         try {
@@ -107,10 +151,16 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     LaunchedEffect(mobile) { mobile?.refreshExercise() }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && running) {
-                running = false
-                frame = null
-                notice = "Kamera yopildi. Mashqni qaytadan boshlashingiz mumkin."
+            if (event == Lifecycle.Event.ON_STOP) {
+                if (running) {
+                    running = false
+                    frame = null
+                    notice = "Kamera yopildi. Mashqni qaytadan boshlashingiz mumkin."
+                }
+                if (clip != null) {
+                    clip = null
+                    notice = "Video tahlili to‘xtatildi. Videoni qayta tanlashingiz mumkin."
+                }
             }
         }
         lifecycle.lifecycle.addObserver(observer)
@@ -120,7 +170,8 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         if (running) {
             running = false
             frame = null
-        } else onBack()
+        } else if (clip != null) clip = null
+        else onBack()
     }
 
     Column(
@@ -136,6 +187,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
             }
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val reading = frame
+                Text("Jonli kamera · Full", style = MaterialTheme.typography.labelLarge)
                 Text(
                     when {
                         reading == null -> "Kamera ishga tushmoqda…"
@@ -178,14 +230,19 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                         })
                     } else {
                         Text("Rejadagi maqsad · ${plan.targetReps} takror", style = MaterialTheme.typography.bodyLarge)
-                        PrimaryAction("Kamerani boshlash", enabled = !ui.saving) {
+                        PrimaryAction("Kamerani boshlash", enabled = !ui.saving && clip == null) {
                             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                                 PackageManager.PERMISSION_GRANTED) startCamera()
                             else permission.launch(Manifest.permission.CAMERA)
                         }
+                        OutlinedButton(
+                            onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                            enabled = !ui.saving && clip == null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Video tanlash va tahlil qilish") }
                         val result = finished
                         if (result != null) PatientCard {
-                            SectionTitle("Kamera o‘lchovi")
+                            SectionTitle("Kamera o‘lchovi · Full")
                             Text("To‘liq ${result.validReps} · Chala ${result.shallowReps}")
                             result.minAngle?.let { Text("Eng kichik burchak ${it.roundToInt()}°") }
                             PrimaryAction("Natijani saqlash", enabled = !ui.saving) {
@@ -195,10 +252,41 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                         OutlinedButton(onClick = ::reportPain, modifier = Modifier.fillMaxWidth(), enabled = !ui.saving) {
                             Text("Og‘riq bor")
                         }
-                        TextButton(onClick = { manual = !manual }) { Text("Takrorni qo‘lda kiritish") }
-                        if (manual) ManualExerciseInput(ui.saving) { reps ->
+                        TextButton(onClick = { manual = !manual }, enabled = clip == null) { Text("Takrorni qo‘lda kiritish") }
+                        if (manual && clip == null) ManualExerciseInput(ui.saving) { reps ->
                             submit(JSONObject().put("source", "self_report").put("reason", "manual").put("reps", reps),
                                 "Qo‘lda qayd") { manual = false }
+                        }
+                    }
+                    TextButton(onClick = { startVideo(ExerciseClip.PublicSample) }, enabled = clip == null && !ui.saving) {
+                        Text("CDC namunasini Heavy bilan tahlil qilish")
+                    }
+                    if (clip != null) {
+                        PatientNotice("Heavy video tahlili · $videoProgress%")
+                        TextButton(onClick = { clip = null }) { Text("Video tahlilini bekor qilish") }
+                    }
+                    videoResult?.let { result ->
+                        if (result.measurement.savable && result.sha256 != null) {
+                            PatientCard {
+                                SectionTitle(if (result.isPublic) "Heavy o‘lchovi · CDC namunasi" else "Heavy o‘lchovi · Tanlangan video")
+                                Text("To‘liq ${result.measurement.validReps} · Chala ${result.measurement.shallowReps}")
+                                result.measurement.minAngle?.let { Text("Eng kichik burchak ${it.roundToInt()}°") }
+                                if (plan != null) {
+                                    Text("Video shu telefonda qoladi. Saqlashda faqat o‘lchov xulosasi yuboriladi.")
+                                    PrimaryAction("Natijani tasdiqlash va saqlash", enabled = !ui.saving) {
+                                        submit(result.measurement.asEvidence(result.sha256), "Video o‘lchovi") { videoResult = null }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (clip?.isPublic != false && videoResult?.isPublic != false) {
+                        TextButton(onClick = { showSampleAi = !showSampleAi }) {
+                            Text(if (showSampleAi) "AI tahlilchini yopish" else "AI tahlilchi · CDC namunasi")
+                        }
+                        if (showSampleAi) {
+                            val cycles = videoResult?.takeIf { it.isPublic && it.measurement.savable }?.cycles
+                            ExerciseSampleAi(mobile, cycles)
                         }
                     }
                     if (mobile != null) {

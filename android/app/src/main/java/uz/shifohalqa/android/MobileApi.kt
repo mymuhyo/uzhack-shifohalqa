@@ -103,6 +103,23 @@ internal class MobileApi private constructor(private val origin: URI) {
         getString("id")
     }
 
+    suspend fun sampleAi(token: String, provider: SampleAiProvider, comparison: String): SampleAiReport {
+        val payload = JSONObject().put("provider", provider.value)
+        if (provider == SampleAiProvider.Baidu) payload.put("comparison", comparison)
+        return request("exercise/sample-ai", token, payload) {
+            when (getString("status")) {
+                "observed" -> {
+                    val observation = getJSONObject("observation")
+                    val seated = observation.getJSONArray("seatedAtSeconds")
+                    SampleAiReport.Observation(getString("model"), observation.getString("view"),
+                        List(seated.length()) { seated.getDouble(it) })
+                }
+                "explained" -> SampleAiReport.Explanation(getString("model"), getString("summary"))
+                else -> throw MobileFailure(MobileFailureKind.Service)
+            }
+        }
+    }
+
     private suspend fun <T> request(
         endpoint: String,
         token: String? = null,
@@ -114,7 +131,7 @@ internal class MobileApi private constructor(private val origin: URI) {
             connection.requestMethod = if (body == null) "GET" else "POST"
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 7_000
-            connection.readTimeout = 10_000
+            connection.readTimeout = if (endpoint == "exercise/sample-ai") 30_000 else 10_000
             connection.useCaches = false
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Cache-Control", "no-store")

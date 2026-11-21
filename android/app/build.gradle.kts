@@ -34,28 +34,26 @@ android {
     }
 }
 
-// Package the same pinned model as the web client, without the browser WASM runtime.
-abstract class PrepareExerciseModel : DefaultTask() {
-    @get:InputFile abstract val modelFile: RegularFileProperty
-    @get:InputFile abstract val licenseFile: RegularFileProperty
+// Keep Android model bundles separate from the web's Lite runtime.
+abstract class PrepareExerciseAssets : DefaultTask() {
+    @get:InputFiles abstract val assets: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
 
     @TaskAction
     fun packageAssets() {
         val directory = outputDirectory.get().asFile
-        modelFile.get().asFile.copyTo(directory.resolve("pose_landmarker_lite.task"), overwrite = true)
-        licenseFile.get().asFile.copyTo(directory.resolve("pose-model-license.txt"), overwrite = true)
+        assets.files.forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
     }
 }
 
-val exerciseModelAssets = tasks.register<PrepareExerciseModel>("prepareExerciseModel") {
-    modelFile.set(rootProject.layout.projectDirectory.file("../public/models/pose_landmarker_lite.task"))
-    licenseFile.set(rootProject.layout.projectDirectory.file("../public/models/LICENSE.txt"))
-    outputDirectory.set(layout.buildDirectory.dir("generated/exercise-model"))
+val exerciseModelAssets = tasks.register<PrepareExerciseAssets>("prepareExerciseAssets") {
+    assets.from(rootProject.file("models/pose_landmarker_full.task"), rootProject.file("models/pose_landmarker_heavy.task"),
+        rootProject.file("../public/models/LICENSE.txt"), rootProject.file("../public/demo/pose-cdc-sample.webm"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/exercise-assets"))
 }
 
 androidComponents.onVariants { variant ->
-    variant.sources.assets?.addGeneratedSourceDirectory(exerciseModelAssets, PrepareExerciseModel::outputDirectory)
+    variant.sources.assets?.addGeneratedSourceDirectory(exerciseModelAssets, PrepareExerciseAssets::outputDirectory)
 }
 
 tasks.withType<Test>().configureEach {
@@ -73,6 +71,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.6.2")
     implementation("androidx.camera:camera-view:1.6.2")
     implementation("com.google.mediapipe:tasks-vision:1.2.3")
+    implementation("androidx.media3:media3-inspector-frame:1.11.1")
     implementation("androidx.room:room-runtime:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
     implementation("androidx.work:work-runtime:2.12.0")

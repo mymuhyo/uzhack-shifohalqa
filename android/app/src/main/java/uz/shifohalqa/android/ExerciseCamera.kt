@@ -30,7 +30,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 internal data class ExerciseCameraFrame(val ready: Boolean, val angle: Double?, val result: ChairStandResult)
-private data class Knee(val side: Int, val angle: Double, val visibility: Double)
+internal data class Knee(val side: Int, val angle: Double, val visibility: Double)
 
 @Composable
 internal fun ExerciseCamera(
@@ -82,7 +82,7 @@ internal fun ExerciseCamera(
                 val landmarker = detector ?: PoseLandmarker.createFromOptions(
                     context.applicationContext,
                     PoseLandmarker.PoseLandmarkerOptions.builder()
-                        .setBaseOptions(BaseOptions.builder().setModelAssetPath("pose_landmarker_lite.task").build())
+                        .setBaseOptions(BaseOptions.builder().setModelAssetPath("pose_landmarker_full.task").build())
                         .setRunningMode(RunningMode.VIDEO)
                         .setNumPoses(1)
                         .build(),
@@ -136,12 +136,12 @@ internal fun ExerciseCamera(
     }
 }
 
-private fun pickKnee(points: List<NormalizedLandmark>, width: Int, height: Int, previous: Int?): Knee? {
+internal fun pickKnee(points: List<NormalizedLandmark>, width: Int, height: Int, previous: Int?, live: Boolean = true): Knee? {
     val left = measureKnee(points, width, height, 0)
     val right = measureKnee(points, width, height, 1)
     if (left == null || right == null) return left ?: right
     val tracked = if (previous == 0) left else if (previous == 1) right else null
-    if (tracked != null && (tracked.visibility >= .75 || abs(left.visibility - right.visibility) < .05)) return tracked
+    if (tracked != null && ((live && tracked.visibility >= .75) || abs(left.visibility - right.visibility) < .05)) return tracked
     return if (left.visibility >= right.visibility) left else right
 }
 

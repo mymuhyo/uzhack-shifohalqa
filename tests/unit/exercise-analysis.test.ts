@@ -21,8 +21,9 @@ function enableGemini() {
 }
 
 it('accepts a provider choice without accepting caller-supplied media or models', () => {
-  expect(exerciseAnalysisRequest.parse({})).toEqual({ provider: 'openrouter' });
+  expect(exerciseAnalysisRequest.parse({})).toEqual({});
   expect(exerciseAnalysisRequest.parse({ provider: 'openrouter' })).toEqual({ provider: 'openrouter' });
+  expect(exerciseAnalysisRequest.parse({ provider: 'opencode' })).toEqual({ provider: 'opencode' });
   expect(exerciseAnalysisRequest.safeParse({ provider: 'unknown' }).success).toBe(false);
   expect(exerciseAnalysisRequest.safeParse({ provider: 'openrouter', model: 'other' }).success).toBe(false);
   expect(exerciseAnalysisRequest.safeParse({ provider: 'openrouter', video: 'other' }).success).toBe(false);
@@ -34,6 +35,35 @@ it('keeps the Gemini key scoped to Decisions, even with a legacy exercise flag',
   const { availableExerciseProviders, reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
   expect(availableExerciseProviders()).toEqual([]);
   await expect(reviewExerciseSample('gemini')).resolves.toEqual({ status: 'unavailable' });
+});
+
+it('routes the bundled clip to Console only with explicit provider and public demo opt-ins', async () => {
+  enableFreeRouter();
+  vi.stubEnv('AI_COMPLETION_PROVIDER', 'opencode');
+  vi.stubEnv('OPENCODE_API_KEY', 'console-test-key');
+  vi.stubEnv('EXERCISE_OPENCODE_DEMO', 'false');
+  const observation = { view: 'side_visible', seatedAtSeconds: [2, 6] };
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+    modelVersion: 'gemini-4-hydrogen',
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(observation) }] } }],
+  }));
+  vi.stubGlobal('fetch', fetch);
+  const { availableExerciseProviders, reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
+  expect(availableExerciseProviders()).toEqual([]);
+  vi.stubEnv('EXERCISE_OPENCODE_DEMO', 'true');
+  expect(availableExerciseProviders()).toEqual(['opencode']);
+  await expect(reviewExerciseSample('opencode')).resolves.toEqual({
+    status: 'observed', model: 'gemini-4-hydrogen', observation, input: 'video',
+  });
+  expect(fetch).toHaveBeenCalledOnce();
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('https://opencode.ai/inference/google/v1beta/models/gemini-4-hydrogen:generateContent');
+  expect(options?.headers).toMatchObject({ Authorization: 'Bearer console-test-key' });
+  const clip = await readFile('public/demo/pose-cdc-lower-body.mp4');
+  expect(JSON.parse(String(options?.body))).toMatchObject({
+    contents: [{ parts: [expect.any(Object), { inlineData: { mimeType: 'video/mp4', data: clip.toString('base64') } }] }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: { required: ['view', 'seatedAtSeconds'] } },
+  });
 });
 
 it('sends only the bundled cropped clip and shares concurrent OpenRouter calls', async () => {

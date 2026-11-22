@@ -22,13 +22,15 @@ export async function POST(request: Request) {
 
     const providers = availableExerciseProviders();
     if (input.data.provider === 'baidu') {
-      if (!providers.includes('openrouter')) return mobileJson({ error: 'not_found' }, 404);
+      if (providers.length === 0) return mobileJson({ error: 'not_found' }, 404);
       const explanation = await explainExerciseComparison(input.data.comparison);
       return mobileJson(explanation, explanation.status === 'explained' ? 200 : 503);
     }
 
-    if (!providers.includes(input.data.provider)) return mobileJson({ error: 'not_found' }, 404);
-    const observation = await reviewExerciseSample(input.data.provider);
+    // The original Android app uses "openrouter" as its public video action ID.
+    const provider = input.data.provider === 'openrouter' ? providers[0] : input.data.provider;
+    if (!providers.includes(provider)) return mobileJson({ error: 'not_found' }, 404);
+    const observation = await reviewExerciseSample(provider);
     return mobileJson(observation, observation.status === 'observed' ? 200 : 503);
   } catch {
     return mobileJson({ error: 'unavailable' }, 503);

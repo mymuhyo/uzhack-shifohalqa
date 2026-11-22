@@ -99,6 +99,7 @@ const errorCodeLabels: Record<ExerciseErrorCode, string> = {
 
 const coachSourceLabels: Record<ExerciseCoachResponse['source'], string> = {
   openrouter: 'Baidu AI murabbiy',
+  opencode: 'OpenCode Console AI murabbiy',
   deterministic_coach: 'Biomexanik murabbiy',
 };
 
@@ -208,6 +209,7 @@ export function ExerciseClient({
   movement?: PoseMovement;
 }) {
   const copy = exerciseCatalog[movement];
+  const analysisProvider = analysisProviders.find(provider => provider !== 'gemini');
   const example = movement === 'elbow_bend' ? elbowSample : movement === 'chair_stand' ? exerciseSample : null;
   const framingMessage: Record<Framing, string> = {
     positioning: `Kameraga yon tomoningizni tuting. ${copy.pointsLabel} kadrga sig‘sin.`,
@@ -801,7 +803,7 @@ export function ExerciseClient({
           }>Natijani yuborish</button>}
         </div>
       )}
-      {reviewingSample && analysisProviders.includes('openrouter') && <ExerciseAnalysisPanel poseCycles={poseCycles} />}
+      {reviewingSample && analysisProvider && <ExerciseAnalysisPanel provider={analysisProvider} poseCycles={poseCycles} />}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
       {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
         <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>

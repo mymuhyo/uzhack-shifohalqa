@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
     return new Response(null, { status: 400, headers });
   }
 
-  if (!providers.includes(parsed.data.provider)) return new Response(null, { status: 404, headers });
-  const report = await reviewExerciseSample(parsed.data.provider);
+  const provider = parsed.data.provider ?? providers[0];
+  if (!providers.includes(provider)) return new Response(null, { status: 404, headers });
+  const report = await reviewExerciseSample(provider);
   return Response.json(report, { status: report.status === 'observed' ? 200 : 503, headers });
 }

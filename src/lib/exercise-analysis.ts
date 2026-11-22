@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const exerciseProvider = z.enum(['gemini', 'openrouter']);
+export const exerciseProvider = z.enum(['gemini', 'openrouter', 'opencode']);
 export type ExerciseProvider = z.infer<typeof exerciseProvider>;
-export const exerciseAnalysisRequest = z.strictObject({ provider: exerciseProvider.default('openrouter') });
+export const exerciseAnalysisRequest = z.strictObject({ provider: exerciseProvider.optional() });
 
 export const videoObservation = z.strictObject({
   view: z.enum(['side_visible', 'partly_visible', 'unclear']),

@@ -49,7 +49,30 @@ describe('DoriMos reading', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('uses Console OCR after Gemini Decisions and keeps manual mode when the Console key is absent', async () => {
+    vi.stubEnv('AI_COMPLETION_PROVIDER', 'opencode');
+    vi.stubEnv('OPENCODE_API_KEY', '');
+    expect(isMedicationBoxAiConfigured()).toBe(false);
+    await expect(readMedicationBox(input)).resolves.toEqual({ status: 'manual', reason: 'missing_key' });
+    vi.stubEnv('OPENCODE_API_KEY', 'console-test-key');
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(expected) }] } }],
+    }));
+    vi.stubGlobal('fetch', fetch);
+    expect(isMedicationBoxAiConfigured()).toBe(true);
+    await expect(readMedicationBox(input)).resolves.toMatchObject({
+      status: 'needs_confirmation', label: expected, model: 'gemini-3.5-flash-lite', decisionModel: 'test-decisions',
+    });
+    expect(sdk.decision).toHaveBeenCalledOnce();
+    expect(sdk.ocr).not.toHaveBeenCalled();
+    expect(fetch.mock.calls[0][0]).toBe('https://opencode.ai/inference/google/v1beta/models/gemini-3.5-flash-lite:generateContent');
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+      contents: [{ parts: [expect.any(Object), { inlineData: { mimeType: 'image/png', data: Buffer.from(image).toString('base64') } }] }],
+    });
   });
 
   it('uses Gemini Decisions then OpenRouter OCR before confirming a mismatch', async () => {

@@ -25,6 +25,8 @@ Keyingi native ishlar qo‘lda bosim, DoriMos, «Yaqinim» va qadam qaydi. Ular 
 
 **Lokal sinash.** `DEMO_MODE=true` va alohida `SESSION_SECRET` bilan ishga tushiring. `/demo/mashq` da **CDC namunasini sinash** ni bosing. OpenRouter tugmasi uchun `EXERCISE_OPENROUTER_DEMO=true` va serverdagi `OPENROUTER_API_KEY` kerak. Jonli provayder brauzer testini `SHIFO_E2E_EXERCISE_OPENROUTER=1 npm run lane -- e2e -- tests/e2e/exercise-preview.spec.ts --workers=1` bilan tanlang. [OpenRouter video kirishi](https://openrouter.ai/docs/guides/overview/multimodal/videos)
 
+**OpenCode Console.** `AI_COMPLETION_PROVIDER=opencode` ni tanlang va serverga Console service account kalitini `OPENCODE_API_KEY` sifatida bering. CDC video va taqqoslash izohi uchun `EXERCISE_OPENCODE_DEMO=true`, ommaviy murabbiy izohi uchun `EXERCISE_COACH_OPENCODE_DEMO=true` kerak. DoriMos OCR’ni Gemini Decisions bilan tekshirishda `DORIMOS_PROVIDER=gemini` ni tanlang va `GEMINI_API_KEY` ni bering. Console so‘rovlari API kreditidan foydalanadi. [Console kalitlari](https://opencode.ai/docs/console/api/#service-accounts)
+
 ## Telefon sinovidan keyingi ketma-ketlik
 
 Vercel’dagi demo `ffdc850`dan chiqarilgan. Lokal `1c7ddd7` hisoblagich tuzatishi bilan loyiha egasi Android brauzerida 8 to‘liq va 2 chala takror hamda yashil tayanch chizig‘ini ko‘rdi. Bajarilgan takrorlarning etalon sanog‘i yozilmagan. Ushbu sinov kamera oqimi ishlaganini tasdiqlaydi. [Benchmark](BENCHMARK.md#jonli-kamerada-sekin-kadr-oqimi)

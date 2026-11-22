@@ -65,3 +65,32 @@ it('returns unavailable for invalid provider output and makes no request without
   expect(await explainExerciseComparison('match')).toEqual({ status: 'unavailable' });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+it('uses Console for both text features and sends only the public sample or the comparison category', async () => {
+  vi.stubEnv('AI_COMPLETION_PROVIDER', 'opencode');
+  vi.stubEnv('OPENCODE_API_KEY', 'console-test-key');
+  vi.stubEnv('EXERCISE_COACH_OPENROUTER_DEMO', 'true');
+  const summary = 'Ikki tahlilda sanoq va o‘tirish vaqtlari mos keldi.';
+  const advice = {
+    patientAdviceUz: 'Kadrda tizza va to‘piq ko‘rinadi.', focusCueUz: 'Kadrni barqaror tuting.',
+    doctorInsightUz: 'Ommaviy namuna ikki takrordan iborat.',
+  };
+  const response = (value: object) => Response.json({
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(value) }] } }],
+  });
+  const fetch = vi.fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(response({ summary }))
+    .mockResolvedValueOnce(response(advice));
+  vi.stubGlobal('fetch', fetch);
+  const { explainExerciseComparison } = await import('../../src/lib/ai/exercise-explanation');
+  const { publicExerciseCoach } = await import('../../src/lib/ai/public-exercise-coach');
+  await expect(explainExerciseComparison('match')).resolves.toMatchObject({ status: 'explained', summary });
+  await expect(publicExerciseCoach('chair_stand')).resolves.toMatchObject({ source: 'deterministic_coach' });
+  vi.stubEnv('EXERCISE_COACH_OPENCODE_DEMO', 'true');
+  await expect(publicExerciseCoach('chair_stand')).resolves.toMatchObject({ source: 'opencode', ...advice });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  for (const [url, options] of fetch.mock.calls) {
+    expect(url).toBe('https://opencode.ai/inference/google/v1beta/models/gemini-3.5-flash-lite:generateContent');
+    expect(JSON.parse(String(options?.body)).contents).toEqual([{ role: 'user', parts: [{ text: expect.any(String) }] }]);
+  }
+});

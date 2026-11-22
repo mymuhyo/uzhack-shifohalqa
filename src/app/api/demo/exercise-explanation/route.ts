@@ -7,7 +7,7 @@ import { readRequestJson } from '@/lib/request-body';
 
 export async function POST(request: NextRequest) {
   const headers = { 'Cache-Control': 'no-store' };
-  if (!isDemoEnabled() || !availableExerciseProviders().includes('openrouter')) {
+  if (!isDemoEnabled() || availableExerciseProviders().length === 0) {
     return new Response(null, { status: 404, headers });
   }
   if (!isSameOriginDemoPost(request)) return new Response(null, { status: 403, headers });

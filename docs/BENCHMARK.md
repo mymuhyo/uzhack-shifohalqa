@@ -1,6 +1,13 @@
 # ShifoHalqa · Demo benchmarklari
 
-## OpenRouter va Gemini Decisions · joriy yo‘l
+## Cloudflare Clef va Clairic Flash
+
+22-noyabr 2026 (MYT) · ajratilgan integratsiya muhitidagi `scripts/dorimos-benchmark.ts` · repodagi 10 ta sintetik quti. Clef sifatni tekshirdi, Clairic Flash o‘qilgan maydonlarni qaytardi. Zaxira provayderi o‘chirilgan edi.
+
+- Kutilgan natija 10 ta namunadan 7 tasida olindi. To‘rtta o‘qiladigan qutida nom/birlik/kuch mos keldi. Uchta o‘qilmaydigan namuna to‘g‘ri qayta olishga yuborildi.
+- Burchak ostidagi 5 mg, past yorug‘likdagi 5 mg va 20 mg namunalarida ishonch yetarli bo‘lmadi. Tizim ularni qayta olishga yubordi. Bitta so‘rovning vaqti 0,26–1,76 soniya oralig‘ida bo‘ldi. Bu bir martalik sintetik to‘plam natijasi.
+
+## OpenRouter va Gemini Decisions · zaxira yo‘li
 
 21-noyabr 2026 (MYT) · Codex worktree · Chromium, 390 × 844 px · haqiqiy API kalitlari va sintetik ish joyi. Har biri bir martalik kuzatuv.
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { compareMedicationBox, medicationBoxReadingSchema, readMedicationBox } from '../../src/lib/ai/dorimos';
+import { compareMedicationBox, isMedicationBoxAiConfigured, medicationBoxReadingSchema, readMedicationBox } from '../../src/lib/ai/dorimos';
 
 const sdk = vi.hoisted(() => ({
   decision: vi.fn(),
@@ -33,6 +33,8 @@ const answers = {
 describe('DoriMos reading', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', '');
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', '');
     vi.stubEnv('GEMINI_API_KEY', 'unit-key');
     vi.stubEnv('OPENROUTER_API_KEY', 'router-unit-key');
     vi.stubEnv('OPENROUTER_OCR_MODEL', 'test-primary');
@@ -159,6 +161,118 @@ describe('DoriMos reading', () => {
     await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'needs_confirmation', model: 'test-fallback' });
     expect(sdk.ocr.mock.calls[1][2]).toBe(overall.signal);
     expect(overall.signal.aborted).toBe(false);
+  });
+});
+
+describe('DoriMos Cloudflare reading', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubEnv('DORIMOS_PROVIDER', 'cloudflare');
+    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-test');
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token-test');
+    vi.stubEnv('CLOUDFLARE_DECISION_MODEL', '@cf/cloudflare/clef');
+    vi.stubEnv('CLOUDFLARE_EXTRACTION_MODEL', '@cf/cloudflare/clairic-flash');
+    vi.stubEnv('GEMINI_API_KEY', '');
+    vi.stubEnv('OPENROUTER_API_KEY', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('runs Clef decision gate then Clairic extraction and returns needs_confirmation', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        result: {
+          model: 'clef',
+          answers: {
+            is_packaging_visible: { type: 'noul', noul: 0.96 },
+            is_label_legible: { type: 'noul', noul: 0.95 },
+            matches_prescribed_drug: { type: 'noul', noul: 0.92 },
+            detected_dose_bucket: { type: 'choice', choice: '10mg', confidence: 0.89 },
+          },
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        result: {
+          model: 'clairic-flash',
+          answers: {
+            drugName: { type: 'text', value: 'NAMUNA DORI', confidence: 0.94, p_null: 0.01 },
+            strength: { type: 'number', value: 10, confidence: 0.96, p_null: 0.01 },
+            unit: { type: 'enum', value: 'mg', confidence: 0.97, p_null: 0.01 },
+          },
+        },
+      }), { status: 200 }));
+
+    expect(isMedicationBoxAiConfigured()).toBe(true);
+    const result = await readMedicationBox(input);
+    expect(result).toMatchObject({
+      status: 'needs_confirmation',
+      label: { drugName: 'NAMUNA DORI', strength: 10, unit: 'mg' },
+      model: '@cf/cloudflare/clairic-flash',
+      decisionModel: '@cf/cloudflare/clef',
+      confidence: 0.89,
+    });
+    expect(medicationBoxReadingSchema.safeParse(result).success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('/accounts/acct-test/ai/run/@cf/cloudflare/clef');
+    expect(fetchMock.mock.calls[1][0]).toContain('/accounts/acct-test/ai/run/@cf/cloudflare/clairic-flash');
+  });
+
+  it('honors a Clef retake without calling Clairic or an available fallback', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'unit-key');
+    vi.stubEnv('OPENROUTER_API_KEY', 'router-unit-key');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      result: {
+        model: 'clef',
+        answers: {
+          is_packaging_visible: { type: 'noul', noul: 0.85 },
+          is_label_legible: { type: 'noul', noul: 0.05 },
+          matches_prescribed_drug: { type: 'noul', noul: 0.1 },
+          detected_dose_bucket: { type: 'choice', choice: 'other', confidence: 0.4 },
+        },
+      },
+    }), { status: 200 }));
+
+    await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'retake', reason: 'unreadable' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sdk.decision).not.toHaveBeenCalled();
+  });
+
+  it('returns manual fallback when Cloudflare credentials are missing or HTTP fails', async () => {
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', '');
+    await expect(readMedicationBox(input)).resolves.toEqual({ status: 'manual', reason: 'missing_key' });
+
+    vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token-test');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('error', { status: 503 }));
+    await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'manual', reason: 'provider_error' });
+  });
+
+  it('uses Gemini Decisions and OpenRouter when Cloudflare has a service failure', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'unit-key');
+    vi.stubEnv('OPENROUTER_API_KEY', 'router-unit-key');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('error', { status: 503 }));
+    sdk.decision.mockResolvedValue({ answers });
+    sdk.ocr.mockResolvedValue({ model: 'fallback-ocr', content: JSON.stringify({ ...expected }) });
+    await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'needs_confirmation', model: 'fallback-ocr' });
+    expect(sdk.decision).toHaveBeenCalledOnce();
+    expect(sdk.ocr).toHaveBeenCalledOnce();
+  });
+
+  it('lets operators choose the Gemini Decisions and OpenRouter route explicitly', async () => {
+    vi.stubEnv('DORIMOS_PROVIDER', 'gemini');
+    vi.stubEnv('GEMINI_API_KEY', 'unit-key');
+    vi.stubEnv('OPENROUTER_API_KEY', 'router-unit-key');
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    sdk.decision.mockResolvedValue({ answers });
+    sdk.ocr.mockResolvedValue({ model: 'fallback-ocr', content: JSON.stringify({ ...expected }) });
+    await expect(readMedicationBox(input)).resolves.toMatchObject({ status: 'needs_confirmation', model: 'fallback-ocr' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

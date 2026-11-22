@@ -391,4 +391,68 @@ describe('buildClinicalBrief', () => {
     expect(brief.plainText).toContain('1 tasi shifokor tomonidan ko‘rilgan');
     expect(brief.plainText).not.toContain('qayta nazorat talab qiladi');
   });
+
+  it('does not label retake reviews or reviewed exercise attempts as L4', () => {
+    const view: ClinicalView = {
+      plan: basePlan,
+      tasks: [],
+      flags: [
+        {
+          id: 'f-retake',
+          color: 'red',
+          ruleKey: 'bp_max',
+          metric: 'systolic',
+          observed: 155,
+          threshold: 150,
+          evidence: {
+            id: 'e-vitals',
+            taskId: 't-vitals',
+            payload: { kind: 'vitals', systolic: 155, diastolic: 92, chestPain: false },
+            level: 0,
+            source: 'self_report',
+            aiMode: 'manual',
+            createdAt: '2026-11-21T04:30:00.000Z',
+            review: { decision: 'retake', reply: 'Qayta o‘lchang', reviewedAt: '2026-11-21T04:45:00.000Z' },
+          },
+        },
+      ],
+      urgentSymptoms: [],
+    };
+
+    const brief = buildClinicalBrief({
+      patientName: 'Anvar aka',
+      view,
+      activity: null,
+      exercisePlan: null,
+      exerciseAttempts: [
+        {
+          id: 'ex-reviewed',
+          source: 'live_camera',
+          aiMode: 'live',
+          level: 3,
+          reason: 'measured',
+          validReps: 3,
+          shallowReps: 2,
+          minAngle: 112,
+          confidence: 0.9,
+          primary: true,
+          sample: false,
+          similarMotion: false,
+          flagColor: 'yellow',
+          review: { decision: 'reviewed', body: 'Chuqurroq o‘tiring', reviewedAt: '2026-11-21T06:00:00.000Z' },
+          android: false,
+          movement: 'chair_stand',
+          diagnostics: null,
+          scheduledDate: '2026-11-21',
+          createdAt: '2026-11-21T05:30:00.000Z',
+        },
+      ],
+      generatedAt: '2026-11-21T08:00:00.000Z',
+    });
+
+    expect(brief.metrics.reviewedCount).toBe(2);
+    expect(brief.plainText).toContain('2 ta ko‘rib chiqilgan qayd');
+    expect(brief.plainText).not.toContain('(L4)');
+    expect(brief.plainText).not.toContain('L4 tasdiqlangan');
+  });
 });

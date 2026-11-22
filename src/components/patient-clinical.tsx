@@ -1,6 +1,7 @@
 import {
   caregiverAckMessage,
   describeRetakeVitalsFollowup,
+  isFollowupSuperseded,
 } from '@/lib/clinical-triage';
 import type {
   BloodPressureTargets,
@@ -112,7 +113,7 @@ function PatientRecord({
         <dt>Vaqti</dt>
         <dd><time dateTime={evidence.createdAt}>{displayTimestamp.format(new Date(evidence.createdAt))}</time> · Toshkent</dd>
         <dt>Manba</dt>
-        <dd>{evidence.source === 'photo_ocr' ? 'Sintetik quti · Gemini o‘qidi, bemor tasdiqladi'
+        <dd>{evidence.source === 'photo_ocr' ? 'Sintetik quti · AI o‘qidi, bemor tasdiqladi'
           : evidence.aiMode === 'manual' ? 'Qo‘lda kiritildi' : 'Bemor qaydi'}</dd>
         <dt>AI rejimi</dt>
         <dd>{evidence.aiMode}</dd>
@@ -129,7 +130,10 @@ function PatientRecord({
           {followups.map((item) => {
             const detail = formatFollowup(item, targets);
             const showDetailPill = Boolean(
-              detail.tone && detail.labelUz && (item.kind === 'retake_vitals' || !item.acknowledgedAt),
+              detail.tone
+                && detail.labelUz
+                && (item.kind === 'retake_vitals' || !item.acknowledgedAt)
+                && !isFollowupSuperseded(followups, item),
             );
             return (
               <p key={item.id}>
@@ -171,7 +175,7 @@ function PatientRecord({
             <PatientRetakeBpForm flagId={flagId} targets={targets} />
           )}
 
-          {flagId && review.decision === 'retake' && payload.kind !== 'vitals' && !retakeMedTaken && (
+          {flagId && review.decision === 'retake' && payload.kind === 'medication' && !retakeMedTaken && (
             <div className={styles.controls}>
               <form action="/api/demo/followup" method="post">
                 <input type="hidden" name="flagId" value={flagId} />
@@ -188,6 +192,12 @@ function PatientRecord({
                 </button>
               </form>
             </div>
+          )}
+
+          {flagId && review.decision === 'retake' && payload.kind === 'medication_box' && (
+            <p className={styles.note}>
+              Dori qutisi yorlig‘ini rejadagi dori nomi va dozasi bilan solishtiring hamda shifokor javobiga amal qiling.
+            </p>
           )}
         </div>
       )}

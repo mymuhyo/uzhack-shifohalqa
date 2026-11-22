@@ -253,6 +253,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       WHERE symptom.workspace_id = ${actor.workspaceId}
         AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
         AND ((symptom.created_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)
+          OR (symptom.reviewed_at IS NOT NULL AND (symptom.reviewed_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6))
           OR (${actor.role === 'doctor'} AND symptom.review_decision IS NULL))
       ORDER BY symptom.created_at DESC
     `,
@@ -476,6 +477,7 @@ export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInpu
             AND evidence.payload->>'kind' = 'vitals')
           OR (${input.kind}::text = 'retake_medication'
             AND flag.decision = 'retake'
+            AND evidence.entry_kind = 'task'
             AND item.type = 'medication')
         )
     ), inserted AS (
@@ -513,7 +515,7 @@ export async function acknowledgeFlagFollowup(
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
-      SELECT followup.workspace_id, followup.id
+      SELECT followup.workspace_id, followup.id, followup.flag_id, followup.kind, followup.created_at
       FROM shifohalqa.flag_followups AS followup
       JOIN shifohalqa.flags AS flag
         ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
@@ -544,7 +546,11 @@ export async function acknowledgeFlagFollowup(
           acknowledged_note = ${input.note}
       FROM scoped
       WHERE followup.workspace_id = scoped.workspace_id
-        AND followup.id = scoped.id
+        AND followup.flag_id = scoped.flag_id
+        AND followup.kind = scoped.kind
+        AND (followup.created_at < scoped.created_at
+          OR (followup.created_at = scoped.created_at AND followup.id <= scoped.id))
+        AND (scoped.kind <> 'retake_medication' OR followup.payload->>'status' = 'missed')
         AND followup.acknowledged_at IS NULL
       RETURNING 1
     )

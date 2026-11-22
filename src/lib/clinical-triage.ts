@@ -189,6 +189,29 @@ export function evaluateFlagFollowupAttention(
   return candidates[0];
 }
 
+export function isFollowupSuperseded(
+  followups: readonly FlagFollowup[],
+  target: FlagFollowup,
+): boolean {
+  const isNewer = (candidate: FlagFollowup) => {
+    const delta = Date.parse(candidate.createdAt) - Date.parse(target.createdAt);
+    return delta > 0 || (delta === 0 && candidate.id > target.id);
+  };
+
+  if (target.kind === 'still_need_help') {
+    return followups.some(
+      (item) => (item.kind === 'supply_resolved' || item.kind === 'still_need_help') && isNewer(item),
+    );
+  }
+  if (target.kind === 'retake_medication' && target.payload.status === 'missed') {
+    return followups.some((item) => item.kind === 'retake_medication' && isNewer(item));
+  }
+  if (target.kind === 'retake_vitals') {
+    return followups.some((item) => item.kind === 'retake_vitals' && isNewer(item));
+  }
+  return false;
+}
+
 export function extractBpTrend(view: ClinicalView): BpTrendPoint[] {
   const targets = view.plan?.targets ?? null;
   const points: BpTrendPoint[] = [];

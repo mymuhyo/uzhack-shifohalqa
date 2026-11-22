@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getActivityDashboard } from '@/lib/activity-store';
+import type { ActivityDashboardData } from '@/lib/clinical-brief';
 import { countOpenClinicalAttention } from '@/lib/clinical-triage';
 import { getClinicalView } from '@/lib/clinical-store';
 import type { ClinicalActor, ClinicalView } from '@/lib/clinical-types';
@@ -35,6 +37,7 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
   let actor: ClinicalActor | null = null;
   let exercisePlan: Awaited<ReturnType<typeof readExercisePlan>> = null;
   let exerciseAttempts: Awaited<ReturnType<typeof readExerciseAttempts>> = [];
+  let activity: ActivityDashboardData = null;
   let storageUnavailable = false;
   try {
     workspace = await ensureDemoWorkspace(session.workspaceId);
@@ -43,14 +46,16 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
         workspaceId: session.workspaceId, role,
         doctorId: workspace.doctor.id, patientId: workspace.patient.id,
       };
-      const [clinical, plan, attempts] = await Promise.all([
+      const [clinical, plan, attempts, doctorActivity] = await Promise.all([
         getClinicalView(actor),
         readExercisePlan(actor).catch(() => null),
         readExerciseAttempts(actor).catch(() => []),
+        role === 'doctor' ? getActivityDashboard(actor).catch(() => null) : Promise.resolve(null),
       ]);
       view = clinical;
       exercisePlan = plan;
       exerciseAttempts = attempts;
+      activity = doctorActivity;
     }
   } catch {
     storageUnavailable = true;
@@ -105,6 +110,7 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
           actor={actor}
           view={view}
           patientName={workspace?.patient.name ?? names.patient}
+          activity={activity}
           exercisePlan={exercisePlan}
           exerciseAttempts={exerciseAttempts}
         />
@@ -117,8 +123,10 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
       )}
       {view && actor && role === 'patient' && <PatientAdherence actor={actor} />}
       {actor && role === 'patient' && <CaregiverSharing actor={actor} />}
-      {view && actor && role === 'doctor' && <DoctorExercise actor={actor} />}
-      {view?.plan && actor && role === 'doctor' && <DoctorAdherence actor={actor} />}
+      {view && actor && role === 'doctor' && (
+        <DoctorExercise actor={actor} initialPlan={exercisePlan} initialAttempts={exerciseAttempts} />
+      )}
+      {view?.plan && actor && role === 'doctor' && <DoctorAdherence actor={actor} initialDashboard={activity} />}
       {view && actor && role === 'doctor' && <DoctorTelegramPanel actor={actor} />}
       {view && role === 'patient' && <PatientTelegramPanel />}
       <div className="role-actions">

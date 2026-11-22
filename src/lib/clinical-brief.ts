@@ -65,6 +65,9 @@ export function buildClinicalBrief({
   const attention = countOpenClinicalAttention({ view, exerciseAttempts });
   const { openUrgent, openWarning, openExerciseFlags, followupEscalations } = attention;
   const reviewedCount = reviewedFlags.length + reviewedSymptoms.length + reviewedExercises.length;
+  const approvedL4Count =
+    reviewedFlags.filter(({ evidence }) => evidence.level === 4).length +
+    reviewedSymptoms.filter(({ level }) => level === 4).length;
 
   const bpTrend = extractBpTrend(view);
   let latestBp: string | null = null;
@@ -110,8 +113,12 @@ export function buildClinicalBrief({
     lines.push(`Oxirgi qon bosimi qaydi: ${latestBp}.`);
   }
 
+  const reviewedSummary =
+    approvedL4Count > 0
+      ? `${reviewedCount} ta ko‘rib chiqilgan (${approvedL4Count} ta L4 tasdiqlangan)`
+      : `${reviewedCount} ta ko‘rib chiqilgan qayd`;
   lines.push(
-    `Navbat holati: ${openUrgent} ta shoshilinch, ${openWarning} ta tekshirish, ${reviewedCount} ta ko‘rib chiqilgan (L4) qayd.`,
+    `Navbat holati: ${openUrgent} ta shoshilinch, ${openWarning} ta tekshirish, ${reviewedSummary}.`,
   );
 
   const followupsCount = view.flags.reduce((sum, f) => sum + (f.evidence.followups?.length ?? 0), 0);

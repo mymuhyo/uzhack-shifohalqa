@@ -38,4 +38,24 @@ describe('exercise attempt comparison', () => {
       ],
     })).toEqual({ duplicateFile: false, similarMotion: false, closestMae: null });
   });
+
+  it('detects similar extension trajectories (shoulder_raise / seated_knee_ext) while rejecting flat curves', () => {
+    const extensionSignature = [22, 26, 35, 48, 63, 78, 88, 94, 96, 95, 92, 85, 74, 61, 49, 39, 31, 26, 24, 23];
+    const flatCurve = [22, 24, 25, 27, 28, 30, 31, 32, 31, 29, 28, 27, 26, 25, 24, 24, 23, 23, 22, 22];
+
+    expect(compareAttempt({
+      fileSha256: null,
+      motionSignature: extensionSignature,
+      previous: [
+        { fileSha256: null, motionSignature: extensionSignature.map((point) => point + 10) },
+        { fileSha256: null, motionSignature: extensionSignature.map((point) => point + 1.5) },
+      ],
+    })).toEqual({ duplicateFile: false, similarMotion: true, closestMae: 1.5 });
+
+    expect(compareAttempt({
+      fileSha256: null,
+      motionSignature: extensionSignature,
+      previous: [{ fileSha256: null, motionSignature: flatCurve }],
+    })).toEqual({ duplicateFile: false, similarMotion: false, closestMae: null });
+  });
 });

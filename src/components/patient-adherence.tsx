@@ -1,5 +1,6 @@
 import { getActivityDashboard } from '@/lib/activity-store';
 import { maximumDailySteps, type AdherenceCounts } from '@/lib/adherence';
+import type { ActivityDashboardData } from '@/lib/clinical-brief';
 import type { ClinicalActor } from '@/lib/clinical-types';
 import styles from './patient-adherence.module.css';
 
@@ -91,8 +92,16 @@ export async function PatientAdherence({ actor }: { actor: ClinicalActor }) {
 
 const outcome = { pending: 'Javobsiz', taken: 'Bajarilgan', recorded: 'Bajarilgan', missed: 'Qoldirilgani bildirildi' };
 
-export async function DoctorAdherence({ actor }: { actor: ClinicalActor }) {
-  const dashboard = await getActivityDashboard(actor).catch(() => null);
+export async function DoctorAdherence({
+  actor,
+  initialDashboard,
+}: {
+  actor: ClinicalActor;
+  initialDashboard?: ActivityDashboardData;
+}) {
+  const dashboard = initialDashboard !== undefined
+    ? initialDashboard
+    : await getActivityDashboard(actor).catch(() => null);
   if (!dashboard) return <p className="notice" role="alert">Haftalik hisobni yuklab bo‘lmadi.</p>;
 
   return (

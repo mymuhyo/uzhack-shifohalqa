@@ -7,9 +7,13 @@ type Attempt = {
 
 const similarMotionMae = 2.5;
 const fileDigest = z.string().regex(/^[0-9a-f]{64}$/i).toLowerCase();
-const motionProfile = z.array(z.number().min(0).max(180)).length(20).refine((points) => (
-  Math.min(points[0], points[points.length - 1]) - Math.min(...points) >= 15
-));
+const motionProfile = z.array(z.number().min(0).max(180)).length(20).refine((points) => {
+  const first = points[0];
+  const last = points[points.length - 1];
+  const flexionExcursion = Math.min(first, last) - Math.min(...points);
+  const extensionExcursion = Math.max(...points) - Math.max(first, last);
+  return Math.max(flexionExcursion, extensionExcursion) >= 15;
+});
 
 export function compareAttempt(input: Attempt & { previous: readonly Attempt[] }) {
   const digest = fileDigest.safeParse(input.fileSha256).data;

@@ -23,7 +23,7 @@ export default function About() {
         </section>
         <section>
           <h2>AI qayerda ishlaydi?</h2>
-          <p>MediaPipe video kadrlarini brauzerda tahlil qiladi. Gemini Decisions sintetik quti sifatini tekshiradi. OpenRouter orqali model quti yozuvini o‘qiydi va ommaviy mashq namunasini kuzatadi. Moslikni dastur qoidasi tekshiradi va navbatdagi qayd bo‘yicha shifokor qaror qiladi.</p>
+          <p>MediaPipe video kadrlarini brauzerda tahlil qiladi. Cloudflare Clef va Clairic Flash (sozlangan bo‘lsa) yoki zaxira sifatida Gemini Decisions va OpenRouter sintetik quti sifatini tekshirib yozuvini o‘qiydi, OpenRouter esa ommaviy mashq namunasini kuzatadi. Moslikni dastur qoidasi tekshiradi va navbatdagi qayd bo‘yicha shifokor qaror qiladi.</p>
           <p>Kodlash va sinovlarda Codex, uning subagentlari va hujjat qidiruv vositalari ishlatildi.</p>
         </section>
       </div>

@@ -2,6 +2,7 @@ import {
   caregiverAckMessage,
   countOpenClinicalAttention,
   describeRetakeVitalsFollowup,
+  isFollowupSuperseded,
 } from '@/lib/clinical-triage';
 import type {
   BloodPressureTargets,
@@ -217,7 +218,10 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
             {followups.map((item) => {
               const detail = formatFollowup(item, targets);
               const showDetailPill = Boolean(
-                detail.tone && detail.labelUz && (item.kind === 'retake_vitals' || !item.acknowledgedAt),
+                detail.tone
+                  && detail.labelUz
+                  && (item.kind === 'retake_vitals' || !item.acknowledgedAt)
+                  && !isFollowupSuperseded(followups, item),
               );
               return (
                 <p key={item.id}>

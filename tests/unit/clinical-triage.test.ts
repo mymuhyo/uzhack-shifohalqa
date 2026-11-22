@@ -7,6 +7,7 @@ import {
   evaluateFlagFollowupAttention,
   extractBpTrend,
   findLatestRealExerciseAttempt,
+  isFollowupSuperseded,
 } from '../../src/lib/clinical-triage';
 import type { ClinicalFlag, ClinicalView, FlagFollowup } from '../../src/lib/clinical-types';
 
@@ -399,4 +400,51 @@ describe('findLatestRealExerciseAttempt', () => {
     expect(findLatestRealExerciseAttempt([{ id: 'only-sample', sample: true, createdAt: '2026-11-21T09:00:00.000Z' }])).toBeNull();
   });
 
+});
+
+describe('isFollowupSuperseded', () => {
+  it('marks older still_need_help, missed retake_medication, and retake_vitals rows as superseded by newer loop updates', () => {
+    const help1: FlagFollowup = {
+      id: 'fu-help-1',
+      flagId: 'flag-1',
+      kind: 'still_need_help',
+      payload: {},
+      createdAt: '2026-11-21T05:00:00.000Z',
+    };
+    const help2: FlagFollowup = {
+      id: 'fu-help-2',
+      flagId: 'flag-1',
+      kind: 'still_need_help',
+      payload: {},
+      createdAt: '2026-11-21T05:05:00.000Z',
+    };
+    const resolved: FlagFollowup = {
+      id: 'fu-resolved',
+      flagId: 'flag-1',
+      kind: 'supply_resolved',
+      payload: {},
+      createdAt: '2026-11-21T05:10:00.000Z',
+    };
+    const bp1: FlagFollowup = {
+      id: 'fu-bp-1',
+      flagId: 'flag-1',
+      kind: 'retake_vitals',
+      payload: { systolic: 155, diastolic: 95, chestPain: false },
+      createdAt: '2026-11-21T06:00:00.000Z',
+    };
+    const bp2: FlagFollowup = {
+      id: 'fu-bp-2',
+      flagId: 'flag-1',
+      kind: 'retake_vitals',
+      payload: { systolic: 125, diastolic: 78, chestPain: false },
+      createdAt: '2026-11-21T06:10:00.000Z',
+    };
+
+    const list = [help1, help2, resolved, bp1, bp2];
+    expect(isFollowupSuperseded(list, help1)).toBe(true);
+    expect(isFollowupSuperseded(list, help2)).toBe(true);
+    expect(isFollowupSuperseded(list, resolved)).toBe(false);
+    expect(isFollowupSuperseded(list, bp1)).toBe(true);
+    expect(isFollowupSuperseded(list, bp2)).toBe(false);
+  });
 });

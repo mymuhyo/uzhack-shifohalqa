@@ -83,7 +83,7 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
             {(summary.statusSignal === 'supply_help' || summary.statusSignal === 'doctor_reviewing' || summary.caregiverAck !== null) && (
               <CaregiverAckButton
                 token={token}
-                kind={ackKind}
+                kind={summary.caregiverAck?.kind ?? ackKind}
                 initialAckAt={summary.caregiverAck?.createdAt ?? null}
               />
             )}

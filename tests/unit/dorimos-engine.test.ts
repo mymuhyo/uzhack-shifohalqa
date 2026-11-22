@@ -223,6 +223,40 @@ describe('DoriMos Cloudflare reading', () => {
     expect(fetchMock.mock.calls[1][0]).toContain('/accounts/acct-test/ai/run/@cf/cloudflare/clairic-flash');
   });
 
+  it('satisfies medicationBoxReadingSchema when a Clairic field confidence is lower than the Clef gate minimum', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        result: {
+          model: 'clef',
+          answers: {
+            is_packaging_visible: { type: 'noul', noul: 0.96 },
+            is_label_legible: { type: 'noul', noul: 0.95 },
+            matches_prescribed_drug: { type: 'noul', noul: 0.92 },
+            detected_dose_bucket: { type: 'choice', choice: '10mg', confidence: 0.91 },
+          },
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        result: {
+          model: 'clairic-flash',
+          answers: {
+            drugName: { type: 'text', value: 'NAMUNA DORI', confidence: 0.84, p_null: 0.02 },
+            strength: { type: 'number', value: 10, confidence: 0.96, p_null: 0.01 },
+            unit: { type: 'enum', value: 'mg', confidence: 0.97, p_null: 0.01 },
+          },
+        },
+      }), { status: 200 }));
+
+    const result = await readMedicationBox(input);
+    expect(result).toMatchObject({
+      status: 'needs_confirmation',
+      confidence: 0.84,
+    });
+    expect(medicationBoxReadingSchema.safeParse(result).success).toBe(true);
+  });
+
   it('honors a Clef retake without calling Clairic or an available fallback', async () => {
     vi.stubEnv('GEMINI_API_KEY', 'unit-key');
     vi.stubEnv('OPENROUTER_API_KEY', 'router-unit-key');

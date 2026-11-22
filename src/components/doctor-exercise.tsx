@@ -1,3 +1,4 @@
+import type { ExerciseAttemptsData, ExercisePlanData } from '@/lib/clinical-brief';
 import { exerciseCatalog } from '@/lib/pose/diagnostics';
 import { DoctorExercisePlanForm } from './doctor-exercise-form';
 import { readExerciseAttempts, readExercisePlan, type ExerciseAttempt } from '@/lib/exercise-store';
@@ -38,8 +39,22 @@ function ExerciseReview({ attempt }: { attempt: ExerciseAttempt }) {
   );
 }
 
-export async function DoctorExercise({ actor }: { actor: ClinicalActor }) {
-  const data = await Promise.all([readExercisePlan(actor), readExerciseAttempts(actor)]).catch(() => null);
+export async function DoctorExercise({
+  actor,
+  initialPlan,
+  initialAttempts,
+}: {
+  actor: ClinicalActor;
+  initialPlan?: ExercisePlanData;
+  initialAttempts?: ExerciseAttemptsData;
+}) {
+  const data =
+    initialPlan !== undefined && initialAttempts !== undefined
+      ? ([initialPlan, initialAttempts] as const)
+      : await Promise.all([
+          initialPlan !== undefined ? Promise.resolve(initialPlan) : readExercisePlan(actor),
+          initialAttempts !== undefined ? Promise.resolve(initialAttempts) : readExerciseAttempts(actor),
+        ]).catch(() => null);
   if (!data) return <p className="notice" role="alert">Mashq bo‘limini yuklab bo‘lmadi.</p>;
   const [plan, attempts] = data;
   return (
@@ -47,7 +62,7 @@ export async function DoctorExercise({ actor }: { actor: ClinicalActor }) {
       <section aria-labelledby="exercise-heading">
         <h2 id="exercise-heading">{plan ? exerciseCatalog[plan.movement].title : 'O‘tirib-turish mashqi'}</h2>
         {plan ? (
-          <p>Reja: {plan.targetReps} takror · tizza burchagi {plan.targetAngle}°.</p>
+          <p>Reja: {plan.targetReps} takror · {exerciseCatalog[plan.movement].jointLabel.toLowerCase()} burchagi {plan.targetAngle}°.</p>
         ) : (
           <DoctorExercisePlanForm />
         )}
@@ -63,8 +78,11 @@ export async function DoctorExercise({ actor }: { actor: ClinicalActor }) {
                   <p><time dateTime={attempt.createdAt}>{localTime.format(new Date(attempt.createdAt))}</time> · Toshkent</p>
                   <p>Vazifa kuni · <time dateTime={attempt.scheduledDate}>{attempt.scheduledDate}</time></p>
                   {attempt.validReps !== null && <p>{attempt.validReps} takror{attempt.shallowReps !== null && ` · ${attempt.shallowReps} chala`}</p>}
-                  {attempt.minAngle !== null && attempt.confidence !== null &&
-                    <p>Eng kichik burchak {attempt.minAngle.toFixed(1)}° · Tayanch nuqtalari ishonchi {Math.round(attempt.confidence * 100)}%</p>}
+                  {attempt.minAngle !== null && attempt.confidence !== null && (
+                    <p>
+                      {exerciseCatalog[attempt.movement].direction === 'extend' ? 'Eng katta burchak' : 'Eng kichik burchak'} {attempt.minAngle.toFixed(1)}° · Tayanch nuqtalari ishonchi {Math.round(attempt.confidence * 100)}%
+                    </p>
+                  )}
                   <p>AI rejimi {attempt.aiMode}{!attempt.sample && attempt.reason !== 'pain' && ` · ${attempt.primary ? 'Asosiy urinish' : 'Qayta urinish'}`}</p>
                   {attempt.diagnostics?.doctorSummaryUz && <p>{attempt.diagnostics.doctorSummaryUz}</p>}
                   {attempt.source !== 'self_report' && <p>O‘lchov manbasi · {attempt.android ? 'Android ilovasi' : 'Bemor brauzeri'}. Server o‘lchovni mustaqil tasdiqlamaydi.</p>}

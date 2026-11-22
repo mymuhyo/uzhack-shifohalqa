@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { caregiverActionSchema } from '@/lib/caregiver';
 import { changeCaregiverSharing } from '@/lib/caregiver-store';
 import { getDemoSession, isSameOriginDemoPost } from '@/lib/demo-session';
+import { readRequestJson } from '@/lib/request-body';
 import { ensureDemoWorkspace } from '@/lib/seed';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
@@ -11,26 +12,16 @@ function reject(status: number) {
   return new Response(null, { status, headers: noStore });
 }
 
-async function readAction(request: NextRequest) {
-  if (request.headers.get('content-type')?.split(';')[0]?.trim() !== 'application/json') return null;
-  if (Number(request.headers.get('content-length')) > maxBodyBytes) return null;
-  const raw = await request.text().catch(() => '');
-  if (Buffer.byteLength(raw) > maxBodyBytes) return null;
-  try {
-    const parsed = caregiverActionSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data.action : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(request: NextRequest) {
   if (!isSameOriginDemoPost(request)) return reject(403);
   const session = await getDemoSession();
   if (session?.role !== 'patient') return reject(403);
 
-  const action = await readAction(request);
-  if (!action) return reject(400);
+  const body = await readRequestJson(request, maxBodyBytes);
+  if (!body.ok) return reject(body.status);
+  const parsed = caregiverActionSchema.safeParse(body.body);
+  if (!parsed.success) return reject(400);
+  const action = parsed.data.action;
 
   try {
     const workspace = await ensureDemoWorkspace(session.workspaceId);

@@ -30,7 +30,7 @@ export const medicationBoxReadingSchema = z.discriminatedUnion('status', [
   }).refine(({ gates, confidence }) => (
     gates.packaging.probability >= minimumBoxConfidence &&
     gates.legibility.probability >= minimumBoxConfidence &&
-    confidence === Math.min(...Object.values(gates).map((gate) => gate.confidence))
+    confidence <= Math.min(...Object.values(gates).map((gate) => gate.confidence))
   )),
   z.strictObject({
     status: z.literal('retake'),

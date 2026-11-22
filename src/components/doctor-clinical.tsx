@@ -1,5 +1,21 @@
-import type { ClinicalFlag, ClinicalView, MissedReason, PlanInput } from '@/lib/clinical-types';
+import {
+  caregiverAckMessage,
+  countOpenClinicalAttention,
+  describeRetakeVitalsFollowup,
+} from '@/lib/clinical-triage';
+import type {
+  BloodPressureTargets,
+  ClinicalFlag,
+  ClinicalView,
+  FlagFollowup,
+  MissedReason,
+  PlanInput,
+  UrgentSymptomType,
+  UrgentSymptomView,
+} from '@/lib/clinical-types';
 import { formatBoxLabel } from '@/lib/dorimos-contract';
+import { DoctorQueueFilter } from './doctor-queue-filter';
+import { DoctorReviewForm } from './doctor-review-form';
 import styles from './doctor-clinical.module.css';
 
 const tashkentTime = new Intl.DateTimeFormat('uz-UZ', {
@@ -14,6 +30,13 @@ const missedReasons: Record<MissedReason, string> = {
   side_effects: 'Nojo‘ya ta’sir sezildi',
   forgot: 'Esdan chiqdi',
   other: 'Boshqa sabab',
+};
+
+const symptomLabels: Record<UrgentSymptomType, string> = {
+  chest_pain: 'Ko‘krak og‘rig‘i',
+  dizziness: 'Bosh aylanishi',
+  shortness_of_breath: 'Nafas qisishi',
+  severe_headache: 'Kuchli bosh og‘rig‘i',
 };
 
 const pressureFields = [
@@ -126,38 +149,40 @@ function FlagDetails({ flag }: { flag: ClinicalFlag }) {
   );
 }
 
-function ReviewForm({ flag }: { flag: ClinicalFlag }) {
-  const replyId = `review-reply-${flag.id}`;
-  const noteId = `review-note-${flag.id}`;
-  return (
-    <form
-      method="post"
-      action="/api/demo/review"
-      className={styles.form}
-      aria-labelledby={`review-${flag.id} flag-title-${flag.id}`}
-    >
-      <input type="hidden" name="flagId" value={flag.id} />
-      <div className={styles.field}>
-        <label htmlFor={replyId}>Bemorga javob</label>
-        <textarea id={replyId} name="reply" rows={3} maxLength={500} required />
-      </div>
-      <div className={styles.field}>
-        <label htmlFor={noteId}>Ichki izoh (ixtiyoriy)</label>
-        <textarea id={noteId} name="note" rows={2} maxLength={500} />
-      </div>
-      <div className={styles.buttons}>
-        <button className={styles.submit} name="decision" value="approved" type="submit">Qaydni tasdiqlash</button>
-        <button className={styles.secondary} name="decision" value="retake" type="submit">Qayta o‘lchashni so‘rash</button>
-      </div>
-    </form>
-  );
+function formatFollowup(
+  followup: FlagFollowup,
+  targets: BloodPressureTargets | null,
+): { text: string; tone?: 'ok' | 'warn' | 'urgent' | null; labelUz?: string | null } {
+  switch (followup.kind) {
+    case 'supply_resolved':
+      return { text: 'Bemor xabari: Dorini oldim va ichdim (halqa yopildi)', tone: 'ok', labelUz: 'Halqa yopildi' };
+    case 'still_need_help':
+      return { text: 'Bemor xabari: Hali yordam kerak', tone: 'warn', labelUz: 'Qayta nazorat' };
+    case 'retake_vitals':
+      return describeRetakeVitalsFollowup(followup, targets, 'mmHg');
+    case 'retake_medication':
+      return {
+        text: `Qayta dori qaydi: ${followup.payload.status === 'taken' ? 'Ichdim' : 'Icha olmadim'}`,
+        tone: followup.payload.status === 'taken' ? 'ok' : 'warn',
+        labelUz: followup.payload.status === 'taken' ? 'Tasdiqlandi' : 'Qayta nazorat',
+      };
+  }
 }
 
-function QueueEntry({ flag }: { flag: ClinicalFlag }) {
-  const { evidence: { createdAt, level, payload, review }, color, metric, ruleKey, threshold } = flag;
+function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPressureTargets | null }) {
+  const { evidence: { createdAt, level, payload, review, followups }, color, metric, ruleKey, threshold } = flag;
+  const titleId = `flag-title-${flag.id}`;
+  const headingId = `review-${flag.id}`;
+
+  const severityClass = review
+    ? styles.reviewedItem
+    : color === 'red'
+      ? styles.urgentItem
+      : styles.warnItem;
+
   return (
-    <li className={styles.queueItem}>
-      <article aria-labelledby={`flag-title-${flag.id}`}>
+    <li className={`${styles.queueItem} ${severityClass}`}>
+      <article aria-labelledby={titleId}>
         <p className={styles.queueMeta}>
           {review ? (
             <span>{review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta o‘lchash so‘raldi'}</span>
@@ -169,7 +194,7 @@ function QueueEntry({ flag }: { flag: ClinicalFlag }) {
           )}
           <LocalTime value={createdAt} />
         </p>
-        <h3 id={`flag-title-${flag.id}`}>{flagTitle(flag)}</h3>
+        <h3 id={titleId}>{flagTitle(flag)}</h3>
         {payload.kind === 'vitals' && payload.systolic !== null && payload.diastolic !== null && (
           <p className={styles.reading}>{payload.systolic}/{payload.diastolic} mmHg</p>
         )}
@@ -186,8 +211,38 @@ function QueueEntry({ flag }: { flag: ClinicalFlag }) {
         {threshold !== undefined && metric && (
           <p className={styles.evidenceLine}>Rejadagi {metric === 'systolic' ? 'sistolik' : 'diastolik'} chegara · {threshold} mmHg</p>
         )}
+        {followups && followups.length > 0 && (
+          <div className={styles.reviewed}>
+            <h4>Bemordan keyingi holat</h4>
+            {followups.map((item) => {
+              const detail = formatFollowup(item, targets);
+              const showDetailPill = Boolean(
+                detail.tone && detail.labelUz && (item.kind === 'retake_vitals' || !item.acknowledgedAt),
+              );
+              return (
+                <p key={item.id}>
+                  {detail.text} · <LocalTime value={item.createdAt} />
+                  {showDetailPill && detail.tone && detail.labelUz && (
+                    <>
+                      {' '}
+                      <span className={`status-pill ${detail.tone === 'urgent' ? 'status-urgent' : detail.tone === 'warn' ? 'status-warn' : 'status-ok'}`}>
+                        {detail.labelUz}
+                      </span>
+                    </>
+                  )}
+                  {item.acknowledgedAt && (
+                    <>
+                      {' '}
+                      <span className="status-pill status-ok">Shifokor ko‘rdi</span>
+                    </>
+                  )}
+                </p>
+              );
+            })}
+          </div>
+        )}
         <details>
-          <summary id={`review-${flag.id}`} className={styles.disclosure}>
+          <summary id={headingId} className={styles.disclosure}>
             {review ? 'Qayd tafsilotlari' : 'Ko‘rib chiqish'}
           </summary>
           <FlagDetails flag={flag} />
@@ -197,7 +252,63 @@ function QueueEntry({ flag }: { flag: ClinicalFlag }) {
               <p>{review.reply}</p>
               <LocalTime value={review.reviewedAt} />
             </div>
-          ) : <ReviewForm flag={flag} />}
+          ) : (
+            <DoctorReviewForm
+              action="/api/demo/review"
+              idFieldName="flagId"
+              idFieldValue={flag.id}
+              ruleKey={ruleKey}
+              headingId={headingId}
+              titleId={titleId}
+            />
+          )}
+        </details>
+      </article>
+    </li>
+  );
+}
+
+function UrgentSymptomEntry({ entry }: { entry: UrgentSymptomView }) {
+  const titleId = `symptom-title-${entry.id}`;
+  const headingId = `symptom-review-${entry.id}`;
+  const severityClass = entry.review ? styles.reviewedItem : styles.urgentItem;
+
+  return (
+    <li className={`${styles.queueItem} ${severityClass}`}>
+      <article aria-labelledby={titleId}>
+        <p className={styles.queueMeta}>
+          {entry.review ? (
+            <span>{entry.review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta ko‘rik so‘raldi'}</span>
+          ) : (
+            <span className={styles.urgent}>
+              <span className={styles.marker} aria-hidden="true" />
+              Shoshilinch simptom
+            </span>
+          )}
+          <LocalTime value={entry.createdAt} />
+        </p>
+        <h3 id={titleId}>{symptomLabels[entry.symptom]} · L{entry.level}</h3>
+        {entry.note && <p>{entry.note}</p>}
+        <details>
+          <summary id={headingId} className={styles.disclosure}>
+            {entry.review ? 'Qayd tafsilotlari' : 'Ko‘rib chiqish'}
+          </summary>
+          {entry.review ? (
+            <div className={styles.reviewed}>
+              <h4>Bemorga yuborilgan javob</h4>
+              <p>{entry.review.reply}</p>
+              <LocalTime value={entry.review.reviewedAt} />
+            </div>
+          ) : (
+            <DoctorReviewForm
+              action="/api/demo/symptom-review"
+              idFieldName="symptomId"
+              idFieldValue={entry.id}
+              ruleKey={entry.symptom === 'chest_pain' ? 'chest_pain' : 'urgent_symptom'}
+              headingId={headingId}
+              titleId={titleId}
+            />
+          )}
         </details>
       </article>
     </li>
@@ -207,6 +318,10 @@ function QueueEntry({ flag }: { flag: ClinicalFlag }) {
 export function DoctorClinical({ view, patientName }: { view: ClinicalView; patientName: string }) {
   const openFlags = view.flags.filter(({ evidence }) => evidence.review === null);
   const reviewedFlags = view.flags.filter(({ evidence }) => evidence.review !== null);
+  const urgentSymptoms = view.urgentSymptoms ?? [];
+  const openSymptoms = urgentSymptoms.filter(({ review }) => review === null);
+  const reviewedSymptoms = urgentSymptoms.filter(({ review }) => review !== null);
+  const { followupEscalations } = countOpenClinicalAttention({ view });
   const today = tashkentDate.format(new Date());
   const waitingForEvidence = view.plan && !view.tasks.some(({ date, evidence }) => date === today && evidence !== null);
 
@@ -214,21 +329,97 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
     <div className={`${styles.dashboard} ${view.plan ? styles.assigned : ''}`}>
       {!view.plan && <PlanAssignment patientName={patientName} />}
       <div>
+        {view.caregiverAck && (
+          <p className="notice" role="status">
+            {caregiverAckMessage(view.caregiverAck, 'doctor')} (<LocalTime value={view.caregiverAck.createdAt} />).
+          </p>
+        )}
+        {followupEscalations.length > 0 && (
+          <section className={styles.panel} aria-labelledby="followup-alerts-heading">
+            <h2 id="followup-alerts-heading">Qayta aloqa va nazorat ({followupEscalations.length})</h2>
+            <p className={styles.hint}>Ko‘rib chiqilgan qayddan keyin bemor yuborgan qayta xabar yoki yuqori qayta o‘lchov.</p>
+            <ul role="list" className={styles.queue}>
+              {followupEscalations.map((item) => {
+                const titleId = `followup-title-${item.followupId}`;
+                const noteId = `followup-note-${item.followupId}`;
+                return (
+                  <li
+                    key={item.followupId}
+                    className={`${styles.queueItem} ${item.severity === 'red' ? styles.urgentItem : styles.warnItem}`}
+                  >
+                    <article aria-labelledby={titleId}>
+                      <p className={styles.queueMeta}>
+                        <span className={item.severity === 'red' ? styles.urgent : styles.followup}>
+                          <span className={styles.marker} aria-hidden="true" />
+                          {item.severity === 'red' ? 'Tez ko‘rib chiqish' : 'Qayta nazorat'}
+                        </span>
+                        <LocalTime value={item.createdAt} />
+                      </p>
+                      <h3 id={titleId}>{item.titleUz}</h3>
+                      <p>{item.summaryUz}</p>
+                      <form
+                        action="/api/demo/followup-ack"
+                        method="post"
+                        className={styles.form}
+                        aria-labelledby={titleId}
+                      >
+                        <input type="hidden" name="followupId" value={item.followupId} />
+                        <div className={styles.field}>
+                          <label htmlFor={noteId}>Ichki izoh (ixtiyoriy)</label>
+                          <input
+                            id={noteId}
+                            name="note"
+                            maxLength={500}
+                            placeholder="Masalan: bemor bilan telefon orqali bog‘landim"
+                          />
+                        </div>
+                        <div className={styles.buttons}>
+                          <button className={styles.submit} type="submit">Bog‘landim · Nazoratni yopish</button>
+                        </div>
+                      </form>
+                      <p className="no-print">
+                        <a className="text-action" href={`#flag-title-${item.flagId}`}>Asosiy qaydga o‘tish ↓</a>
+                      </p>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {openSymptoms.length > 0 && (
+          <section className={styles.panel} aria-labelledby="urgent-symptoms-heading">
+            <h2 id="urgent-symptoms-heading">Shoshilinch simptomlar ({openSymptoms.length})</h2>
+            <ul role="list" className={styles.queue}>
+              {openSymptoms.map((entry) => <UrgentSymptomEntry key={entry.id} entry={entry} />)}
+            </ul>
+          </section>
+        )}
         <section className={styles.panel} aria-labelledby="queue-heading">
           <h2 id="queue-heading">Bemorlar navbati</h2>
           <p className={styles.hint}>{patientName} · Dori va bosim bo‘yicha ochiq qaydlar ({openFlags.length})</p>
           {openFlags.length > 0 ? (
-            <ul role="list" className={styles.queue}>{openFlags.map((flag) => <QueueEntry key={flag.id} flag={flag} />)}</ul>
+            <DoctorQueueFilter
+              listClassName={styles.queue}
+              items={openFlags.map((flag) => ({
+                id: flag.id,
+                color: flag.color,
+                node: <QueueEntry key={flag.id} flag={flag} targets={view.plan?.targets ?? null} />,
+              }))}
+            />
           ) : (
             <p className={styles.empty}>
               {waitingForEvidence ? 'Bemordan ma’lumot kelmagan.' : 'Ko‘rib chiqiladigan ochiq qayd yo‘q.'}
             </p>
           )}
         </section>
-        {reviewedFlags.length > 0 && (
+        {(reviewedFlags.length > 0 || reviewedSymptoms.length > 0) && (
           <section className={styles.panel} aria-labelledby="reviewed-heading">
             <h2 id="reviewed-heading">Ko‘rib chiqilgan qaydlar</h2>
-            <ul role="list" className={styles.queue}>{reviewedFlags.map((flag) => <QueueEntry key={flag.id} flag={flag} />)}</ul>
+            <ul role="list" className={styles.queue}>
+              {reviewedFlags.map((flag) => <QueueEntry key={flag.id} flag={flag} targets={view.plan?.targets ?? null} />)}
+              {reviewedSymptoms.map((entry) => <UrgentSymptomEntry key={entry.id} entry={entry} />)}
+            </ul>
           </section>
         )}
       </div>

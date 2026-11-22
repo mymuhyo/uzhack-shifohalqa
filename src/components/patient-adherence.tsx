@@ -63,7 +63,9 @@ export async function PatientAdherence({ actor }: { actor: ClinicalActor }) {
         {steps ? (
           <div className={styles.stepRecord}>
             <p className={styles.completion}>{numberFormat.format(steps.count)} qadam</p>
-            <p>Qo‘lda kiritildi · L{steps.level} · AI rejimi {steps.aiMode}</p>
+            <p>
+              Qo‘lda kiritildi · L{steps.level} · AI rejimi {steps.aiMode}
+            </p>
             <p><time dateTime={steps.updatedAt}>{timestampFormat.format(new Date(steps.updatedAt))}</time> · Toshkent</p>
           </div>
         ) : <p>Bugun qadamlar hali kiritilmagan.</p>}
@@ -98,6 +100,15 @@ export async function DoctorAdherence({ actor }: { actor: ClinicalActor }) {
       <section>
         <h2>Reja ijrosi</h2>
         <AdherenceSummary counts={dashboard.adherence.week} period="week" />
+        {dashboard.steps && (
+          <div className={styles.stepRecord}>
+            <p className={styles.completion}>{numberFormat.format(dashboard.steps.count)} qadam (bugun)</p>
+            <p>
+              Qo‘lda kiritildi · L{dashboard.steps.level} ·{' '}
+              <time dateTime={dashboard.steps.updatedAt}>{timestampFormat.format(new Date(dashboard.steps.updatedAt))}</time> · Toshkent
+            </p>
+          </div>
+        )}
         {dashboard.dueUnits.length > 0 && (
           <details>
             <summary>Hisobga kirgan vazifalar</summary>

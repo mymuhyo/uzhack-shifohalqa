@@ -4,6 +4,7 @@ import { SiteTelemetry } from '@/components/site-telemetry';
 import '@fontsource/golos-text/400.css';
 import '@fontsource/golos-text/600.css';
 import '@fontsource/literata/500.css';
+import { OfflineBanner, TextScaleToggle } from '@/components/accessibility-controls';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -23,9 +24,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <span className="wordmark-symbol" aria-hidden="true" />
               ShifoHalqa
             </Link>
-            <nav aria-label="Asosiy menyu"><Link href="/about">Demo haqida</Link></nav>
+            <nav className="header-nav" aria-label="Asosiy menyu">
+              <TextScaleToggle />
+              <Link href="/about">Demo haqida</Link>
+            </nav>
           </div>
         </header>
+        <OfflineBanner />
         {children}
         <SiteTelemetry />
       </body>

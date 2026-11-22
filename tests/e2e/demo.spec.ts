@@ -66,3 +66,64 @@ test('starts a clean demo workspace from the judge information page', async ({ p
   expect(await workspace()).toBeTruthy();
   expect(await workspace()).not.toBe(originalWorkspace);
 });
+
+test('opens the Telegram Mini App route cleanly on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/tg');
+  await expect(page.getByRole('heading', { name: 'ShifoHalqa · Telegram' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Bemor vazifalarini ochish/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Shifokor navbatini ochish/ })).toBeVisible();
+  expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
+});
+
+test('opens the knee-lift, shoulder-raise, and seated-knee-ext preview routes cleanly on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  for (const [route, heading] of [
+    ['/demo/mashq/tizza', 'Tizza ko‘tarish tahlili'],
+    ['/demo/mashq/yelka', 'Qo‘lni yelkadan ko‘tarish tahlili'],
+    ['/demo/mashq/oyoq', 'O‘tirib oyoqni tekislash tahlili'],
+  ] as const) {
+    await page.goto(route);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Mashq turlari' })).toBeVisible();
+    await expect(page.getByText(/alohida ochiq CDC klipi biriktirilmagan/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'CDC namunasini sinash' })).toHaveCount(0);
+    expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
+  }
+});
+
+test('toggles large text accessibility mode and persists across reload without narrow-screen overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/');
+  const toggle = page.getByRole('button', { name: 'A+ Katta shrift' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(page.locator('html')).toHaveAttribute('data-text-scale', 'large');
+  await expect(page.getByRole('button', { name: 'A+ Katta shrift' })).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-text-scale', 'large');
+
+  await page.getByRole('button', { name: 'Bemor sifatida kirish' }).click();
+  await expect(page).toHaveURL('/patient');
+  expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
+
+  await page.getByRole('button', { name: 'A+ Katta shrift' }).click();
+  await expect(page.locator('html')).not.toHaveAttribute('data-text-scale', 'large');
+});
+
+test('shows and clears the offline alert banner with 103 emergency link when connectivity changes', async ({ page, context }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/');
+  await expect(page.getByText(/Internet aloqasi uzildi/)).toHaveCount(0);
+
+  await context.setOffline(true);
+  const banner = page.locator('.offline-banner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('Internet aloqasi uzildi');
+  await expect(banner.getByRole('link', { name: '103' })).toHaveAttribute('href', 'tel:103');
+  expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
+
+  await context.setOffline(false);
+  await expect(banner).toHaveCount(0);
+});

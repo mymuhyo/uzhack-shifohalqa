@@ -18,7 +18,8 @@ export default function About() {
           <h2>Namuna ma’lumotlar</h2>
           <p>Dr. Sardor va Anvar aka sintetik qahramonlar. Bu demo bir brauzer sessiyasi uchun alohida ish joyi ochadi.</p>
           <p>CDC mashqi oldindan yozilgan namuna video. Tasdiqlangan video L2, yetarli sifatdagi jonli kamera o‘lchovi L3 sifatida saqlanadi.</p>
-          <p>DoriMos tayyor sintetik quti rasmlarini o‘qiydi. O‘qilgan yozuvni bemor tasdiqlaydi. Xira rasm yoki xizmat uzilishida qo‘lda qayd yo‘li bor.</p>
+          <p>Bemor shoshilinch simptom yoki qayta yordam so‘rovini yuborishi mumkin. Shifokor 7 kunlik xulosa va qayta murojaatlar navbatini ko‘radi. Yaqinlari ulashilgan havoladan yordam holatini bildiradi.</p>
+          <p>DoriMos tayyor sintetik quti rasmlarini o‘qiydi. O‘qilgan yozuvni bemor tasdiqlaydi. Xira rasmni qayta olish mumkin. Xizmat uzilganda qo‘lda qayd saqlanadi.</p>
         </section>
         <section>
           <h2>AI qayerda ishlaydi?</h2>

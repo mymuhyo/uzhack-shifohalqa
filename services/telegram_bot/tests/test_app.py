@@ -159,6 +159,38 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.bot.requests, [])
 
+    async def test_ilova_and_mashq_return_mini_app_buttons(self):
+        ilova = await self.message("/ilova")
+        self.assertEqual(
+            json.loads(ilova.text),
+            {
+                "method": "sendMessage",
+                "chat_id": 42,
+                "text": "ShifoHalqani Telegram Mini App ichida yoki brauzerda oching.",
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [{"text": "ShifoHalqa Mini App", "web_app": {"url": f"{APP_URL}tg"}}],
+                        [{"text": "Brauzerda ochish", "url": APP_URL}],
+                    ]
+                },
+            },
+        )
+        mashq = await self.message("/mashq")
+        self.assertEqual(
+            json.loads(mashq.text),
+            {
+                "method": "sendMessage",
+                "chat_id": 42,
+                "text": "Mashq tahlilini Telegram Mini App yoki brauzerda oching.",
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [{"text": "Mashq tahlilini ochish", "web_app": {"url": f"{APP_URL}demo/mashq"}}],
+                        [{"text": "Brauzerda ochish", "url": f"{APP_URL}demo/mashq"}],
+                    ]
+                },
+            },
+        )
+
     async def test_valid_pairing_and_stop(self):
         linked = await self.message(f"/start {CODE}")
         self.assertEqual(json.loads(linked.text)["text"], "Telegram xabarlari ulandi.")

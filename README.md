@@ -24,7 +24,7 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 - **Production:** https://shifohalqa.vercel.app (Vercel `shifohalqa`, faqat `main` dan)
 - **DB:** Neon `shifohalqa/main` · UzHack sintetik demosi
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
-- **AI:** Hybrid — on-device MediaPipe Pose (L3) + OpenRouter (synthetic label OCR, public sample observation and Uzbek explanation) + `gemini-decision-1` (quality checks via Decisions API `v1beta`)
+- **AI:** Hybrid — on-device MediaPipe Pose (L3) + Cloudflare Clef + Clairic Flash (synthetic-label quality and extraction) + Gemini Decisions / OpenRouter fallback. OpenRouter also handles public sample observations and Uzbek explanations
 
 ## O'qish tartibi
 | Fayl | Maqsad |
@@ -72,7 +72,7 @@ Playwright lokal serverda alohida sessiya kaliti bilan ishlaydi. Standart brauze
 
 Ma’lumotlar bazasi bilan E2E Python servisini ham ishga tushiradi. Avval `uv sync --project services/telegram_bot --locked` bilan uning bog‘liqliklarini o‘rnating. Python unit testlari uchun `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests` ishlating. E2E Telegramga chiqmasdan, bitta sintetik chatga bog‘langan navbatni haqiqiy Neon’da sinaydi.
 
-Jonli DoriMos brauzer sinovi uchun `SHIFO_E2E_LIVE_DORIMOS=1`, `GEMINI_API_KEY` va `OPENROUTER_API_KEY` kerak. Standart E2E tashqi AI provayderlarini chaqirmaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
+Jonli DoriMos brauzer sinovi uchun `SHIFO_E2E_LIVE_DORIMOS=1` va tanlangan provayder kalitlari kerak. `CLOUDFLARE_ACCOUNT_ID` va `CLOUDFLARE_API_TOKEN` berilsa, Clef quti sifatini tekshiradi, Clairic Flash yozuvni o‘qiydi. Cloudflare ishlamay qolsa, `GEMINI_API_KEY` va `OPENROUTER_API_KEY` bilan Gemini Decisions + OpenRouter yo‘li ishlaydi. Xira yoki noaniq namuna qayta olishga yuboriladi. `DORIMOS_PROVIDER=gemini` o‘sha yo‘lni bevosita tanlaydi. Standart E2E tashqi AI provayderlarini chaqirmaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
 
 ```bash
 node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/dorimos-benchmark.ts

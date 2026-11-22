@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from .config import Config
 
@@ -40,9 +41,23 @@ async def manage_webhook(config: Config, target: str, *, register: bool) -> str:
         if not register:
             return "ShifoHalqa webhook is registered." if current == target else "This bot has no webhook."
 
-        registered = await bot.set_webhook(target, secret_token=config.webhook_secret, allowed_updates=["message"])
+        registered = await bot.set_webhook(
+            target,
+            secret_token=config.webhook_secret,
+            allowed_updates=["message", "callback_query"],
+        )
         if not registered:
             raise ValueError("Telegram did not confirm webhook registration.")
+        await bot.set_my_commands([
+            BotCommand(command="bugun", description="Bugungi vazifalarni ochish"),
+            BotCommand(command="ilova", description="ShifoHalqa Mini App menyusi"),
+            BotCommand(command="mashq", description="Mashq tahlilini ochish"),
+            BotCommand(command="help", description="Yordam va boshqaruv"),
+            BotCommand(command="stop", description="Telegram xabarlarini o‘chirish"),
+        ])
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="ShifoHalqa", web_app=WebAppInfo(url=f"{config.app_url}tg")),
+        )
         return "ShifoHalqa webhook registered."
 
 

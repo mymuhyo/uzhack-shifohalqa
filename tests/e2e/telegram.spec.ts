@@ -109,7 +109,15 @@ test('Telegram isolates workspaces, retries a throttled red notice and ignores s
     await expect(today).toBeOK();
     expect(await today.json()).toEqual({
       method: 'sendMessage', chat_id: chatId, text: 'Bugungi vazifalarni ShifoHalqada oching.',
-      reply_markup: { inline_keyboard: [[{ text: 'ShifoHalqani ochish', url: appUrl }]] },
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'ShifoHalqa Mini App', web_app: { url: `${appUrl}tg?focus=patient` } }],
+          [
+            { text: 'Mashq tahlili', web_app: { url: `${appUrl}demo/mashq` } },
+            { text: 'Brauzerda ochish', url: appUrl },
+          ],
+        ],
+      },
     });
 
     await page.getByText('Icha olmadim', { exact: true }).click();

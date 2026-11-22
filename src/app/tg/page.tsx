@@ -8,13 +8,21 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function TelegramPage() {
+export default async function TelegramPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ focus?: string | string[] }>;
+}) {
   const demoEnabled = isDemoEnabled();
+  const params = await searchParams;
+  const rawFocus = Array.isArray(params.focus) ? params.focus[0] : params.focus;
+  const focus = rawFocus === 'doctor' || rawFocus === 'patient' ? rawFocus : null;
+
   return (
     <main className="frame content" id="content" tabIndex={-1}>
       <h1>ShifoHalqa · Telegram</h1>
       <p className="lede">Bemor, shifokor va mashq tahlili uchun ixcham tezkor kirish oynasi.</p>
-      <TelegramMiniApp demoEnabled={demoEnabled} />
+      <TelegramMiniApp demoEnabled={demoEnabled} focus={focus} />
     </main>
   );
 }

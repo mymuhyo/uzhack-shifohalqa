@@ -109,6 +109,20 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         headers = {WEBHOOK_SECRET_HEADER: secret, "Content-Type": "application/json"}
         return await self.request("POST", WEBHOOK_PATH, headers=headers, chunks=[json.dumps(telegram_update(text, **kwargs)).encode()])
 
+    async def callback(self, data, *, chat_id=42, chat_type="private", user_id=42, secret=SECRET):
+        headers = {WEBHOOK_SECRET_HEADER: secret, "Content-Type": "application/json"}
+        payload = {
+            "update_id": 8,
+            "callback_query": {
+                "id": "cb-1",
+                "from": {"id": user_id, "is_bot": False, "first_name": "Test"},
+                "chat_instance": "ci-1",
+                "data": data,
+                "message": telegram_update("/help", chat_id=chat_id, chat_type=chat_type, user_id=user_id)["message"],
+            },
+        }
+        return await self.request("POST", WEBHOOK_PATH, headers=headers, chunks=[json.dumps(payload).encode()])
+
     async def test_health_and_database_lifecycle(self):
         response = await self.request("GET", "/healthz")
         self.assertEqual(json.loads(response.text), {"ok": True})
@@ -154,7 +168,15 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                 "method": "sendMessage",
                 "chat_id": 42,
                 "text": "Bugungi vazifalarni ShifoHalqada oching.",
-                "reply_markup": {"inline_keyboard": [[{"text": "ShifoHalqani ochish", "url": APP_URL}]]},
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [{"text": "ShifoHalqa Mini App", "web_app": {"url": f"{APP_URL}tg?focus=patient"}}],
+                        [
+                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}demo/mashq"}},
+                            {"text": "Brauzerda ochish", "url": APP_URL},
+                        ],
+                    ]
+                },
             },
         )
         self.assertEqual(self.bot.requests, [])
@@ -169,8 +191,14 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                 "text": "ShifoHalqani Telegram Mini App ichida yoki brauzerda oching.",
                 "reply_markup": {
                     "inline_keyboard": [
-                        [{"text": "ShifoHalqa Mini App", "web_app": {"url": f"{APP_URL}tg"}}],
-                        [{"text": "Brauzerda ochish", "url": APP_URL}],
+                        [
+                            {"text": "Bemor (Mini App)", "web_app": {"url": f"{APP_URL}tg?focus=patient"}},
+                            {"text": "Shifokor (Mini App)", "web_app": {"url": f"{APP_URL}tg?focus=doctor"}},
+                        ],
+                        [
+                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}demo/mashq"}},
+                            {"text": "Brauzerda ochish", "url": APP_URL},
+                        ],
                     ]
                 },
             },
@@ -190,6 +218,26 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                 },
             },
         )
+
+    async def test_help_and_stop_callback_button(self):
+        help_res = await self.message("/help")
+        self.assertEqual(
+            json.loads(help_res.text)["reply_markup"]["inline_keyboard"][-1],
+            [{"text": "Xabarlarni to‘xtatish", "callback_data": "stop_notices"}],
+        )
+        ignored = await self.callback("stop_notices", chat_id=-42, chat_type="group")
+        self.assertEqual(ignored.status, 200)
+        self.assertEqual(ignored.text or "", "")
+        stopped = await self.callback("stop_notices")
+        self.assertEqual(
+            json.loads(stopped.text),
+            {
+                "method": "answerCallbackQuery",
+                "callback_query_id": "cb-1",
+                "text": "Telegram xabarlari o‘chirildi.",
+            },
+        )
+        self.assertEqual(self.store.disconnected, [(42, 1770000000, 8)])
 
     async def test_valid_pairing_and_stop(self):
         linked = await self.message(f"/start {CODE}")
@@ -222,7 +270,11 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         method, timeout = self.bot.requests[0]
         self.assertIsInstance(method, SendMessage)
         self.assertEqual((method.chat_id, method.text, timeout), (42, RED_NOTICE, 3.5))
-        self.assertEqual(method.reply_markup.inline_keyboard[0][0].url, APP_URL)
+        self.assertEqual(
+            method.reply_markup.inline_keyboard[0][0].web_app.url,
+            f"{APP_URL}tg?focus=doctor",
+        )
+        self.assertEqual(method.reply_markup.inline_keyboard[1][0].url, APP_URL)
         self.bot.error = TelegramNetworkError
         self.assertEqual(await send_red_notice(self.bot, CONFIG, 42), "unknown")
         self.bot.error = TelegramForbiddenError

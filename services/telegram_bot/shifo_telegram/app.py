@@ -12,8 +12,8 @@ from aiogram.exceptions import (
     ClientDecodeError, TelegramAPIError, TelegramNetworkError, TelegramRetryAfter, TelegramServerError,
 )
 from aiogram.filters import Filter
-from aiogram.methods import SendMessage
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
+from aiogram.methods import AnswerCallbackQuery, SendMessage
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
 from aiogram.utils.serialization import deserialize_telegram_object_to_python
 from aiohttp import web
 from pydantic import ValidationError
@@ -38,23 +38,60 @@ RED_NOTICE = "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
 logger = logging.getLogger(__name__)
 
 
-def _message(chat_id: int, text: str, app_url: str | None = None) -> SendMessage:
-    keyboard = None
-    if app_url:
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="ShifoHalqani ochish", url=app_url)]]
-        )
+def _message(chat_id: int, text: str, keyboard: InlineKeyboardMarkup | None = None) -> SendMessage:
     return SendMessage(chat_id=chat_id, text=text, reply_markup=keyboard)
 
 
-def _mini_app_message(chat_id: int, text: str, web_app_label: str, web_app_url: str, fallback_url: str) -> SendMessage:
-    keyboard = InlineKeyboardMarkup(
+def _mini_app_url(config: Config, focus: str | None = None) -> str:
+    return f"{config.app_url}tg?focus={focus}" if focus else f"{config.app_url}tg"
+
+
+def _mini_app_keyboard(
+    config: Config,
+    *,
+    focus: str | None = None,
+    primary_label: str = "ShifoHalqa Mini App",
+    include_exercise: bool = False,
+    include_stop: bool = False,
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=primary_label, web_app=WebAppInfo(url=_mini_app_url(config, focus)))],
+    ]
+    if include_exercise:
+        rows.append([
+            InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}demo/mashq")),
+            InlineKeyboardButton(text="Brauzerda ochish", url=config.app_url),
+        ])
+    else:
+        rows.append([InlineKeyboardButton(text="Brauzerda ochish", url=config.app_url)])
+    if include_stop:
+        rows.append([InlineKeyboardButton(text="Xabarlarni to‘xtatish", callback_data="stop_notices")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _mini_app_menu_keyboard(config: Config) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=web_app_label, web_app=WebAppInfo(url=web_app_url))],
-            [InlineKeyboardButton(text="Brauzerda ochish", url=fallback_url)],
+            [
+                InlineKeyboardButton(text="Bemor (Mini App)", web_app=WebAppInfo(url=_mini_app_url(config, "patient"))),
+                InlineKeyboardButton(text="Shifokor (Mini App)", web_app=WebAppInfo(url=_mini_app_url(config, "doctor"))),
+            ],
+            [
+                InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}demo/mashq")),
+                InlineKeyboardButton(text="Brauzerda ochish", url=config.app_url),
+            ],
         ]
     )
-    return SendMessage(chat_id=chat_id, text=text, reply_markup=keyboard)
+
+
+def _exercise_keyboard(config: Config) -> InlineKeyboardMarkup:
+    exercise_url = f"{config.app_url}demo/mashq"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Mashq tahlilini ochish", web_app=WebAppInfo(url=exercise_url))],
+            [InlineKeyboardButton(text="Brauzerda ochish", url=exercise_url)],
+        ]
+    )
 
 
 class PrivateCommand(Filter):
@@ -95,28 +132,50 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
             linked = telegram_pair_code_valid(argument) and await store.redeem_pairing(
                 argument, chat_id, sent_at=sent_at, update_id=event_update.update_id,
             )
-            return _message(chat_id, "Telegram xabarlari ulandi." if linked else INVALID_PAIR, config.app_url)
+            keyboard = _mini_app_keyboard(
+                config,
+                focus="doctor",
+                primary_label="Shifokor navbatini ochish" if linked else "Shifokor sahifasini ochish",
+            )
+            return _message(chat_id, "Telegram xabarlari ulandi." if linked else INVALID_PAIR, keyboard)
         if command == "stop":
             stopped = await store.disconnect_chat(chat_id, sent_at=sent_at, update_id=event_update.update_id)
             return _message(chat_id, "Telegram xabarlari o‘chirildi.") if stopped else None
         if command == "ilova":
-            return _mini_app_message(
-                chat_id,
-                MINI_APP,
-                "ShifoHalqa Mini App",
-                f"{config.app_url}tg",
-                config.app_url,
-            )
+            return _message(chat_id, MINI_APP, _mini_app_menu_keyboard(config))
         if command == "mashq":
-            exercise_url = f"{config.app_url}demo/mashq"
-            return _mini_app_message(
-                chat_id,
-                EXERCISE_APP,
-                "Mashq tahlilini ochish",
-                exercise_url,
-                exercise_url,
-            )
-        return _message(chat_id, HELP if command == "help" else TODAY, config.app_url)
+            return _message(chat_id, EXERCISE_APP, _exercise_keyboard(config))
+        if command == "help":
+            return _message(chat_id, HELP, _mini_app_keyboard(config, include_exercise=True, include_stop=True))
+        return _message(
+            chat_id,
+            TODAY,
+            _mini_app_keyboard(config, focus="patient", primary_label="ShifoHalqa Mini App", include_exercise=True),
+        )
+
+    @router.callback_query()
+    async def handle_callback(callback: CallbackQuery, event_update: Update) -> AnswerCallbackQuery | None:
+        if callback.data != "stop_notices":
+            return None
+        msg = callback.message
+        sender = callback.from_user
+        if (
+            not isinstance(msg, Message)
+            or msg.chat.type != ChatType.PRIVATE
+            or not telegram_chat_id_valid(msg.chat.id)
+            or sender.is_bot
+            or sender.id != msg.chat.id
+        ):
+            return None
+        stopped = await store.disconnect_chat(
+            msg.chat.id,
+            sent_at=int(msg.date.timestamp()),
+            update_id=event_update.update_id,
+        )
+        return AnswerCallbackQuery(
+            callback_query_id=callback.id,
+            text="Telegram xabarlari o‘chirildi." if stopped else "Faol ulanish topilmadi.",
+        )
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
@@ -127,7 +186,8 @@ async def send_red_notice(bot: Bot, config: Config, chat_id: int) -> DeliveryRes
     if not telegram_chat_id_valid(chat_id):
         return "rejected"
     try:
-        result = await bot(_message(chat_id, RED_NOTICE, config.app_url), request_timeout=3.5)
+        keyboard = _mini_app_keyboard(config, focus="doctor", primary_label="Navbatni ochish (Mini App)")
+        result = await bot(_message(chat_id, RED_NOTICE, keyboard), request_timeout=3.5)
     except TelegramRetryAfter as error:
         return RetryAfter(max(1, error.retry_after))
     except (ClientDecodeError, TelegramNetworkError, TelegramServerError, TimeoutError):
@@ -195,7 +255,7 @@ def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Applicatio
             logger.warning("Telegram webhook command could not be processed.")
             return web.Response(status=503, headers=NO_STORE)
 
-        if not isinstance(response, SendMessage):
+        if not isinstance(response, (SendMessage, AnswerCallbackQuery)):
             return web.Response(headers=NO_STORE)
         payload = deserialize_telegram_object_to_python(response, default=bot.default, include_api_method_name=True)
         return web.json_response(payload, headers=NO_STORE)

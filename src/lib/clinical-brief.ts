@@ -10,7 +10,11 @@ import { exerciseCatalog } from './pose/diagnostics';
 import type { ClinicalView } from './clinical-types';
 import type { readExerciseAttempts, readExercisePlan } from './exercise-store';
 
-export type ActivityDashboardData = Awaited<ReturnType<typeof getActivityDashboard>>;
+export type ActivityDashboardData =
+  | (Omit<NonNullable<Awaited<ReturnType<typeof getActivityDashboard>>>, 'dailyStepGoal'> & {
+      dailyStepGoal?: number | null;
+    })
+  | null;
 export type ExercisePlanData = Awaited<ReturnType<typeof readExercisePlan>>;
 export type ExerciseAttemptsData = Awaited<ReturnType<typeof readExerciseAttempts>>;
 
@@ -154,7 +158,16 @@ export function buildClinicalBrief({
   }
 
   if (activity?.steps) {
-    lines.push(`Bugungi qadamlar: ${activity.steps.count} (qo‘lda · L${activity.steps.level}).`);
+    const sourceLabel = activity.steps.source === 'device_sensor'
+      ? 'telefon sensori'
+      : activity.steps.source === 'demo_sim'
+        ? 'simulyatsiya'
+        : 'qo‘lda';
+    const goal = activity.dailyStepGoal ?? view.plan?.dailyStepGoal ?? null;
+    const goalNote = goal !== null
+      ? ` / maqsad ${goal} (${activity.steps.count >= goal ? 'bajarildi' : 'jarayonda'})`
+      : '';
+    lines.push(`Bugungi qadamlar: ${activity.steps.count}${goalNote} (${sourceLabel} · L${activity.steps.level}).`);
   }
 
   if (view.caregiverAck) {

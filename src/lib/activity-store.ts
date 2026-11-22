@@ -1,15 +1,23 @@
 import { z } from 'zod';
-import { calculateAdherence, dueAdherenceUnitSchema, stepCountSchema } from './adherence';
+import {
+  calculateAdherence,
+  defaultDailyStepGoal,
+  dueAdherenceUnitSchema,
+  stepCountSchema,
+  stepSourceSchema,
+  type StepSource,
+} from './adherence';
 import type { ClinicalActor, MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 
 const activityRow = z.object({
   today: z.iso.date(),
+  dailyStepGoal: z.number().int().min(100).max(50000).nullable().optional(),
   units: z.array(dueAdherenceUnitSchema.extend({ title: z.string(), dueTime: z.string() })),
   steps: z.object({
     count: stepCountSchema,
     level: z.literal(0),
-    source: z.literal('self_report'),
+    source: stepSourceSchema,
     aiMode: z.literal('manual'),
     updatedAt: z.iso.datetime(),
   }).nullable(),
@@ -44,6 +52,7 @@ export async function getActivityDashboard(actor: ClinicalActor) {
         AND days.calendar_date + item.due_time <= clock.local_now
     )
     SELECT to_char(clock.local_now, 'YYYY-MM-DD') AS today,
+           plan.daily_step_goal AS "dailyStepGoal",
            COALESCE((SELECT jsonb_agg(due ORDER BY "scheduledDate" DESC, "dueTime", title) FROM due), '[]'::jsonb) AS units,
            CASE WHEN activity.step_count IS NOT NULL THEN jsonb_build_object(
              'count', activity.step_count, 'level', activity.level, 'source', activity.source,
@@ -51,32 +60,45 @@ export async function getActivityDashboard(actor: ClinicalActor) {
              to_char(activity.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            ) END AS steps
     FROM scoped CROSS JOIN clock
+    LEFT JOIN shifohalqa.plans AS plan ON plan.workspace_id = scoped.workspace_id AND plan.patient_id = scoped.id
+      AND plan.doctor_id = scoped.doctor_id
     LEFT JOIN shifohalqa.daily_step_counts AS activity ON activity.workspace_id = scoped.workspace_id
       AND activity.patient_id = scoped.id AND activity.activity_date = clock.local_now::date
   `;
 
   if (!row) return null;
-  const { today, units, steps } = activityRow.parse(row);
-  return { localDate: today, adherence: calculateAdherence(units, today), steps, dueUnits: units };
+  const { today, dailyStepGoal, units, steps } = activityRow.parse(row);
+  return {
+    localDate: today,
+    dailyStepGoal: dailyStepGoal ?? defaultDailyStepGoal,
+    adherence: calculateAdherence(units, today),
+    steps,
+    dueUnits: units,
+  };
 }
 
-export async function saveStepCount(actor: ClinicalActor, input: z.infer<typeof stepCountSchema>): Promise<MutationResult> {
+export async function saveStepCount(
+  actor: ClinicalActor,
+  input: number | { count: number; source?: StepSource },
+): Promise<MutationResult> {
   if (actor.role !== 'patient') return 'not_found';
   const sql = getDatabase();
   if (!sql) throw new Error('Activity database is unavailable');
-  const count = stepCountSchema.parse(input);
+  const count = stepCountSchema.parse(typeof input === 'number' ? input : input.count);
+  const source = stepSourceSchema.parse(typeof input === 'number' ? 'self_report' : (input.source ?? 'self_report'));
 
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id FROM shifohalqa.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), saved AS (
-      INSERT INTO shifohalqa.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count)
-      SELECT workspace_id, id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${count}
+      INSERT INTO shifohalqa.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count, source)
+      SELECT workspace_id, id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${count}, ${source}
       FROM scoped
       ON CONFLICT (workspace_id, patient_id, activity_date) DO UPDATE
-      SET step_count = EXCLUDED.step_count, updated_at = CURRENT_TIMESTAMP
+      SET step_count = EXCLUDED.step_count, source = EXCLUDED.source, updated_at = CURRENT_TIMESTAMP
       WHERE activity.step_count IS DISTINCT FROM EXCLUDED.step_count
+         OR activity.source IS DISTINCT FROM EXCLUDED.source
       RETURNING 1
     )
     SELECT CASE

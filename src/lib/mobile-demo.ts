@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { defaultDailyStepGoal, type StepSource } from './adherence';
 import type { ClinicalActor, ClinicalTask, ClinicalView } from './clinical-types';
 import { getDatabase } from './db';
 import { isDemoEnabled } from './demo-session';
@@ -86,14 +87,48 @@ function medicationRecord(task: ClinicalTask) {
   return { id: entry.id, status, reason: status === 'missed' ? entry.payload.reason : null, reply };
 }
 
-export function mobileToday(patientName: string, view: ClinicalView, date = tashkentDate.format(new Date())) {
+export type MobileActivitySnapshot = {
+  dailyStepGoal?: number | null;
+  steps: {
+    count: number;
+    source: StepSource;
+    updatedAt: string;
+  } | null;
+};
+
+export function mobileToday(
+  patientName: string,
+  view: ClinicalView,
+  date = tashkentDate.format(new Date()),
+  activity?: MobileActivitySnapshot | null,
+) {
   const medication = view.tasks.filter((task) => task.type === 'medication');
+  const boxAvailable = view.plan?.medicationStrengthMg !== null && view.plan?.medicationStrengthMg !== undefined;
   const tasks = medication.filter((task) => task.date === date).map((task) => ({
-    id: task.id, title: task.title, time: task.dueTime, record: medicationRecord(task),
+    id: task.id,
+    title: task.title,
+    time: task.dueTime,
+    record: medicationRecord(task),
+    ...(activity !== undefined ? { boxAvailable, boxDone: task.boxEvidence !== null } : {}),
   }));
   const replies = medication.flatMap((task) => {
     const record = medicationRecord(task);
     return record?.reply ? [{ recordId: record.id, taskTitle: task.title, date: task.date, ...record.reply }] : [];
   });
-  return { patientName, date, tasks, replies };
+  if (activity === undefined) return { patientName, date, tasks, replies };
+  const goal = view.plan?.dailyStepGoal ?? activity?.dailyStepGoal ?? defaultDailyStepGoal;
+  const count = activity?.steps?.count ?? 0;
+  return {
+    patientName,
+    date,
+    tasks,
+    replies,
+    steps: {
+      count,
+      goal,
+      achieved: count >= goal,
+      source: activity?.steps?.source ?? null,
+      updatedAt: activity?.steps?.updatedAt ?? null,
+    },
+  };
 }

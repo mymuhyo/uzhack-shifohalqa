@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS shifohalqa.plans (
     REFERENCES shifohalqa.patients (workspace_id, id, doctor_id) ON DELETE CASCADE
 );
 
+ALTER TABLE shifohalqa.plans
+  ADD COLUMN IF NOT EXISTS daily_step_goal integer NOT NULL DEFAULT 3000 CHECK (daily_step_goal BETWEEN 100 AND 50000);
+
 CREATE TABLE IF NOT EXISTS shifohalqa.plan_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL,
@@ -217,13 +220,26 @@ CREATE TABLE IF NOT EXISTS shifohalqa.daily_step_counts (
   activity_date date NOT NULL,
   step_count integer NOT NULL CHECK (step_count BETWEEN 0 AND 999999),
   level smallint NOT NULL DEFAULT 0 CHECK (level = 0),
-  source text NOT NULL DEFAULT 'self_report' CHECK (source = 'self_report'),
+  source text NOT NULL DEFAULT 'self_report' CHECK (source IN ('self_report', 'device_sensor', 'demo_sim')),
   ai_mode text NOT NULL DEFAULT 'manual' CHECK (ai_mode = 'manual'),
   updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (workspace_id, patient_id, activity_date),
   FOREIGN KEY (workspace_id, patient_id)
     REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'shifohalqa.daily_step_counts'::regclass
+      AND conname = 'daily_step_counts_source_check'
+  ) THEN
+    ALTER TABLE shifohalqa.daily_step_counts
+      DROP CONSTRAINT daily_step_counts_source_check,
+      ADD CONSTRAINT daily_step_counts_source_check CHECK (source IN ('self_report', 'device_sensor', 'demo_sim'));
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS shifohalqa.caregiver_links (
   workspace_id uuid NOT NULL,
@@ -330,6 +346,153 @@ CREATE OR REPLACE TRIGGER telegram_queue_on_red_flag
   AFTER INSERT ON shifohalqa.flags
   FOR EACH ROW WHEN (NEW.color = 'red')
   EXECUTE FUNCTION shifohalqa.queue_telegram_red_flag();
+
+CREATE TABLE IF NOT EXISTS shifohalqa.telegram_patient_pairings (
+  workspace_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  code_hash text NOT NULL UNIQUE CHECK (code_hash ~ '^[0-9a-f]{64}$'),
+  expires_at timestamptz NOT NULL,
+  redeemed_at timestamptz,
+  PRIMARY KEY (workspace_id, patient_id),
+  FOREIGN KEY (workspace_id, patient_id) REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS shifohalqa.telegram_patient_links (
+  workspace_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  link_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  chat_id bigint NOT NULL UNIQUE CHECK (chat_id BETWEEN 1 AND 4503599627370495),
+  connected_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  paired_message_at bigint CHECK (paired_message_at > 0),
+  paired_update_id bigint CHECK (paired_update_id > 0),
+  PRIMARY KEY (workspace_id, patient_id),
+  UNIQUE (workspace_id, patient_id, link_id),
+  FOREIGN KEY (workspace_id, patient_id) REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS shifohalqa.telegram_patient_notices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  link_id uuid NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('doctor_reply', 'exercise_reply')),
+  ref_id uuid NOT NULL,
+  message_text text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  attempted_at timestamptz,
+  delivery_status text NOT NULL DEFAULT 'pending' CHECK (delivery_status IN ('pending', 'sent', 'rejected', 'unknown')),
+  next_attempt_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (workspace_id, kind, ref_id),
+  FOREIGN KEY (workspace_id, patient_id, link_id)
+    REFERENCES shifohalqa.telegram_patient_links (workspace_id, patient_id, link_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS telegram_patient_notices_queue_idx
+  ON shifohalqa.telegram_patient_notices (created_at, workspace_id, id) WHERE delivery_status = 'pending';
+
+CREATE TABLE IF NOT EXISTS shifohalqa.telegram_doctor_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  doctor_id uuid NOT NULL,
+  link_id uuid NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('exercise_pain', 'step_goal_achieved')),
+  ref_key text NOT NULL,
+  message_text text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  attempted_at timestamptz,
+  delivery_status text NOT NULL DEFAULT 'pending' CHECK (delivery_status IN ('pending', 'sent', 'rejected', 'unknown')),
+  next_attempt_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (workspace_id, kind, ref_key),
+  FOREIGN KEY (workspace_id, doctor_id, link_id)
+    REFERENCES shifohalqa.telegram_doctor_links (workspace_id, doctor_id, link_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS telegram_doctor_events_queue_idx
+  ON shifohalqa.telegram_doctor_events (created_at, workspace_id, id) WHERE delivery_status = 'pending';
+
+CREATE OR REPLACE FUNCTION shifohalqa.queue_telegram_patient_flag_reply() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO shifohalqa.telegram_patient_notices (workspace_id, patient_id, link_id, kind, ref_id, message_text)
+  SELECT plan.workspace_id, plan.patient_id, link.link_id, 'doctor_reply', NEW.id,
+         'Shifokor qaydingizga javob yozdi: ' || left(NEW.patient_reply, 220)
+  FROM shifohalqa.evidence_logs AS evidence
+  JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+  JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+  JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+  JOIN shifohalqa.telegram_patient_links AS link ON link.workspace_id = plan.workspace_id AND link.patient_id = plan.patient_id
+  WHERE evidence.workspace_id = NEW.workspace_id AND evidence.id = NEW.evidence_log_id
+  ON CONFLICT (workspace_id, kind, ref_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER telegram_queue_on_flag_review
+  AFTER UPDATE OF decision ON shifohalqa.flags
+  FOR EACH ROW WHEN (OLD.decision IS NULL AND NEW.decision IS NOT NULL)
+  EXECUTE FUNCTION shifohalqa.queue_telegram_patient_flag_reply();
+
+CREATE OR REPLACE FUNCTION shifohalqa.queue_telegram_patient_exercise_reply() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO shifohalqa.telegram_patient_notices (workspace_id, patient_id, link_id, kind, ref_id, message_text)
+  SELECT prescription.workspace_id, prescription.patient_id, link.link_id, 'exercise_reply', NEW.id,
+         'Shifokor mashq qaydingizga javob yozdi: ' || left(NEW.review_reply, 220)
+  FROM shifohalqa.exercise_prescriptions AS prescription
+  JOIN shifohalqa.telegram_patient_links AS link
+    ON link.workspace_id = prescription.workspace_id AND link.patient_id = prescription.patient_id
+  WHERE prescription.workspace_id = NEW.workspace_id AND prescription.id = NEW.prescription_id
+  ON CONFLICT (workspace_id, kind, ref_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER telegram_queue_on_exercise_review
+  AFTER UPDATE OF review_decision ON shifohalqa.exercise_attempts
+  FOR EACH ROW WHEN (OLD.review_decision IS NULL AND NEW.review_decision IS NOT NULL)
+  EXECUTE FUNCTION shifohalqa.queue_telegram_patient_exercise_reply();
+
+CREATE OR REPLACE FUNCTION shifohalqa.queue_telegram_doctor_exercise_pain() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO shifohalqa.telegram_doctor_events (workspace_id, doctor_id, link_id, kind, ref_key, message_text)
+  SELECT prescription.workspace_id, prescription.doctor_id, link.link_id, 'exercise_pain', NEW.id::text,
+         'ShifoHalqa: bemor mashq paytida og‘riq bildirdi.'
+  FROM shifohalqa.exercise_prescriptions AS prescription
+  JOIN shifohalqa.telegram_doctor_links AS link
+    ON link.workspace_id = prescription.workspace_id AND link.doctor_id = prescription.doctor_id
+  WHERE prescription.workspace_id = NEW.workspace_id AND prescription.id = NEW.prescription_id
+  ON CONFLICT (workspace_id, kind, ref_key) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER telegram_queue_on_exercise_pain
+  AFTER INSERT ON shifohalqa.exercise_attempts
+  FOR EACH ROW WHEN (NEW.reason = 'pain' AND NEW.flag_color = 'red')
+  EXECUTE FUNCTION shifohalqa.queue_telegram_doctor_exercise_pain();
+
+CREATE OR REPLACE FUNCTION shifohalqa.queue_telegram_doctor_step_goal() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO shifohalqa.telegram_doctor_events (workspace_id, doctor_id, link_id, kind, ref_key, message_text)
+  SELECT plan.workspace_id, plan.doctor_id, link.link_id, 'step_goal_achieved',
+         to_char(NEW.activity_date, 'YYYY-MM-DD'),
+         'ShifoHalqa: bemor bugungi kunlik qadam maqsadiga yetdi (' || NEW.step_count || ' / ' || plan.daily_step_goal || ').'
+  FROM shifohalqa.plans AS plan
+  JOIN shifohalqa.telegram_doctor_links AS link
+    ON link.workspace_id = plan.workspace_id AND link.doctor_id = plan.doctor_id
+  WHERE plan.workspace_id = NEW.workspace_id AND plan.patient_id = NEW.patient_id
+    AND NEW.step_count >= plan.daily_step_goal
+  ON CONFLICT (workspace_id, kind, ref_key) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER telegram_queue_on_step_goal
+  AFTER INSERT OR UPDATE OF step_count ON shifohalqa.daily_step_counts
+  FOR EACH ROW
+  EXECUTE FUNCTION shifohalqa.queue_telegram_doctor_step_goal();
 
 CREATE TABLE IF NOT EXISTS shifohalqa.flag_followups (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

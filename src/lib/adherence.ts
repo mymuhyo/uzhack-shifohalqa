@@ -1,11 +1,20 @@
 import { z } from 'zod';
 
 export const maximumDailySteps = 999_999;
+export const defaultDailyStepGoal = 3000;
 export const stepCountSchema = z.int().min(0).max(maximumDailySteps);
+export const stepSourceSchema = z.enum(['self_report', 'device_sensor', 'demo_sim']);
+export type StepSource = z.infer<typeof stepSourceSchema>;
 
 export const stepsForm = z.strictObject({
   steps: z.string().regex(/^\d{1,6}$/).transform(Number).pipe(stepCountSchema),
 });
+
+export const mobileStepsInputSchema = z.strictObject({
+  count: stepCountSchema,
+  source: stepSourceSchema.default('device_sensor'),
+});
+export type MobileStepsInput = z.infer<typeof mobileStepsInputSchema>;
 
 export const dueAdherenceUnitSchema = z.object({
   planItemId: z.string(),

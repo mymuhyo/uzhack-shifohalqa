@@ -18,8 +18,10 @@ function task(type: TaskContext['type'], supplyFollowUp = false): TaskContext {
 describe('clinical forms', () => {
   it('parses the actual plan targets and explicitly selected follow-up', () => {
     expect(planForm.parse({ ...values, supplyFollowUp: 'yes' })).toMatchObject({
-      medicationTime: '08:00', supplyFollowUp: true, targets: { warnDiastolic: 85, maxSystolic: 150 },
+      medicationTime: '08:00', supplyFollowUp: true, dailyStepGoal: 3000, targets: { warnDiastolic: 85, maxSystolic: 150 },
     });
+    expect(planForm.parse({ ...values, dailyStepGoal: '4500' }).dailyStepGoal).toBe(4500);
+    expect(planForm.safeParse({ ...values, dailyStepGoal: '50' }).success).toBe(false);
     expect(planForm.parse(values).supplyFollowUp).toBe(false);
   });
 

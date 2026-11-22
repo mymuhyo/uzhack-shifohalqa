@@ -84,6 +84,10 @@ function PlanAssignment({ patientName }: { patientName: string }) {
             <label htmlFor="vitals-time">Bosim o‘lchash vaqti</label>
             <input id="vitals-time" name="vitalsTime" type="time" defaultValue="09:00" required />
           </div>
+          <div className={styles.field}>
+            <label htmlFor="daily-step-goal">Kunlik qadam maqsadi</label>
+            <input id="daily-step-goal" name="dailyStepGoal" type="number" min={100} max={50000} defaultValue={3000} required />
+          </div>
         </div>
         <fieldset className={styles.thresholds}>
           <legend>Bosim chegaralari (mmHg)</legend>
@@ -117,6 +121,7 @@ function PlanSummary({ plan }: { plan: PlanInput }) {
         <div><dt>Bosim o‘lchash vaqti</dt><dd>{plan.vitalsTime} · Toshkent</dd></div>
         <div><dt>Kuzatuv chegarasi</dt><dd>{targets.warnSystolic}/{targets.warnDiastolic} mmHg</dd></div>
         <div><dt>Yuqori chegara</dt><dd>{targets.maxSystolic}/{targets.maxDiastolic} mmHg</dd></div>
+        <div><dt>Kunlik qadam maqsadi</dt><dd>{plan.dailyStepGoal ?? 3000} qadam</dd></div>
         <div><dt>«Dori tugadi» bo‘yicha navbat</dt><dd>{plan.supplyFollowUp ? 'Yoqilgan' : 'O‘chirilgan'}</dd></div>
       </dl>
     </section>
@@ -208,7 +213,13 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
             <p>Rejada · {formatBoxLabel(payload.expected)}</p>
           </>
         )}
-        <p className={styles.evidenceLine}>{payload.kind === 'medication_box' ? 'Sintetik quti · bemor tasdiqlagan OCR' : 'Bemor kiritgan qayd'} · L{level}</p>
+        <p className={styles.evidenceLine}>
+          {payload.kind === 'medication_box'
+            ? (payload.result !== 'manual' && payload.sampleId === 'camera_photo'
+              ? 'Kamera rasmi · bemor tasdiqlagan OCR'
+              : 'Sintetik quti · bemor tasdiqlagan OCR')
+            : 'Bemor kiritgan qayd'} · L{level}
+        </p>
         {threshold !== undefined && metric && (
           <p className={styles.evidenceLine}>Rejadagi {metric === 'systolic' ? 'sistolik' : 'diastolik'} chegara · {threshold} mmHg</p>
         )}

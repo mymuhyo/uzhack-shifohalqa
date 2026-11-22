@@ -24,6 +24,7 @@ const planFields = z.object({
     warnSystolic: z.number(), warnDiastolic: z.number(),
   }),
   supplyFollowUp: z.boolean(),
+  dailyStepGoal: z.number().int().min(100).max(50000).default(3000),
 });
 
 const taskStatus = z.enum(['pending', 'taken', 'missed', 'recorded']);
@@ -112,8 +113,8 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
       FROM shifohalqa.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), added AS (
-      INSERT INTO shifohalqa.plans (workspace_id, patient_id, doctor_id, vitals_target, supply_follow_up)
-      SELECT workspace_id, id, doctor_id, ${JSON.stringify(input.targets)}::jsonb, ${input.supplyFollowUp}
+      INSERT INTO shifohalqa.plans (workspace_id, patient_id, doctor_id, vitals_target, supply_follow_up, daily_step_goal)
+      SELECT workspace_id, id, doctor_id, ${JSON.stringify(input.targets)}::jsonb, ${input.supplyFollowUp}, ${input.dailyStepGoal ?? 3000}
       FROM scoped
       ON CONFLICT (workspace_id, patient_id) DO NOTHING
       RETURNING workspace_id, id
@@ -141,7 +142,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       SELECT medicine.title AS "medicationName", medicine.box_strength_mg::float8 AS "medicationStrengthMg",
              left(medicine.due_time::text, 5) AS "medicationTime",
              left(vitals.due_time::text, 5) AS "vitalsTime", plan.vitals_target AS targets,
-             plan.supply_follow_up AS "supplyFollowUp"
+             plan.supply_follow_up AS "supplyFollowUp", plan.daily_step_goal AS "dailyStepGoal"
       FROM shifohalqa.plans AS plan
       JOIN shifohalqa.plan_items AS medicine
         ON medicine.workspace_id = plan.workspace_id AND medicine.plan_id = plan.id AND medicine.type = 'medication'
@@ -336,7 +337,7 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
            medicine.title AS "medicationName", medicine.box_strength_mg::float8 AS "medicationStrengthMg",
            left(medicine.due_time::text, 5) AS "medicationTime",
            left(vitals.due_time::text, 5) AS "vitalsTime", plan.vitals_target AS targets,
-           plan.supply_follow_up AS "supplyFollowUp",
+           plan.supply_follow_up AS "supplyFollowUp", plan.daily_step_goal AS "dailyStepGoal",
            CASE WHEN item.type = 'medication' AND plan.start_date < task.scheduled_date
                 THEN to_char(task.scheduled_date - 1, 'YYYY-MM-DD') END AS "previousDate",
            CASE WHEN previous_evidence.id IS NULL THEN 'unanswered' ELSE prior.status END AS "previousStatus"

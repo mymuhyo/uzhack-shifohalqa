@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mobileStepsInputSchema } from '../../src/lib/adherence';
 import { mobileToday, readMobileBody } from '../../src/lib/mobile-demo';
 import type { ClinicalView } from '../../src/lib/clinical-types';
 
@@ -22,6 +23,19 @@ describe('Android demo JSON', () => {
       replies: [{ recordId: 'reviewed', taskTitle: 'Dori', date: '2026-11-19', body: reviewed.reply,
         decision: reviewed.decision, reviewedAt: reviewed.reviewedAt }],
     });
+  });
+
+  it('includes daily step progress when activity snapshot is provided and validates mobile step input', () => {
+    expect(mobileToday('Anvar aka', view, '2026-11-20', {
+      dailyStepGoal: 3000,
+      steps: { count: 3250, source: 'device_sensor', updatedAt: '2026-11-20T06:00:00.000Z' },
+    })).toMatchObject({
+      steps: { count: 3250, goal: 3000, achieved: true, source: 'device_sensor' },
+    });
+    expect(mobileStepsInputSchema.parse({ count: 1200, source: 'demo_sim' })).toEqual({
+      count: 1200, source: 'demo_sim',
+    });
+    expect(mobileStepsInputSchema.safeParse({ count: -1 }).success).toBe(false);
   });
 
   it('rejects large and non-JSON request bodies', async () => {

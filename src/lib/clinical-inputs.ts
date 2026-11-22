@@ -9,6 +9,8 @@ const optionalReading = z.union([z.literal('').transform(() => null), positiveRe
 const checked = z.literal('yes').optional().transform(value => value === 'yes');
 const id = z.uuid();
 
+const dailyStepGoalField = z.string().regex(/^\d{3,5}$/).transform(Number).pipe(z.number().int().min(100).max(50000));
+
 export const planForm = z.strictObject({
   medicationName: z.string().trim().min(1).max(80),
   medicationStrengthMg: z.string().regex(/^\d{1,6}(?:\.\d{1,3})?$/)
@@ -20,12 +22,13 @@ export const planForm = z.strictObject({
   warnSystolic: positiveReading,
   warnDiastolic: positiveReading,
   supplyFollowUp: checked,
+  dailyStepGoal: dailyStepGoalField.optional().default(3000),
 }).refine(({ medicationName, medicationStrengthMg }) => medicationStrengthMg === undefined || /\p{L}/u.test(medicationName), {
   path: ['medicationName'],
 }).refine(value => value.warnSystolic <= value.maxSystolic, { path: ['warnSystolic'] })
   .refine(value => value.warnDiastolic <= value.maxDiastolic, { path: ['warnDiastolic'] })
-  .transform(({ medicationName, medicationStrengthMg, medicationTime, vitalsTime, supplyFollowUp, ...targets }): PlanInput => ({
-    medicationName, medicationStrengthMg: medicationStrengthMg ?? null, medicationTime, vitalsTime, supplyFollowUp, targets,
+  .transform(({ medicationName, medicationStrengthMg, medicationTime, vitalsTime, supplyFollowUp, dailyStepGoal, ...targets }): PlanInput => ({
+    medicationName, medicationStrengthMg: medicationStrengthMg ?? null, medicationTime, vitalsTime, supplyFollowUp, dailyStepGoal, targets,
   }));
 
 type EvidenceCommand = { taskId: string; payload: EvidencePayload };

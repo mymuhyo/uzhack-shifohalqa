@@ -21,6 +21,7 @@ export type PlanInput = {
   vitalsTime: string;
   targets: BloodPressureTargets;
   supplyFollowUp: boolean;
+  dailyStepGoal?: number;
 };
 
 export type MissedReason = 'out_of_supply' | 'side_effects' | 'forgot' | 'other';

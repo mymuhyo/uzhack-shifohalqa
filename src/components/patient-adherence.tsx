@@ -1,5 +1,5 @@
 import { getActivityDashboard } from '@/lib/activity-store';
-import { maximumDailySteps, type AdherenceCounts } from '@/lib/adherence';
+import { defaultDailyStepGoal, maximumDailySteps, type AdherenceCounts, type StepSource } from '@/lib/adherence';
 import type { ActivityDashboardData } from '@/lib/clinical-brief';
 import type { ClinicalActor } from '@/lib/clinical-types';
 import styles from './patient-adherence.module.css';
@@ -8,6 +8,11 @@ const numberFormat = new Intl.NumberFormat('uz-Latn-UZ');
 const timestampFormat = new Intl.DateTimeFormat('uz-Latn-UZ', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tashkent',
 });
+const stepSourceLabels: Record<StepSource, string> = {
+  device_sensor: 'Telefon sensori (auto-sync)',
+  demo_sim: 'Demo simulyatsiya (Android)',
+  self_report: 'Qo‘lda kiritildi',
+};
 
 function AdherenceSummary({ counts, period }: { counts: AdherenceCounts; period: 'today' | 'week' }) {
   const headingId = `adherence-${period}`;
@@ -61,15 +66,21 @@ export async function PatientAdherence({ actor }: { actor: ClinicalActor }) {
       </section>
       <section>
         <h2 id="daily-steps-title">Bugungi qadamlar</h2>
+        <p>Shifokor belgilagan kunlik maqsad: {numberFormat.format(dashboard.dailyStepGoal ?? defaultDailyStepGoal)} qadam.</p>
         {steps ? (
           <div className={styles.stepRecord}>
-            <p className={styles.completion}>{numberFormat.format(steps.count)} qadam</p>
+            <p className={styles.completion}>
+              {numberFormat.format(steps.count)} / {numberFormat.format(dashboard.dailyStepGoal ?? defaultDailyStepGoal)} qadam{' '}
+              <span className={`status-pill ${steps.count >= (dashboard.dailyStepGoal ?? defaultDailyStepGoal) ? 'status-ok' : 'status-warn'}`}>
+                {steps.count >= (dashboard.dailyStepGoal ?? defaultDailyStepGoal) ? 'Maqsad bajarildi' : 'Jarayonda'}
+              </span>
+            </p>
             <p>
-              Qo‘lda kiritildi · L{steps.level} · AI rejimi {steps.aiMode}
+              {stepSourceLabels[steps.source]} · L{steps.level} · AI rejimi {steps.aiMode}
             </p>
             <p><time dateTime={steps.updatedAt}>{timestampFormat.format(new Date(steps.updatedAt))}</time> · Toshkent</p>
           </div>
-        ) : <p>Bugun qadamlar hali kiritilmagan.</p>}
+        ) : <p>Bugun qadamlar hali kiritilmagan (Android ilovasidan avtomatik sinxronlanadi yoki qo‘lda kiriting).</p>}
         <form className={styles.stepsForm} action="/api/demo/steps" method="post" aria-labelledby="daily-steps-title">
           <label htmlFor="daily-steps">Qadamlar soni</label>
           <input
@@ -109,15 +120,31 @@ export async function DoctorAdherence({
       <section>
         <h2>Reja ijrosi</h2>
         <AdherenceSummary counts={dashboard.adherence.week} period="week" />
-        {dashboard.steps && (
-          <div className={styles.stepRecord}>
-            <p className={styles.completion}>{numberFormat.format(dashboard.steps.count)} qadam (bugun)</p>
-            <p>
-              Qo‘lda kiritildi · L{dashboard.steps.level} ·{' '}
-              <time dateTime={dashboard.steps.updatedAt}>{timestampFormat.format(new Date(dashboard.steps.updatedAt))}</time> · Toshkent
-            </p>
-          </div>
-        )}
+        {(() => {
+          const stepGoal = dashboard.dailyStepGoal ?? defaultDailyStepGoal;
+          if (!dashboard.steps) {
+            return (
+              <div className={styles.stepRecord}>
+                <p>Bugungi qadamlar: hali sinxronlanmagan (kunlik maqsad: {numberFormat.format(stepGoal)} qadam).</p>
+              </div>
+            );
+          }
+          const achieved = dashboard.steps.count >= stepGoal;
+          return (
+            <div className={styles.stepRecord}>
+              <p className={styles.completion}>
+                {numberFormat.format(dashboard.steps.count)} / {numberFormat.format(stepGoal)} qadam (bugun){' '}
+                <span className={`status-pill ${achieved ? 'status-ok' : 'status-warn'}`}>
+                  {achieved ? 'Maqsad bajarildi' : 'Maqsadga yetmagan'}
+                </span>
+              </p>
+              <p>
+                {stepSourceLabels[dashboard.steps.source]} · L{dashboard.steps.level} ·{' '}
+                <time dateTime={dashboard.steps.updatedAt}>{timestampFormat.format(new Date(dashboard.steps.updatedAt))}</time> · Toshkent
+              </p>
+            </div>
+          );
+        })()}
         {dashboard.dueUnits.length > 0 && (
           <details>
             <summary>Hisobga kirgan vazifalar</summary>

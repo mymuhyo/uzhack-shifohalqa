@@ -35,8 +35,9 @@ class OfflineTelegramSession(BaseSession):
         assert method.text == "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
         assert method.reply_markup is not None
         buttons = method.reply_markup.inline_keyboard
-        assert len(buttons) == 1 and len(buttons[0]) == 1
-        assert buttons[0][0].url == "https://shifohalqa.example.test/"
+        assert len(buttons) == 2 and all(len(row) == 1 for row in buttons)
+        assert buttons[0][0].web_app.url == "https://shifohalqa.example.test/tg?focus=doctor"
+        assert buttons[1][0].url == "https://shifohalqa.example.test/"
         if method.chat_id not in self.retry_at:
             self.retry_at[method.chat_id] = monotonic() + 2
             raise TelegramRetryAfter(method=method, message="synthetic flood control", retry_after=2)

@@ -1,15 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { exerciseCatalog } from '@/lib/pose/diagnostics';
 import type { PoseMovement } from '@/lib/pose/engine';
 import styles from './doctor-clinical.module.css';
+
+const subscribe = () => () => {};
+const isClient = () => true;
+const isServer = () => false;
 
 /**
  * Client-side exercise assignment form that keeps target angle bounds
  * and default targets synchronized with the selected movement.
  */
 export function DoctorExercisePlanForm() {
+  const canSelectMovement = useSyncExternalStore(subscribe, isClient, isServer);
   const [movement, setMovement] = useState<PoseMovement>('chair_stand');
   const [targetAngle, setTargetAngle] = useState<string>(
     String(exerciseCatalog.chair_stand.defaultTargetAngle),
@@ -25,6 +30,7 @@ export function DoctorExercisePlanForm() {
           <select
             name="movement"
             value={movement}
+            disabled={!canSelectMovement}
             onChange={(event) => {
               const nextMovement = event.currentTarget.value as PoseMovement;
               setMovement(nextMovement);

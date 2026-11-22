@@ -132,6 +132,7 @@ test('Android saves a confirmed local video summary and restricts cloud analysis
 test('assigns a new movement and stores diagnostics without changing the paired exercise contract', async ({ page }) => {
   await enter(page, 'doctor');
   await page.getByLabel('Mashq turi').selectOption('shoulder_raise');
+  await expect(page.getByLabel('Maqsad burchagi')).toHaveValue('90');
   await page.getByRole('button', { name: 'Mashqni biriktirish' }).click();
   await expect(page.getByText(/Reja: 5 takror/)).toBeVisible();
   const origin = new URL(page.url()).origin;

@@ -57,19 +57,29 @@
 .submit {
   inline-size: 100%;
   padding: 0.6rem 1rem;
+  border-radius: var(--radius-md);
   background: var(--action);
   color: var(--on-action);
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 160ms ease, transform 140ms var(--ease-out);
 }
 
-.submit:hover {
-  background: var(--action-hover);
+.submit:active {
+  transform: scale(0.985);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .submit:hover {
+    background: var(--action-hover);
+  }
 }
 
 .disclosure summary {
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
   font-weight: 600;
   cursor: pointer;
 }
@@ -126,9 +136,11 @@
 }
 
 .record {
-  padding: 0.75rem 1rem;
-  border-inline-start: 3px solid var(--line);
-  background: var(--panel);
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--action);
+  border-radius: var(--radius-md);
+  background: var(--card);
 }
 
 .record .recordTitle {

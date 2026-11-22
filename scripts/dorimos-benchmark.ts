@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { compareMedicationBox, readMedicationBox } from '../src/lib/ai/dorimos';
+import { compareMedicationBox, isMedicationBoxAiConfigured, readMedicationBox } from '../src/lib/ai/dorimos';
 import { dorimosPracticePrescription, dorimosSamples } from '../src/lib/dorimos-samples';
 
-if (!process.env.GEMINI_API_KEY?.trim()) throw new Error('Set GEMINI_API_KEY for the live DoriMos benchmark.');
+if (!isMedicationBoxAiConfigured()) throw new Error('Configure Cloudflare or Gemini Decisions + OpenRouter for the live DoriMos benchmark.');
 
 for (const sample of Object.values(dorimosSamples)) {
   const image = await readFile(join(process.cwd(), 'public', sample.imagePath));

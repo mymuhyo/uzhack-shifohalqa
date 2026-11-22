@@ -26,6 +26,7 @@ export default function Home() {
       ) : (
         <p className="notice">Demo kirishi hozir mavjud emas.</p>
       )}
+      {demoEnabled && <Link className="text-action" href="/tg">Telegram Mini App ko‘rinishi</Link>}
     </main>
   );
 }

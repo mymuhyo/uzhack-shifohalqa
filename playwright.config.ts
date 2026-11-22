@@ -30,7 +30,7 @@ export default defineConfig({
       DATABASE_URL: databaseUrl,
       DEMO_MODE: 'true',
       DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
-      ...(useLiveOcr ? {} : { GEMINI_API_KEY: '' }),
+      ...(useLiveOcr ? {} : { GEMINI_API_KEY: '', CLOUDFLARE_ACCOUNT_ID: '', CLOUDFLARE_API_TOKEN: '' }),
       ...(useLiveOcr || useExerciseOpenRouter ? {} : { OPENROUTER_API_KEY: '' }),
       EXERCISE_OPENROUTER_DEMO: String(useExerciseOpenRouter),
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',

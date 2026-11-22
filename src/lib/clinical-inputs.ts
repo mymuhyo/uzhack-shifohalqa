@@ -54,6 +54,62 @@ export const reviewForm = z.strictObject({
   note: z.string().trim().max(500).optional().default(''),
 });
 
+export const followupForm = z.union([
+  z.strictObject({
+    flagId: id,
+    kind: z.enum(['supply_resolved', 'still_need_help']),
+  }).transform(({ flagId, kind }) => ({
+    flagId,
+    kind,
+    payload: {} as Record<string, unknown>,
+  })),
+  z.strictObject({
+    flagId: id,
+    kind: z.literal('retake_vitals'),
+    systolic: positiveReading,
+    diastolic: positiveReading,
+    chestPain: checked,
+  }).transform(({ flagId, kind, systolic, diastolic, chestPain }) => ({
+    flagId,
+    kind,
+    payload: { systolic, diastolic, chestPain } as Record<string, unknown>,
+  })),
+  z.strictObject({
+    flagId: id,
+    kind: z.literal('retake_medication'),
+    medicationStatus: z.enum(['taken', 'missed']),
+  }).transform(({ flagId, kind, medicationStatus }) => ({
+    flagId,
+    kind,
+    payload: { status: medicationStatus } as Record<string, unknown>,
+  })),
+]);
+
+export type FollowupInput = z.infer<typeof followupForm>;
+
+export const followupAckForm = z.strictObject({
+  followupId: id,
+  note: z.string().trim().max(500).optional().default(''),
+});
+
+export type FollowupAckInput = z.infer<typeof followupAckForm>;
+
+export const urgentSymptomForm = z.strictObject({
+  symptom: z.enum(['chest_pain', 'dizziness', 'shortness_of_breath', 'severe_headache']),
+  note: z.string().trim().max(300).optional().default(''),
+});
+
+export type UrgentSymptomInput = z.infer<typeof urgentSymptomForm>;
+
+export const symptomReviewForm = z.strictObject({
+  symptomId: id,
+  decision: z.enum(['approved', 'retake']),
+  reply: z.string().trim().min(1).max(500),
+  note: z.string().trim().max(500).optional().default(''),
+});
+
+export type SymptomReviewInput = z.infer<typeof symptomReviewForm>;
+
 function asEvidenceFlag(rule: RuleFlag | null): EvidenceFlag | null {
   if (!rule) return null;
   const { rule_key: ruleKey, ...details } = rule;

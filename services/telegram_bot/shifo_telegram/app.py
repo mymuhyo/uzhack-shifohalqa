@@ -13,7 +13,7 @@ from aiogram.exceptions import (
 )
 from aiogram.filters import Filter
 from aiogram.methods import SendMessage
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update, WebAppInfo
 from aiogram.utils.serialization import deserialize_telegram_object_to_python
 from aiohttp import web
 from pydantic import ValidationError
@@ -26,11 +26,13 @@ WEBHOOK_PATH = "/api/telegram/webhook"
 WEBHOOK_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token"
 MAX_WEBHOOK_BYTES = 32 * 1024
 NO_STORE = {"Cache-Control": "no-store"}
-COMMAND = re.compile(r"/(start|bugun|help|stop)(?:@([A-Za-z0-9_]+))?(?:[ \t]+(\S+))?")
+COMMAND = re.compile(r"/(start|bugun|ilova|mashq|help|stop)(?:@([A-Za-z0-9_]+))?(?:[ \t]+(\S+))?")
 
 INVALID_PAIR = "Ulash kodi yaroqsiz. Shifokor sahifasidan yangi ulash havolasini oling."
 TODAY = "Bugungi vazifalarni ShifoHalqada oching."
-HELP = "Ilovani ochish uchun /bugun, xabarlarni to‘xtatish uchun /stop buyrug‘ini yuboring."
+MINI_APP = "ShifoHalqani Telegram Mini App ichida yoki brauzerda oching."
+EXERCISE_APP = "Mashq tahlilini Telegram Mini App yoki brauzerda oching."
+HELP = "Ilovani ochish uchun /bugun yoki /ilova, mashq uchun /mashq, xabarlarni to‘xtatish uchun /stop buyrug‘ini yuboring."
 RED_NOTICE = "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,16 @@ def _message(chat_id: int, text: str, app_url: str | None = None) -> SendMessage
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="ShifoHalqani ochish", url=app_url)]]
         )
+    return SendMessage(chat_id=chat_id, text=text, reply_markup=keyboard)
+
+
+def _mini_app_message(chat_id: int, text: str, web_app_label: str, web_app_url: str, fallback_url: str) -> SendMessage:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=web_app_label, web_app=WebAppInfo(url=web_app_url))],
+            [InlineKeyboardButton(text="Brauzerda ochish", url=fallback_url)],
+        ]
+    )
     return SendMessage(chat_id=chat_id, text=text, reply_markup=keyboard)
 
 
@@ -87,6 +99,23 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
         if command == "stop":
             stopped = await store.disconnect_chat(chat_id, sent_at=sent_at, update_id=event_update.update_id)
             return _message(chat_id, "Telegram xabarlari o‘chirildi.") if stopped else None
+        if command == "ilova":
+            return _mini_app_message(
+                chat_id,
+                MINI_APP,
+                "ShifoHalqa Mini App",
+                f"{config.app_url}tg",
+                config.app_url,
+            )
+        if command == "mashq":
+            exercise_url = f"{config.app_url}demo/mashq"
+            return _mini_app_message(
+                chat_id,
+                EXERCISE_APP,
+                "Mashq tahlilini ochish",
+                exercise_url,
+                exercise_url,
+            )
         return _message(chat_id, HELP if command == "help" else TODAY, config.app_url)
 
     dispatcher = Dispatcher()

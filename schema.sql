@@ -309,3 +309,73 @@ CREATE OR REPLACE TRIGGER telegram_queue_on_red_flag
   AFTER INSERT ON shifohalqa.flags
   FOR EACH ROW WHEN (NEW.color = 'red')
   EXECUTE FUNCTION shifohalqa.queue_telegram_red_flag();
+
+CREATE TABLE IF NOT EXISTS shifohalqa.flag_followups (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  flag_id uuid NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('supply_resolved', 'still_need_help', 'retake_vitals', 'retake_medication')),
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id, flag_id)
+    REFERENCES shifohalqa.flags (workspace_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS flag_followups_flag_idx
+  ON shifohalqa.flag_followups (workspace_id, flag_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS flag_followups_completion_idx
+  ON shifohalqa.flag_followups (workspace_id, flag_id, kind)
+  WHERE kind = 'supply_resolved' OR (kind = 'retake_medication' AND payload->>'status' = 'taken');
+
+ALTER TABLE shifohalqa.flag_followups
+  ADD COLUMN IF NOT EXISTS acknowledged_at timestamptz,
+  ADD COLUMN IF NOT EXISTS acknowledged_note text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'shifohalqa.flag_followups'::regclass
+      AND conname = 'flag_followups_ack_consistency_check'
+  ) THEN
+    ALTER TABLE shifohalqa.flag_followups
+      ADD CONSTRAINT flag_followups_ack_consistency_check CHECK (
+        (acknowledged_at IS NULL AND acknowledged_note IS NULL)
+        OR (acknowledged_at IS NOT NULL AND acknowledged_note IS NOT NULL)
+      );
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS shifohalqa.urgent_symptoms (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  symptom text NOT NULL CHECK (symptom IN ('chest_pain', 'dizziness', 'shortness_of_breath', 'severe_headache')),
+  note text NOT NULL DEFAULT '',
+  level smallint NOT NULL DEFAULT 0 CHECK (level IN (0, 4)),
+  review_decision text CHECK (review_decision IN ('approved', 'retake')),
+  patient_reply text,
+  doctor_note text,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id, patient_id)
+    REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE,
+  CHECK ((review_decision IS NULL AND patient_reply IS NULL AND doctor_note IS NULL AND reviewed_at IS NULL)
+      OR (review_decision IS NOT NULL AND patient_reply IS NOT NULL AND doctor_note IS NOT NULL AND reviewed_at IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS urgent_symptoms_patient_idx
+  ON shifohalqa.urgent_symptoms (workspace_id, patient_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS shifohalqa.caregiver_acks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  patient_id uuid NOT NULL,
+  activity_date date NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date),
+  kind text NOT NULL CHECK (kind IN ('supply_on_the_way', 'checked_in')),
+  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (workspace_id, patient_id, activity_date),
+  FOREIGN KEY (workspace_id, patient_id)
+    REFERENCES shifohalqa.patients (workspace_id, id) ON DELETE CASCADE
+);

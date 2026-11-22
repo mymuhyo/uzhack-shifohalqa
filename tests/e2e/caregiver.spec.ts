@@ -97,6 +97,17 @@ test('a patient shares only the current daily aggregate and can rotate, revoke a
     expect(expired?.matched).toBe(1);
     await caregiver.goto(expiringLink);
     await expect(caregiver.getByText(/Havola faol emas/)).toBeVisible();
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Ulashishni yoqish' }).click();
+    const ackLink = await shareLink.inputValue();
+    await caregiver.goto(ackLink);
+    await expect(caregiver.getByText('Oila yordami kerak', { exact: true })).toBeVisible();
+    await expect(caregiver.getByRole('main')).not.toContainText(/Anvar|Sardor|123|Dori tugadi|Namuna dori|diastolik/i);
+    await caregiver.getByRole('button', { name: 'Xabar oldim — yordam beramiz' }).click();
+    await expect(caregiver.getByText(/Tasdiq yuborildi/)).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(/Yaqiningiz xabaringizni ko‘rdi/)).toBeVisible();
   } finally {
     await guest.close();
   }

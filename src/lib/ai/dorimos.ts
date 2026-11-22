@@ -10,11 +10,13 @@ import {
   type MedicationBoxReading,
 } from './medication-box';
 import { requestOpenRouterCompletion } from './openrouter';
+import { readCloudflareBox } from './dorimos-cloudflare';
 
 export { compareMedicationBox, medicationBoxLabelSchema, medicationBoxReadingSchema } from './medication-box';
 export type { MedicationBoxLabel, MedicationBoxReading } from './medication-box';
 
 const requestDeadlineMs = 18_000;
+const cloudflareWindowMs = 10_000;
 const primaryWindowMs = 5_000;
 const defaultOcrModel = 'nvidia/nemotron-3.5-super-vl:free';
 const defaultFallbackOcrModel = 'google/gemma-4-26b-a4b-it:free';
@@ -157,21 +159,44 @@ async function extractBoxLabel(
   }
 }
 
+function cloudflareCredentials() {
+  if (process.env.DORIMOS_PROVIDER?.trim().toLowerCase() === 'gemini') return null;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  return accountId && apiToken ? { accountId, apiToken } : null;
+}
+
 export function isMedicationBoxAiConfigured() {
-  return Boolean(process.env.GEMINI_API_KEY?.trim() && process.env.OPENROUTER_API_KEY?.trim());
+  return Boolean(cloudflareCredentials() || (process.env.GEMINI_API_KEY?.trim() && process.env.OPENROUTER_API_KEY?.trim()));
 }
 
 /** For server-owned synthetic fixtures. The caller owns access checks, confirmation and storage. */
 export async function readMedicationBox(input: BoxImageInput): Promise<MedicationBoxReading> {
-  const { image, mimeType, expected } = boxImageInput.parse(input);
+  const parsed = boxImageInput.parse(input);
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!geminiKey || !openRouterKey) return { status: 'manual', reason: 'missing_key' };
+  const cloudflare = cloudflareCredentials();
+  const signal = AbortSignal.timeout(requestDeadlineMs);
 
+  if (cloudflare) {
+    const canFallback = Boolean(geminiKey && openRouterKey);
+    const cloudflareSignal = canFallback ? AbortSignal.any([signal, AbortSignal.timeout(cloudflareWindowMs)]) : signal;
+    const reading = await readCloudflareBox(cloudflare.accountId, cloudflare.apiToken, parsed.image, parsed.mimeType, parsed.expected, cloudflareSignal);
+    if (reading.status !== 'manual' || !canFallback || signal.aborted) return reading;
+  }
+  if (!geminiKey || !openRouterKey) return { status: 'manual', reason: 'missing_key' };
+  return readGeminiOpenRouterBox(parsed, geminiKey, openRouterKey, signal);
+}
+
+async function readGeminiOpenRouterBox(
+  { image, mimeType, expected }: BoxImageInput,
+  geminiKey: string,
+  openRouterKey: string,
+  signal: AbortSignal,
+): Promise<MedicationBoxReading> {
   const primaryModel = process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
   const fallbackModel = process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
   const decisionModel = process.env.GEMINI_DECISION_MODEL?.trim() || 'gemini-decision-1';
-  const signal = AbortSignal.timeout(requestDeadlineMs);
   const imageBlock: ImageBlock = { type: 'image', data: Buffer.from(image).toString('base64'), mime_type: mimeType };
 
   let gates: BoxGates | undefined;

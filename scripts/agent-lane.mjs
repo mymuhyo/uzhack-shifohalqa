@@ -10,7 +10,7 @@ const lanes = {
   codex: { host: 'codex.localhost', dev: 3030, webTest: 3040, telegramTest: 3041, emulator: 5580 },
   antigravity: { host: 'antigravity.localhost', dev: 3130, webTest: 3140, telegramTest: 3141, emulator: 5582 },
 };
-const managedEnv = /^(?:DATABASE_URL(?:_UNPOOLED)?$|SHIFO_|DEMO_|SESSION_SECRET$|NEXT_PUBLIC_APP_URL$|PORT$|PG[A-Z_]|NEON_|GEMINI_|OPENROUTER_|EXERCISE_|TELEGRAM_|UV_PROJECT_ENVIRONMENT$|ANDROID_SERIAL$|ANDROID_AVD_HOME$|ANDROID_ADB_SERVER_PORT$|ADB_SERVER_SOCKET$)/;
+const managedEnv = /^(?:DATABASE_URL(?:_UNPOOLED)?$|SHIFO_|DEMO_|SESSION_SECRET$|NEXT_PUBLIC_APP_URL$|PORT$|PG[A-Z_]|NEON_|GEMINI_|CLOUDFLARE_|DORIMOS_PROVIDER$|OPENROUTER_|EXERCISE_|TELEGRAM_|UV_PROJECT_ENVIRONMENT$|ANDROID_SERIAL$|ANDROID_AVD_HOME$|ANDROID_ADB_SERVER_PORT$|ADB_SERVER_SOCKET$)/;
 
 function launch(command, args, { cwd = root, env, capture = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -68,6 +68,8 @@ async function main() {
     NEXT_TELEMETRY_DISABLED: '1',
     DATABASE_URL: '',
     GEMINI_API_KEY: '',
+    CLOUDFLARE_ACCOUNT_ID: '',
+    CLOUDFLARE_API_TOKEN: '',
     OPENROUTER_API_KEY: '',
     EXERCISE_OPENROUTER_DEMO: 'false',
     TELEGRAM_DATABASE_URL: '',
@@ -87,8 +89,11 @@ async function main() {
     verifyDatabase(local, laneConfig.SHIFO_NEON_HOST, 'SHIFO_E2E_DATABASE_URL_UNPOOLED', 'shifo_e2e', false);
   };
 
+  const cloudflareConfigured = local.DORIMOS_PROVIDER?.trim().toLowerCase() !== 'gemini' &&
+    Boolean(local.CLOUDFLARE_ACCOUNT_ID && local.CLOUDFLARE_API_TOKEN);
   const runLive = async ([command, ...commandArgs]) => {
-    for (const key of ['GEMINI_API_KEY', 'GEMINI_DECISION_MODEL', 'OPENROUTER_API_KEY', 'OPENROUTER_OCR_MODEL',
+    for (const key of ['DORIMOS_PROVIDER', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN',
+      'CLOUDFLARE_DECISION_MODEL', 'CLOUDFLARE_EXTRACTION_MODEL', 'GEMINI_API_KEY', 'GEMINI_DECISION_MODEL', 'OPENROUTER_API_KEY', 'OPENROUTER_OCR_MODEL',
       'OPENROUTER_OCR_FALLBACK_MODEL', 'EXERCISE_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL']) {
       if (local[key] !== undefined) env[key] = local[key];
     }
@@ -106,7 +111,7 @@ async function main() {
     case 'check':
       checkDevDb();
       checkTestDb();
-      console.log(`${name} · ${branch}\nWeb ${url} · tests ${config.webTest} · Telegram mock ${config.telegramTest}\nNeon ${laneConfig.SHIFO_NEON_HOST} · neondb / shifo_e2e\nAndroid ${avd} · ${serial}\nLive API keys: ${[local.GEMINI_API_KEY && 'Gemini', local.OPENROUTER_API_KEY && 'OpenRouter'].filter(Boolean).join(', ') || 'none'}`);
+      console.log(`${name} · ${branch}\nWeb ${url} · tests ${config.webTest} · Telegram mock ${config.telegramTest}\nNeon ${laneConfig.SHIFO_NEON_HOST} · neondb / shifo_e2e\nAndroid ${avd} · ${serial}\nLive API keys: ${[cloudflareConfigured && 'Cloudflare', local.GEMINI_API_KEY && 'Gemini', local.OPENROUTER_API_KEY && 'OpenRouter'].filter(Boolean).join(', ') || 'none'}`);
       break;
     case 'dev': {
       checkDevDb();
@@ -115,7 +120,7 @@ async function main() {
       const command = ['npm', 'run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(config.dev)];
       console.log(url);
       if (args[0] === '--live') {
-        if (!local.GEMINI_API_KEY && !local.OPENROUTER_API_KEY) throw new Error('Add this lane’s own API key to .env.local');
+        if (!cloudflareConfigured && !local.GEMINI_API_KEY && !local.OPENROUTER_API_KEY) throw new Error('Add this lane’s own API key to .env.local');
         await runLive(command);
       } else {
         await launch(command[0], command.slice(1), { env });
@@ -136,7 +141,8 @@ async function main() {
       const liveOcr = action === 'e2e' && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
       const liveExercise = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
       if (liveOcr || liveExercise) {
-        if (!local.OPENROUTER_API_KEY || (liveOcr && !local.GEMINI_API_KEY)) {
+        if ((liveExercise && !local.OPENROUTER_API_KEY) ||
+          (liveOcr && !cloudflareConfigured && !(local.GEMINI_API_KEY && local.OPENROUTER_API_KEY))) {
           throw new Error('Add the required lane-specific API keys to .env.local');
         }
         if (liveOcr) env.SHIFO_E2E_LIVE_DORIMOS = '1';

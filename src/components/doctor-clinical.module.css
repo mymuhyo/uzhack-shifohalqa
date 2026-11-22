@@ -38,6 +38,7 @@
 .thresholds legend { font-weight: 600; }
 
 .field input,
+.field select,
 .field textarea {
   box-sizing: border-box;
   inline-size: 100%;
@@ -104,8 +105,24 @@
 .queue { margin-block-start: 0.75rem; }
 
 .queueItem {
-  padding-block: 1rem;
-  border-block-end: 1px solid var(--line);
+  padding: 1rem 1rem 1rem 1.05rem;
+  margin-block-end: 0.75rem;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.urgentItem {
+  border-inline-start-color: var(--urgent);
+}
+
+.warnItem {
+  border-inline-start-color: var(--followup-tone);
+}
+
+.reviewedItem {
+  border-inline-start-color: var(--ok);
 }
 
 .queueMeta {

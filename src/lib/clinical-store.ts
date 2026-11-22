@@ -4,11 +4,13 @@ import type {
   ClinicalView,
   EvidenceView,
   EvidenceWrite,
+  FlagFollowup,
   MutationResult,
   PlanInput,
   ReviewInput,
   TaskContext,
 } from './clinical-types';
+import type { FollowupAckInput, FollowupInput, SymptomReviewInput, UrgentSymptomInput } from './clinical-inputs';
 import { getDatabase } from './db';
 import { medicationBoxEvidenceSchema } from './dorimos-contract';
 
@@ -71,6 +73,28 @@ const contextFields = planFields.extend({
 });
 
 const mutationRow = z.object({ result: z.enum(['saved', 'already_saved', 'not_found']) });
+const followupRow = z.object({
+  id: z.uuid(),
+  flagId: z.uuid(),
+  kind: z.enum(['supply_resolved', 'still_need_help', 'retake_vitals', 'retake_medication']),
+  payload: z.record(z.string(), z.unknown()),
+  createdAt: z.iso.datetime(),
+  acknowledgedAt: z.iso.datetime().nullable(),
+});
+const symptomRow = z.object({
+  id: z.uuid(),
+  symptom: z.enum(['chest_pain', 'dizziness', 'shortness_of_breath', 'severe_headache']),
+  note: z.string(),
+  level: z.union([z.literal(0), z.literal(4)]),
+  createdAt: z.iso.datetime(),
+  decision: decision.nullable(),
+  reply: z.string().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+});
+const ackRow = z.object({
+  kind: z.enum(['supply_on_the_way', 'checked_in']),
+  createdAt: z.iso.datetime(),
+});
 const flagPriority = { red: 0, yellow: 1 };
 
 function requireDatabase() {
@@ -112,7 +136,7 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
 
 export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalView> {
   const sql = requireDatabase();
-  const [plans, , taskRows] = await sql.transaction((tx) => [
+  const [plans, , taskRows, followupRows, symptomRows, ackRows] = await sql.transaction((tx) => [
     tx`
       SELECT medicine.title AS "medicationName", medicine.box_strength_mg::float8 AS "medicationStrengthMg",
              left(medicine.due_time::text, 5) AS "medicationTime",
@@ -158,13 +182,114 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
           OR (task.scheduled_date < local_date.today AND evidence.id IS NOT NULL
             AND (task.scheduled_date >= local_date.today - 6
               OR (flag.reviewed_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
-              OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND flag.decision IS NULL))))
+              OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND flag.decision IS NULL)
+              OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM shifohalqa.flag_followups AS open_fu
+                WHERE open_fu.workspace_id = flag.workspace_id
+                  AND open_fu.flag_id = flag.id
+                  AND open_fu.acknowledged_at IS NULL
+                  AND (
+                    (open_fu.kind = 'still_need_help' AND NOT EXISTS (
+                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      WHERE newer_fu.workspace_id = open_fu.workspace_id
+                        AND newer_fu.flag_id = open_fu.flag_id
+                        AND newer_fu.kind IN ('still_need_help', 'supply_resolved')
+                        AND (newer_fu.created_at > open_fu.created_at
+                          OR (newer_fu.created_at = open_fu.created_at AND newer_fu.id > open_fu.id))
+                    ))
+                    OR (open_fu.kind = 'retake_medication' AND open_fu.payload->>'status' = 'missed' AND NOT EXISTS (
+                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      WHERE newer_fu.workspace_id = open_fu.workspace_id
+                        AND newer_fu.flag_id = open_fu.flag_id
+                        AND newer_fu.kind = 'retake_medication'
+                        AND (newer_fu.created_at > open_fu.created_at
+                          OR (newer_fu.created_at = open_fu.created_at AND newer_fu.id > open_fu.id))
+                    ))
+                    OR (open_fu.kind = 'retake_vitals' AND (
+                        open_fu.payload->'chestPain' = 'true'::jsonb
+                        OR (CASE WHEN (open_fu.payload->>'systolic') ~ '^[0-9]{1,3}$'
+                            THEN (open_fu.payload->>'systolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnSystolic')::int
+                        OR (CASE WHEN (open_fu.payload->>'diastolic') ~ '^[0-9]{1,3}$'
+                            THEN (open_fu.payload->>'diastolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnDiastolic')::int
+                      ) AND NOT EXISTS (
+                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      WHERE newer_fu.workspace_id = open_fu.workspace_id
+                        AND newer_fu.flag_id = open_fu.flag_id
+                        AND newer_fu.kind = 'retake_vitals'
+                        AND (newer_fu.created_at > open_fu.created_at
+                          OR (newer_fu.created_at = open_fu.created_at AND newer_fu.id > open_fu.id))
+                    ))
+                  )
+              ))
+              OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM shifohalqa.flag_followups AS recent_ack
+                WHERE recent_ack.workspace_id = flag.workspace_id
+                  AND recent_ack.flag_id = flag.id
+                  AND (recent_ack.acknowledged_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
+              )))))
       ORDER BY task.scheduled_date DESC, item.due_time, item.type
+    `,
+    tx`
+      SELECT followup.id, followup.flag_id AS "flagId", followup.kind, followup.payload,
+             to_char(followup.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
+             to_char(followup.acknowledged_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "acknowledgedAt"
+      FROM shifohalqa.flag_followups AS followup
+      JOIN shifohalqa.flags AS flag ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
+      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      WHERE followup.workspace_id = ${actor.workspaceId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+      ORDER BY followup.created_at ASC, followup.id ASC
+    `,
+    tx`
+      SELECT symptom.id, symptom.symptom, symptom.note, symptom.level,
+             to_char(symptom.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
+             symptom.review_decision AS decision, symptom.patient_reply AS reply,
+             to_char(symptom.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "reviewedAt"
+      FROM shifohalqa.urgent_symptoms AS symptom
+      JOIN shifohalqa.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
+      WHERE symptom.workspace_id = ${actor.workspaceId}
+        AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
+        AND ((symptom.created_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)
+          OR (${actor.role === 'doctor'} AND symptom.review_decision IS NULL))
+      ORDER BY symptom.created_at DESC
+    `,
+    tx`
+      SELECT ack.kind,
+             to_char(ack.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"
+      FROM shifohalqa.caregiver_acks AS ack
+      JOIN shifohalqa.patients AS patient ON patient.workspace_id = ack.workspace_id AND patient.id = ack.patient_id
+      WHERE ack.workspace_id = ${actor.workspaceId}
+        AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
+        AND ack.activity_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
     `,
   ], { isolationLevel: 'ReadCommitted' });
 
-  if (!plans[0]) return { plan: null, tasks: [], flags: [] };
-  const view: ClinicalView = { plan: planFields.parse(plans[0]), tasks: [], flags: [] };
+  const urgentSymptoms = z.array(symptomRow).parse(symptomRows).map((row) => ({
+    id: row.id,
+    symptom: row.symptom,
+    note: row.note,
+    level: row.level,
+    createdAt: row.createdAt,
+    review: row.decision && row.reply && row.reviewedAt
+      ? { decision: row.decision, reply: row.reply, reviewedAt: row.reviewedAt }
+      : null,
+  }));
+  const caregiverAck = ackRows[0] ? ackRow.parse(ackRows[0]) : null;
+
+  if (!plans[0]) return { plan: null, tasks: [], flags: [], urgentSymptoms, caregiverAck };
+
+  const followupsByFlag = new Map<string, FlagFollowup[]>();
+  for (const rawFollowup of followupRows) {
+    const parsed = followupRow.parse(rawFollowup);
+    const list = followupsByFlag.get(parsed.flagId) ?? [];
+    list.push(parsed);
+    followupsByFlag.set(parsed.flagId, list);
+  }
+
+  const view: ClinicalView = { plan: planFields.parse(plans[0]), tasks: [], flags: [], urgentSymptoms, caregiverAck };
   const visibleTasks = new Map<string, ClinicalView['tasks'][number]>();
   for (const row of taskRows) {
     const task = taskFields.parse(row);
@@ -173,6 +298,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       const { evidenceId, ...fields } = evidenceFields.parse(row);
       evidence = {
         ...fields, id: evidenceId, taskId: task.taskId,
+        ...(task.flagId ? { flagId: task.flagId, followups: followupsByFlag.get(task.flagId) ?? [] } : {}),
         review: task.decision ? resolvedFields.parse(row) : null,
       };
     }
@@ -313,6 +439,166 @@ export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Prom
       INSERT INTO shifohalqa.audit_events (workspace_id, evidence_log_id, actor_id, action, metadata)
       SELECT workspace_id, evidence_log_id, ${actor.doctorId}::uuid, 'review_flag', jsonb_build_object('decision', decision)
       FROM reviewed
+    )
+    SELECT CASE
+      WHEN EXISTS (SELECT 1 FROM reviewed) THEN 'saved'
+      WHEN EXISTS (SELECT 1 FROM scoped) THEN 'already_saved'
+      ELSE 'not_found'
+    END AS result
+  `;
+  return mutationRow.parse(row).result;
+}
+
+export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInput): Promise<MutationResult> {
+  if (actor.role !== 'patient') return 'not_found';
+  const sql = requireDatabase();
+  const [row] = await sql`
+    WITH scoped AS (
+      SELECT flag.workspace_id, flag.id, flag.decision
+      FROM shifohalqa.flags AS flag
+      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      WHERE flag.workspace_id = ${actor.workspaceId} AND flag.id = ${input.flagId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND flag.decision IS NOT NULL
+        AND (
+          (${input.kind}::text IN ('supply_resolved', 'still_need_help')
+            AND flag.decision = 'approved'
+            AND evidence.entry_kind = 'task'
+            AND evidence.payload->>'kind' = 'medication'
+            AND evidence.payload->>'status' = 'missed'
+            AND evidence.payload->>'reason' = 'out_of_supply')
+          OR (${input.kind}::text = 'retake_vitals'
+            AND flag.decision = 'retake'
+            AND evidence.entry_kind = 'task'
+            AND evidence.payload->>'kind' = 'vitals')
+          OR (${input.kind}::text = 'retake_medication'
+            AND flag.decision = 'retake'
+            AND item.type = 'medication')
+        )
+    ), inserted AS (
+      INSERT INTO shifohalqa.flag_followups (workspace_id, flag_id, kind, payload)
+      SELECT workspace_id, id, ${input.kind}::text, ${JSON.stringify(input.payload)}::jsonb
+      FROM scoped
+      WHERE NOT (${input.kind}::text IN ('supply_resolved', 'still_need_help') AND EXISTS (
+        SELECT 1 FROM shifohalqa.flag_followups AS existing
+        WHERE existing.workspace_id = scoped.workspace_id AND existing.flag_id = scoped.id
+          AND existing.kind = 'supply_resolved'
+      ))
+        AND NOT (${input.kind}::text = 'retake_medication' AND EXISTS (
+          SELECT 1 FROM shifohalqa.flag_followups AS existing
+          WHERE existing.workspace_id = scoped.workspace_id AND existing.flag_id = scoped.id
+            AND existing.kind = 'retake_medication'
+            AND existing.payload->>'status' = 'taken'
+        ))
+      ON CONFLICT DO NOTHING
+      RETURNING 1
+    )
+    SELECT CASE
+      WHEN EXISTS (SELECT 1 FROM inserted) THEN 'saved'
+      WHEN EXISTS (SELECT 1 FROM scoped) THEN 'already_saved'
+      ELSE 'not_found'
+    END AS result
+  `;
+  return mutationRow.parse(row).result;
+}
+
+export async function acknowledgeFlagFollowup(
+  actor: ClinicalActor,
+  input: FollowupAckInput,
+): Promise<MutationResult> {
+  if (actor.role !== 'doctor') return 'not_found';
+  const sql = requireDatabase();
+  const [row] = await sql`
+    WITH scoped AS (
+      SELECT followup.workspace_id, followup.id
+      FROM shifohalqa.flag_followups AS followup
+      JOIN shifohalqa.flags AS flag
+        ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
+      JOIN shifohalqa.evidence_logs AS evidence
+        ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN shifohalqa.task_instances AS task
+        ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN shifohalqa.plan_items AS item
+        ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN shifohalqa.plans AS plan
+        ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      WHERE followup.workspace_id = ${actor.workspaceId} AND followup.id = ${input.followupId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND (
+          followup.kind = 'still_need_help'
+          OR (followup.kind = 'retake_medication' AND followup.payload->>'status' = 'missed')
+          OR (followup.kind = 'retake_vitals' AND (
+            followup.payload->'chestPain' = 'true'::jsonb
+            OR (CASE WHEN (followup.payload->>'systolic') ~ '^[0-9]{1,3}$'
+                THEN (followup.payload->>'systolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnSystolic')::int
+            OR (CASE WHEN (followup.payload->>'diastolic') ~ '^[0-9]{1,3}$'
+                THEN (followup.payload->>'diastolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnDiastolic')::int
+          ))
+        )
+    ), updated AS (
+      UPDATE shifohalqa.flag_followups AS followup
+      SET acknowledged_at = CURRENT_TIMESTAMP,
+          acknowledged_note = ${input.note}
+      FROM scoped
+      WHERE followup.workspace_id = scoped.workspace_id
+        AND followup.id = scoped.id
+        AND followup.acknowledged_at IS NULL
+      RETURNING 1
+    )
+    SELECT CASE
+      WHEN EXISTS (SELECT 1 FROM updated) THEN 'saved'
+      WHEN EXISTS (SELECT 1 FROM scoped) THEN 'already_saved'
+      ELSE 'not_found'
+    END AS result
+  `;
+  return mutationRow.parse(row).result;
+}
+
+export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSymptomInput): Promise<MutationResult> {
+  if (actor.role !== 'patient') return 'not_found';
+  const sql = requireDatabase();
+  const [row] = await sql`
+    WITH scoped AS (
+      SELECT workspace_id, id
+      FROM shifohalqa.patients
+      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
+    ), inserted AS (
+      INSERT INTO shifohalqa.urgent_symptoms (workspace_id, patient_id, symptom, note)
+      SELECT workspace_id, id, ${input.symptom}, ${input.note}
+      FROM scoped
+      RETURNING 1
+    )
+    SELECT CASE
+      WHEN EXISTS (SELECT 1 FROM inserted) THEN 'saved'
+      ELSE 'not_found'
+    END AS result
+  `;
+  return mutationRow.parse(row).result;
+}
+
+export async function reviewUrgentSymptom(actor: ClinicalActor, input: SymptomReviewInput): Promise<MutationResult> {
+  if (actor.role !== 'doctor') return 'not_found';
+  const sql = requireDatabase();
+  const [row] = await sql`
+    WITH scoped AS (
+      SELECT symptom.workspace_id, symptom.id
+      FROM shifohalqa.urgent_symptoms AS symptom
+      JOIN shifohalqa.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
+      WHERE symptom.workspace_id = ${actor.workspaceId} AND symptom.id = ${input.symptomId}
+        AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
+    ), reviewed AS (
+      UPDATE shifohalqa.urgent_symptoms AS symptom
+      SET review_decision = ${input.decision},
+          patient_reply = ${input.reply},
+          doctor_note = ${input.note},
+          reviewed_at = CURRENT_TIMESTAMP,
+          level = CASE WHEN ${input.decision} = 'approved' THEN 4 ELSE symptom.level END
+      FROM scoped
+      WHERE symptom.workspace_id = scoped.workspace_id AND symptom.id = scoped.id AND symptom.review_decision IS NULL
+      RETURNING 1
     )
     SELECT CASE
       WHEN EXISTS (SELECT 1 FROM reviewed) THEN 'saved'

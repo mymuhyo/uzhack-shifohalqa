@@ -76,11 +76,14 @@ test('opens the Telegram Mini App route cleanly on a narrow screen', async ({ pa
   expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
 });
 
-test('opens both public exercise previews without narrow-screen overflow', async ({ page }) => {
+test('opens all five public exercise previews without narrow-screen overflow', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
-  for (const route of ['/demo/mashq', '/demo/mashq/tirsak']) {
+  const routes = ['/demo/mashq', '/demo/mashq/tirsak', '/demo/mashq/tizza', '/demo/mashq/yelka', '/demo/mashq/oyoq'];
+  for (const [index, route] of routes.entries()) {
     expect((await page.goto(route))?.ok()).toBe(true);
-    await expect(page.getByRole('button', { name: 'CDC namunasini sinash' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Mashq turlari' }).getByRole('link')).toHaveCount(5);
+    await expect(page.getByRole('button', { name: 'Kamerani boshlash' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'CDC namunasini sinash' })).toHaveCount(index < 2 ? 1 : 0);
     expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
   }
 });

@@ -1,3 +1,5 @@
+import { exerciseCatalog } from '@/lib/pose/diagnostics';
+import { DoctorExercisePlanForm } from './doctor-exercise-form';
 import { readExerciseAttempts, readExercisePlan, type ExerciseAttempt } from '@/lib/exercise-store';
 import type { ClinicalActor } from '@/lib/clinical-types';
 import styles from './doctor-clinical.module.css';
@@ -43,20 +45,11 @@ export async function DoctorExercise({ actor }: { actor: ClinicalActor }) {
   return (
     <div className="ledger">
       <section aria-labelledby="exercise-heading">
-        <h2 id="exercise-heading">O‘tirib-turish mashqi</h2>
+        <h2 id="exercise-heading">{plan ? exerciseCatalog[plan.movement].title : 'O‘tirib-turish mashqi'}</h2>
         {plan ? (
           <p>Reja: {plan.targetReps} takror · tizza burchagi {plan.targetAngle}°.</p>
         ) : (
-          <form action="/api/demo/exercise-plan" method="post" className={styles.form} aria-labelledby="exercise-heading">
-            <p>Namuna qiymatlarini biriktirishdan oldin ko‘rib chiqing.</p>
-            <div className={styles.pair}>
-              <label className={styles.field}>Takror soni <input type="number" name="targetReps" defaultValue={5} min={1} max={40} required /></label>
-              <label className={styles.field}>Maqsad burchagi <input type="number" name="targetAngle" defaultValue={100} min={60} max={130} required /></label>
-              <label className={styles.field}>Chala takror chegarasi <input type="number" name="maxShallow" defaultValue={1} min={0} max={40} required /></label>
-              <label className={styles.field}>Og‘riq xabari <select name="painColor"><option value="yellow">Tekshirish</option><option value="red">Tez ko‘rib chiqish</option></select></label>
-            </div>
-            <button className={styles.submit} type="submit">Mashqni biriktirish</button>
-          </form>
+          <DoctorExercisePlanForm />
         )}
       </section>
       {attempts.length > 0 && (
@@ -73,6 +66,7 @@ export async function DoctorExercise({ actor }: { actor: ClinicalActor }) {
                   {attempt.minAngle !== null && attempt.confidence !== null &&
                     <p>Eng kichik burchak {attempt.minAngle.toFixed(1)}° · Tayanch nuqtalari ishonchi {Math.round(attempt.confidence * 100)}%</p>}
                   <p>AI rejimi {attempt.aiMode}{!attempt.sample && attempt.reason !== 'pain' && ` · ${attempt.primary ? 'Asosiy urinish' : 'Qayta urinish'}`}</p>
+                  {attempt.diagnostics?.doctorSummaryUz && <p>{attempt.diagnostics.doctorSummaryUz}</p>}
                   {attempt.source !== 'self_report' && <p>O‘lchov manbasi · {attempt.android ? 'Android ilovasi' : 'Bemor brauzeri'}. Server o‘lchovni mustaqil tasdiqlamaydi.</p>}
                   {attempt.flagColor && <p>{attempt.flagColor === 'red' ? 'Tez ko‘rib chiqish' : 'Tekshirish'}{attempt.similarMotion && ' · O‘xshash harakat'}</p>}
                   {!attempt.sample && <ExerciseReview attempt={attempt} />}

@@ -72,6 +72,7 @@ async function main() {
     CLOUDFLARE_API_TOKEN: '',
     OPENROUTER_API_KEY: '',
     EXERCISE_OPENROUTER_DEMO: 'false',
+    EXERCISE_COACH_OPENROUTER_DEMO: 'false',
     TELEGRAM_DATABASE_URL: '',
     TELEGRAM_BOT_TOKEN: '',
     UV_NO_CACHE: '1',
@@ -94,7 +95,7 @@ async function main() {
   const runLive = async ([command, ...commandArgs]) => {
     for (const key of ['DORIMOS_PROVIDER', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN',
       'CLOUDFLARE_DECISION_MODEL', 'CLOUDFLARE_EXTRACTION_MODEL', 'GEMINI_API_KEY', 'GEMINI_DECISION_MODEL', 'OPENROUTER_API_KEY', 'OPENROUTER_OCR_MODEL',
-      'OPENROUTER_OCR_FALLBACK_MODEL', 'EXERCISE_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL']) {
+      'OPENROUTER_OCR_FALLBACK_MODEL', 'EXERCISE_OPENROUTER_DEMO', 'EXERCISE_COACH_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL']) {
       if (local[key] !== undefined) env[key] = local[key];
     }
     if (laneConfig.SHIFO_LIVE_ISOLATED === 'true') return launch(command, commandArgs, { env });

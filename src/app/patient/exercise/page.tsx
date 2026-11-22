@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ExerciseClient } from '@/components/exercise-client';
 import { getDemoSession } from '@/lib/demo-session';
 import { readExerciseAttempts, readExercisePlan, type ExerciseAttempt } from '@/lib/exercise-store';
+import { exerciseCatalog } from '@/lib/pose/diagnostics';
 import { ensureDemoWorkspace } from '@/lib/seed';
 
 export const metadata: Metadata = { title: 'O‘tirib-turish mashqi' };
@@ -29,7 +30,7 @@ export default async function ExercisePage() {
   }
   return (
     <main className="frame content" id="content" tabIndex={-1}>
-      <h1>O‘tirib-turish mashqi</h1>
+      <h1>{plan ? exerciseCatalog[plan.movement].title : 'O‘tirib-turish mashqi'}</h1>
       <a className="emergency" href="tel:103">Tez yordam · 103</a>
       {plan ? (
         <>
@@ -47,7 +48,7 @@ export default async function ExercisePage() {
               </article>
             ))}
           </section>
-          <ExerciseClient targetAngle={plan.targetAngle} />
+          <ExerciseClient movement={plan.movement} targetAngle={plan.targetAngle} targetReps={plan.targetReps} maxShallow={plan.maxShallow} painColor={plan.painColor} />
         </>
       ) : <p className="notice">{unavailable ? 'Mashq rejasini ochib bo‘lmadi.' : 'Shifokor mashq rejasini hali biriktirmagan.'}</p>}
       <Link className="text-action" href="/patient">Bugungi vazifalarga qaytish</Link>

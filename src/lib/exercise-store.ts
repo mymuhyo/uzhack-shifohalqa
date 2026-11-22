@@ -4,11 +4,13 @@ import { compareAttempt } from './anticheat/compare-attempt';
 import type { ClinicalActor, MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 import type { ExerciseInput, ExercisePlan, ExerciseReview, MobileExerciseInput } from './exercise-inputs';
-import { exerciseSample } from './exercise-sample';
+import { elbowSample, exerciseSample } from './exercise-sample';
+import { analyzeExerciseDiagnostics, exerciseDiagnosticsSchema } from './pose/diagnostics';
+import { movementId } from './pose/engine';
 import { deriveEvidenceLevel } from './rules/evidence-level';
 
 const exercisePlanRow = z.object({
-  id: z.uuid(), targetAngle: z.int(), targetReps: z.int(), maxShallow: z.int(), painColor: z.enum(['red', 'yellow']),
+  id: z.uuid(), movement: movementId, targetAngle: z.int(), targetReps: z.int(), maxShallow: z.int(), painColor: z.enum(['red', 'yellow']),
 });
 const reviewRow = z.object({
   decision: z.enum(['reviewed', 'retake']), body: z.string(), reviewedAt: z.iso.datetime(),
@@ -20,7 +22,7 @@ const attemptRow = z.object({
   shallowReps: z.int().nullable(), minAngle: z.number().nullable(), confidence: z.number().nullable(),
   primary: z.boolean(), sample: z.boolean(), similarMotion: z.boolean(), flagColor: z.enum(['red', 'yellow']).nullable(),
   createdAt: z.iso.datetime(), scheduledDate: z.iso.date(), android: z.boolean(),
-  review: reviewRow.nullable(),
+  movement: movementId, diagnostics: exerciseDiagnosticsSchema.nullable(), review: reviewRow.nullable(),
 });
 const receiptRow = z.object({
   id: z.uuid(), level: z.number(), primary: z.boolean(), similarMotion: z.boolean(),
@@ -48,9 +50,9 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), assigned AS (
       INSERT INTO shifohalqa.exercise_prescriptions (
-        workspace_id, patient_id, doctor_id, target_angle, target_reps, max_shallow, pain_color
+        workspace_id, patient_id, doctor_id, movement, target_angle, target_reps, max_shallow, pain_color
       )
-      SELECT workspace_id, id, doctor_id, ${input.targetAngle}, ${input.targetReps}, ${input.maxShallow}, ${input.painColor}
+      SELECT workspace_id, id, doctor_id, ${input.movement}, ${input.targetAngle}, ${input.targetReps}, ${input.maxShallow}, ${input.painColor}
       FROM scoped ON CONFLICT (workspace_id, patient_id) DO NOTHING RETURNING id
     )
     SELECT CASE WHEN EXISTS (SELECT FROM assigned) THEN 'saved'
@@ -62,7 +64,7 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
 export async function readExercisePlan(actor: ClinicalActor) {
   const sql = requireDatabase();
   const [row] = await sql`
-    SELECT id, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
+    SELECT id, movement, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
     FROM shifohalqa.exercise_prescriptions
     WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
   `;
@@ -72,9 +74,9 @@ export async function readExercisePlan(actor: ClinicalActor) {
 export async function readExerciseAttempts(actor: ClinicalActor) {
   const sql = requireDatabase();
   const rows = await sql`
-    SELECT attempt.id, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
+    SELECT attempt.id, attempt.movement, attempt.diagnostics, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
       min_angle AS "minAngle", confidence, is_primary AS "primary", similar_motion AS "similarMotion", flag_color AS "flagColor",
-      attempt.file_sha256 IS NOT DISTINCT FROM ${exerciseSample.sha256} AS sample,
+      COALESCE(attempt.file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}), false) AS sample,
       attempt.client_attempt_id IS NOT NULL AS android, attempt.scheduled_date::text AS "scheduledDate",
       to_char(attempt.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
       CASE WHEN attempt.review_decision IS NOT NULL THEN jsonb_build_object(
@@ -85,7 +87,7 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
     JOIN shifohalqa.exercise_prescriptions AS plan ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
     WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
       AND (
-        (${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL)
+        (${actor.role} = 'doctor' AND attempt.flag_color IS NOT NULL AND attempt.review_decision IS NULL)
         OR attempt.id IN (
           SELECT recent.id FROM shifohalqa.exercise_attempts AS recent
           WHERE recent.workspace_id = plan.workspace_id AND recent.prescription_id = plan.id
@@ -93,9 +95,9 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
         )
       )
     ORDER BY
-      CASE WHEN ${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL
+      CASE WHEN ${actor.role} = 'doctor' AND attempt.flag_color IS NOT NULL AND attempt.review_decision IS NULL
         THEN CASE WHEN attempt.flag_color = 'red' THEN 0 ELSE 1 END ELSE 2 END,
-      CASE WHEN ${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL
+      CASE WHEN ${actor.role} = 'doctor' AND attempt.flag_color IS NOT NULL AND attempt.review_decision IS NULL
         THEN attempt.created_at END,
       greatest(attempt.created_at, attempt.reviewed_at) DESC, attempt.id
   `;
@@ -105,7 +107,7 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
 async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, hash: string) {
   const [row] = await requireDatabase()`
     SELECT id, level, is_primary AS "primary", similar_motion AS "similarMotion",
-      file_sha256 IS NOT DISTINCT FROM ${exerciseSample.sha256} AS sample, client_request_hash AS hash
+      COALESCE(file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}), false) AS sample, client_request_hash AS hash
     FROM shifohalqa.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${mobile.prescriptionId}
       AND client_attempt_id = ${mobile.clientAttemptId}
@@ -131,6 +133,9 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
     }
   }
 
+  const movement = input.movement ?? 'chair_stand';
+  if (movement !== plan.movement) return { status: 'invalid' } as const;
+
   const report = input.source === 'self_report' ? input : null;
   const measured = input.source !== 'self_report' ? input : null;
   const reason = report?.reason ?? 'measured';
@@ -146,13 +151,14 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
 
   const sql = requireDatabase();
   const fileSha256 = measured?.fileSha256?.toLowerCase() ?? null;
-  const sample = fileSha256 === exerciseSample.sha256;
+  const sample = fileSha256 === exerciseSample.sha256 || fileSha256 === elbowSample.sha256;
+  if (sample && (fileSha256 === elbowSample.sha256 ? 'elbow_bend' : 'chair_stand') !== movement) return { status: 'invalid' } as const;
   const motionSignature = measured?.motionSignature ?? null;
   const previous = measured ? z.array(fingerprint).parse(await sql`
     SELECT file_sha256 AS "fileSha256", motion_signature AS "motionSignature"
     FROM shifohalqa.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${plan.id}
-      AND (file_sha256 = ${fileSha256} OR (motion_signature IS NOT NULL AND file_sha256 IS DISTINCT FROM ${exerciseSample.sha256}))
+      AND (file_sha256 = ${fileSha256} OR (motion_signature IS NOT NULL AND file_sha256 IS DISTINCT FROM ${exerciseSample.sha256} AND file_sha256 IS DISTINCT FROM ${elbowSample.sha256}))
     ORDER BY (file_sha256 = ${fileSha256}) DESC NULLS LAST, created_at DESC LIMIT 100
   `) : [];
   const { duplicateFile, similarMotion } = compareAttempt({ fileSha256, motionSignature: sample ? null : motionSignature, previous });
@@ -160,8 +166,13 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
     return (mobile && hash ? await readReceipt(actor, mobile, hash) : null) ?? { status: 'duplicate' } as const;
   }
 
-  const flag = sample ? null : reason === 'pain' ? plan.painColor
-    : similarMotion || (measured && measured.shallowReps > plan.maxShallow) ? 'yellow' : null;
+  const diagnostics = analyzeExerciseDiagnostics({
+    ...plan, reason, validReps: measured?.validReps ?? (report?.reason === 'manual' ? report.reps : null),
+    shallowReps: measured?.shallowReps ?? null, minAngle: measured?.minAngle ?? null,
+    avgCycleSeconds: measured?.avgCycleSeconds, interruptedCycles: measured?.interruptedCycles,
+    incompleteCycles: measured?.incompleteCycles, formMetrics: measured?.formMetrics, similarMotion, sample,
+  });
+  const flag = sample || diagnostics.severity === 'ok' ? null : diagnostics.severity;
   const id = randomUUID();
   const measurements = {
     valid: measured?.validReps ?? (report?.reason === 'manual' ? report.reps : null),
@@ -172,12 +183,12 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
     INSERT INTO shifohalqa.exercise_attempts (
       id, workspace_id, prescription_id, is_primary, source, ai_mode, level, reason,
       valid_reps, shallow_reps, min_angle, confidence, analyzed_frames, file_sha256, motion_signature, similar_motion, flag_color,
-      scheduled_date, client_attempt_id, client_request_hash
+      scheduled_date, client_attempt_id, client_request_hash, movement, diagnostics
     )
     SELECT ${id}, ${actor.workspaceId}, ${plan.id}, ${primary}, ${input.source}, ${aiMode}, ${assessment.level}, ${reason},
       ${measurements.valid}, ${measurements.shallow}, ${measurements.minimum}, ${measurements.confidence}, ${measurements.frames},
       ${fileSha256}, ${motionSignature ? JSON.stringify(motionSignature) : null}::jsonb, ${similarMotion}, ${flag},
-      ${mobile?.scheduledDate ?? today}::date, ${mobile?.clientAttemptId ?? null}::uuid, ${hash}
+      ${mobile?.scheduledDate ?? today}::date, ${mobile?.clientAttemptId ?? null}::uuid, ${hash}, ${movement}, ${JSON.stringify(diagnostics)}::jsonb
     WHERE NOT (${primary} AND (${reason} = 'pain' OR ${sample}))
     ON CONFLICT DO NOTHING RETURNING is_primary
   `));

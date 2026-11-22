@@ -17,11 +17,11 @@ export default function Home() {
           <button className="role-button" type="submit" name="role" value="doctor" aria-describedby="doctor-hint">
             Shifokor sifatida kirish <span aria-hidden="true">↗</span>
           </button>
-          <p className="role-hint" id="doctor-hint">Avval Dr. Sardor sifatida namuna rejani biriktiring.</p>
+          <p className="role-hint" id="doctor-hint">Avval Dr. Sardor sifatida dori, bosim, kunlik qadam maqsadi va 5 ta mashqdan birini biriktiring; Android va Telegram ulanishini oching.</p>
           <button className="role-button" type="submit" name="role" value="patient" aria-describedby="patient-hint">
             Bemor sifatida kirish <span aria-hidden="true">↗</span>
           </button>
-          <p className="role-hint" id="patient-hint">Anvar aka sifatida «Icha olmadim»dan «Dori tugadi» sababini yuboring. So‘ng shifokor rolida qaydni ochib javob yozing va bemor roliga qayting.</p>
+          <p className="role-hint" id="patient-hint">Anvar aka sifatida dori (yoki DoriMos kamera tekshiruvi), bosim, qadam va mashqni bajaring. So‘ng shifokor rolida javob yozing.</p>
         </form>
       ) : (
         <p className="notice">Demo kirishi hozir mavjud emas.</p>

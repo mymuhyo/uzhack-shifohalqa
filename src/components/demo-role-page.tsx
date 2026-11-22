@@ -82,10 +82,14 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
         {role === 'patient' ? (
           <>
             <Link className="text-action" href="/patient/exercise">Mashq</Link>
+            <a className="text-action" href="#daily-steps-title">Qadamlar</a>
             <a className="text-action" href="#caregiver-title">Yaqinim</a>
           </>
         ) : (
-          <a className="text-action" href="#exercise-heading">Mashq</a>
+          <>
+            <a className="text-action" href="#queue-heading">Navbat</a>
+            <a className="text-action" href="#exercise-heading">Mashq</a>
+          </>
         )}
         <Link className="text-action" href="/">Rolni almashtirish</Link>
         {role === 'doctor' && view && (
@@ -128,7 +132,7 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
       )}
       {view?.plan && actor && role === 'doctor' && <DoctorAdherence actor={actor} initialDashboard={activity} />}
       {view && actor && role === 'doctor' && <DoctorTelegramPanel actor={actor} />}
-      {view && role === 'patient' && <PatientTelegramPanel />}
+      {view && role === 'patient' && <PatientTelegramPanel actor={actor ?? undefined} />}
       <div className="role-actions">
         {role === 'patient' && !exercisePlan && <Link className="text-action" href="/patient/exercise">O‘tirib-turish mashqi</Link>}
         <form action="/api/demo/logout" method="post">

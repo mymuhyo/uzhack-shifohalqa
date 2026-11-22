@@ -4,7 +4,11 @@ import { getDemoSession, isSameOriginDemoPost } from '@/lib/demo-session';
 import { ensureDemoWorkspace } from '@/lib/seed';
 import { getTelegramBotUsername } from '@/lib/telegram-web';
 import { readRequestJson } from '@/lib/request-body';
-import { createTelegramPairing, disconnectDoctorTelegram } from '@/lib/telegram-store';
+import {
+  createTelegramPairing,
+  disconnectDoctorTelegram,
+  disconnectPatientTelegram,
+} from '@/lib/telegram-store';
 
 const actionSchema = z.strictObject({ action: z.enum(['pair', 'disconnect']) });
 const maxBodyBytes = 1024;
@@ -17,7 +21,7 @@ function reject(status: number) {
 export async function POST(request: NextRequest) {
   if (!isSameOriginDemoPost(request)) return reject(403);
   const session = await getDemoSession();
-  if (session?.role !== 'doctor') return reject(403);
+  if (!session || (session.role !== 'doctor' && session.role !== 'patient')) return reject(403);
 
   const input = await readRequestJson(request, maxBodyBytes);
   if (!input.ok) return reject(input.status);
@@ -35,7 +39,8 @@ export async function POST(request: NextRequest) {
     };
 
     if (parsed.data.action === 'disconnect') {
-      await disconnectDoctorTelegram(actor);
+      if (actor.role === 'doctor') await disconnectDoctorTelegram(actor);
+      else await disconnectPatientTelegram(actor);
       return new Response(null, { status: 204, headers: responseHeaders });
     }
 

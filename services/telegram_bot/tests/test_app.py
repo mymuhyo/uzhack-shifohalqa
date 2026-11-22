@@ -11,8 +11,17 @@ from aiogram.methods import SendMessage
 from aiogram.types import Message
 from aiohttp.test_utils import make_mocked_request
 
-from shifo_telegram.app import MAX_WEBHOOK_BYTES, RED_NOTICE, WEBHOOK_PATH, WEBHOOK_SECRET_HEADER, create_app, send_red_notice
+from shifo_telegram.app import (
+    MAX_WEBHOOK_BYTES,
+    RED_NOTICE,
+    WEBHOOK_PATH,
+    WEBHOOK_SECRET_HEADER,
+    create_app,
+    send_red_notice,
+    send_text_message,
+)
 from shifo_telegram.config import Config
+from shifo_telegram.store import TodaySummary
 
 BOT_TOKEN = "123456789:abcdefghijklmnopqrstuvwxyz-0123456789"
 SECRET = "telegram-e2e-secret"
@@ -43,6 +52,8 @@ class OfflineStore:
         self.redeemed = []
         self.disconnected = []
         self.stop_applied = True
+        self.summary = None
+        self.med_actions = []
 
     async def open(self):
         self.opened = True
@@ -57,6 +68,13 @@ class OfflineStore:
     async def disconnect_chat(self, chat_id, *, sent_at, update_id):
         self.disconnected.append((chat_id, sent_at, update_id))
         return self.stop_applied
+
+    async def get_today_summary(self, chat_id):
+        return self.summary
+
+    async def record_medication_action(self, chat_id, task_id, action):
+        self.med_actions.append((chat_id, task_id, action))
+        return "saved_taken" if action == "taken" else "saved_supply"
 
 
 class OfflineBot(Bot):
@@ -287,6 +305,39 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         retry = await send_red_notice(self.bot, CONFIG, 42)
         self.assertEqual(retry.seconds, 17)
         self.assertEqual(len(self.bot.requests), 1)
+
+    async def test_holat_returns_summary_and_inline_medication_actions(self):
+        unlinked = await self.message("/holat")
+        self.assertIn("Chat hali ulanmagan", json.loads(unlinked.text)["text"])
+
+        task_id = "f2b5ee25-b406-4732-83f9-f45ce90aeccd"
+        self.store.summary = TodaySummary(
+            role="patient",
+            text="Bugungi holat · Anvar aka\n• Qadamlar: 3200 / 3000 (Maqsad bajarildi ✓)",
+            pending_med_task_id=task_id,
+        )
+        linked = await self.message("/holat")
+        payload = json.loads(linked.text)
+        self.assertEqual(payload["method"], "sendMessage")
+        self.assertIn("3200 / 3000", payload["text"])
+        buttons = payload["reply_markup"]["inline_keyboard"][0]
+        self.assertEqual(buttons[0]["callback_data"], f"med_taken:{task_id}")
+        self.assertEqual(buttons[1]["callback_data"], f"med_supply:{task_id}")
+
+        taken = await self.callback(f"med_taken:{task_id}")
+        self.assertEqual(json.loads(taken.text)["text"], "Dori ichildi deb saqlandi ✓")
+        supply = await self.callback(f"med_supply:{task_id}")
+        self.assertEqual(json.loads(supply.text)["text"], "Dori tugadi xabari shifokorga yuborildi ✓")
+        self.assertEqual(self.store.med_actions, [(42, task_id, "taken"), (42, task_id, "supply")])
+
+    async def test_send_text_message_delivers_patient_reply_with_patient_focus(self):
+        self.assertEqual(
+            await send_text_message(self.bot, CONFIG, 42, "Shifokor javobi", focus="patient", label="ShifoHalqa Mini App"),
+            "sent",
+        )
+        method, _ = self.bot.requests[0]
+        self.assertEqual(method.text, "Shifokor javobi")
+        self.assertEqual(method.reply_markup.inline_keyboard[0][0].web_app.url, f"{APP_URL}tg?focus=patient")
 
 
 class ConfigTests(TestCase):

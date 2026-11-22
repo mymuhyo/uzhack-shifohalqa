@@ -19,20 +19,27 @@ from aiohttp import web
 from pydantic import ValidationError
 
 from .config import Config
-from .store import DeliveryResult, RetryAfter, TelegramStore, telegram_chat_id_valid, telegram_pair_code_valid
+from .store import (
+    DeliveryResult,
+    RetryAfter,
+    TelegramStore,
+    TextNotice,
+    telegram_chat_id_valid,
+    telegram_pair_code_valid,
+)
 from .worker import run_delivery_worker
 
 WEBHOOK_PATH = "/api/telegram/webhook"
 WEBHOOK_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token"
 MAX_WEBHOOK_BYTES = 32 * 1024
 NO_STORE = {"Cache-Control": "no-store"}
-COMMAND = re.compile(r"/(start|bugun|ilova|mashq|help|stop)(?:@([A-Za-z0-9_]+))?(?:[ \t]+(\S+))?")
+COMMAND = re.compile(r"/(start|bugun|ilova|mashq|holat|help|stop)(?:@([A-Za-z0-9_]+))?(?:[ \t]+(\S+))?")
 
-INVALID_PAIR = "Ulash kodi yaroqsiz. Shifokor sahifasidan yangi ulash havolasini oling."
+INVALID_PAIR = "Ulash kodi yaroqsiz. ShifoHalqa sahifasidan yangi ulash havolasini oling."
 TODAY = "Bugungi vazifalarni ShifoHalqada oching."
 MINI_APP = "ShifoHalqani Telegram Mini App ichida yoki brauzerda oching."
 EXERCISE_APP = "Mashq tahlilini Telegram Mini App yoki brauzerda oching."
-HELP = "Ilovani ochish uchun /bugun yoki /ilova, mashq uchun /mashq, xabarlarni to‘xtatish uchun /stop buyrug‘ini yuboring."
+HELP = "Bugungi holat uchun /holat, ilova uchun /bugun yoki /ilova, mashq uchun /mashq, xabarlarni to‘xtatish uchun /stop buyrug‘ini yuboring."
 RED_NOTICE = "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
 
 logger = logging.getLogger(__name__)
@@ -121,6 +128,22 @@ class PrivateCommand(Filter):
         return {"command": command, "argument": argument}
 
 
+def _holat_keyboard(config: Config, role: str, pending_med_task_id: str | None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if role == "patient" and pending_med_task_id:
+        rows.append([
+            InlineKeyboardButton(text="✓ Dori ichdim", callback_data=f"med_taken:{pending_med_task_id}"),
+            InlineKeyboardButton(text="Dori tugadi", callback_data=f"med_supply:{pending_med_task_id}"),
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text="ShifoHalqa Mini App" if role == "patient" else "Shifokor navbatini ochish",
+            web_app=WebAppInfo(url=_mini_app_url(config, role)),
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
     router = Router()
 
@@ -132,15 +155,28 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
             linked = telegram_pair_code_valid(argument) and await store.redeem_pairing(
                 argument, chat_id, sent_at=sent_at, update_id=event_update.update_id,
             )
+            role = (await store.get_linked_role(chat_id) if linked and hasattr(store, "get_linked_role") else None) or "doctor"
             keyboard = _mini_app_keyboard(
                 config,
-                focus="doctor",
-                primary_label="Shifokor navbatini ochish" if linked else "Shifokor sahifasini ochish",
+                focus=role,
+                primary_label=(
+                    ("Bemor sahifasini ochish" if role == "patient" else "Shifokor navbatini ochish")
+                    if linked else "ShifoHalqani ochish"
+                ),
             )
             return _message(chat_id, "Telegram xabarlari ulandi." if linked else INVALID_PAIR, keyboard)
         if command == "stop":
             stopped = await store.disconnect_chat(chat_id, sent_at=sent_at, update_id=event_update.update_id)
             return _message(chat_id, "Telegram xabarlari o‘chirildi.") if stopped else None
+        if command == "holat":
+            summary = await store.get_today_summary(chat_id) if hasattr(store, "get_today_summary") else None
+            if summary is None:
+                return _message(
+                    chat_id,
+                    "Chat hali ulanmagan. Veb-paneldagi «Telegramni ulash» tugmasi orqali ulang yoki Mini App’ni oching.",
+                    _mini_app_menu_keyboard(config),
+                )
+            return _message(chat_id, summary.text, _holat_keyboard(config, summary.role, summary.pending_med_task_id))
         if command == "ilova":
             return _message(chat_id, MINI_APP, _mini_app_menu_keyboard(config))
         if command == "mashq":
@@ -155,8 +191,7 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
 
     @router.callback_query()
     async def handle_callback(callback: CallbackQuery, event_update: Update) -> AnswerCallbackQuery | None:
-        if callback.data != "stop_notices":
-            return None
+        data = callback.data or ""
         msg = callback.message
         sender = callback.from_user
         if (
@@ -167,15 +202,28 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
             or sender.id != msg.chat.id
         ):
             return None
-        stopped = await store.disconnect_chat(
-            msg.chat.id,
-            sent_at=int(msg.date.timestamp()),
-            update_id=event_update.update_id,
-        )
-        return AnswerCallbackQuery(
-            callback_query_id=callback.id,
-            text="Telegram xabarlari o‘chirildi." if stopped else "Faol ulanish topilmadi.",
-        )
+        if data == "stop_notices":
+            stopped = await store.disconnect_chat(
+                msg.chat.id,
+                sent_at=int(msg.date.timestamp()),
+                update_id=event_update.update_id,
+            )
+            return AnswerCallbackQuery(
+                callback_query_id=callback.id,
+                text="Telegram xabarlari o‘chirildi." if stopped else "Faol ulanish topilmadi.",
+            )
+        if (data.startswith("med_taken:") or data.startswith("med_supply:")) and hasattr(store, "record_medication_action"):
+            action_key, task_id = data.split(":", 1)
+            action = "taken" if action_key == "med_taken" else "supply"
+            outcome = await store.record_medication_action(msg.chat.id, task_id, action)
+            reply_text = {
+                "saved_taken": "Dori ichildi deb saqlandi ✓",
+                "saved_supply": "Dori tugadi xabari shifokorga yuborildi ✓",
+                "already_saved": "Bugungi dori qaydi avval saqlangan.",
+                "not_found": "Vazifa topilmadi yoki muddati o‘tgan.",
+            }[outcome]
+            return AnswerCallbackQuery(callback_query_id=callback.id, text=reply_text)
+        return None
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
@@ -183,11 +231,23 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
 
 
 async def send_red_notice(bot: Bot, config: Config, chat_id: int) -> DeliveryResult:
+    return await send_text_message(bot, config, chat_id, RED_NOTICE, focus="doctor", label="Navbatni ochish (Mini App)")
+
+
+async def send_text_message(
+    bot: Bot,
+    config: Config,
+    chat_id: int,
+    text: str,
+    *,
+    focus: str = "doctor",
+    label: str = "ShifoHalqa Mini App",
+) -> DeliveryResult:
     if not telegram_chat_id_valid(chat_id):
         return "rejected"
     try:
-        keyboard = _mini_app_keyboard(config, focus="doctor", primary_label="Navbatni ochish (Mini App)")
-        result = await bot(_message(chat_id, RED_NOTICE, keyboard), request_timeout=3.5)
+        keyboard = _mini_app_keyboard(config, focus=focus, primary_label=label)
+        result = await bot(_message(chat_id, text, keyboard), request_timeout=3.5)
     except TelegramRetryAfter as error:
         return RetryAfter(max(1, error.retry_after))
     except (ClientDecodeError, TelegramNetworkError, TelegramServerError, TimeoutError):
@@ -206,15 +266,55 @@ def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Applicatio
         async def send(chat_id: int) -> DeliveryResult:
             return await send_red_notice(bot, config, chat_id)
 
+        async def drain_text_notices() -> int:
+            if not hasattr(store, "claim_pending_text_notice"):
+                return 0
+            attempted = 0
+            for _ in range(10):
+                notice: TextNotice | None = await store.claim_pending_text_notice()
+                if notice is None:
+                    break
+                attempted += 1
+                label = "ShifoHalqa Mini App" if notice.focus == "patient" else "Navbatni ochish (Mini App)"
+                try:
+                    status = await send_text_message(
+                        bot, config, notice.chat_id, notice.message_text, focus=notice.focus, label=label,
+                    )
+                except Exception:
+                    continue
+                if isinstance(status, RetryAfter):
+                    await store.schedule_text_retry(notice, status.seconds)
+                elif status == "sent" or status == "rejected":
+                    await store.record_text_delivery(notice, status)
+            return attempted
+
+        async def text_notice_loop() -> None:
+            while True:
+                try:
+                    attempted = await drain_text_notices()
+                except Exception:
+                    attempted = 0
+                await asyncio.sleep(0 if attempted >= 10 else 2.0)
+
         try:
             await store.open()
             worker = asyncio.create_task(run_delivery_worker(store, send), name="telegram-notices")
+            text_worker = (
+                asyncio.create_task(text_notice_loop(), name="telegram-text-notices")
+                if hasattr(store, "claim_pending_text_notice")
+                else None
+            )
             try:
                 yield
             finally:
                 worker.cancel()
+                if text_worker is not None:
+                    text_worker.cancel()
                 with suppress(asyncio.CancelledError):
                     await worker
+                if text_worker is not None:
+                    with suppress(asyncio.CancelledError):
+                        await text_worker
         finally:
             try:
                 await store.close()

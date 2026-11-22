@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
-import { exerciseCoachAdvice, exerciseCoachInputSchema } from '@/lib/ai/exercise-coach';
-import { publicExerciseCoach } from '@/lib/ai/public-exercise-coach';
+import { exerciseCoachInputSchema } from '@/lib/ai/exercise-coach';
+import { personalizedExerciseCoach, publicExerciseCoach } from '@/lib/ai/public-exercise-coach';
 import { isDemoEnabled, isSameOriginDemoPost } from '@/lib/demo-session';
 import { readRequestJson } from '@/lib/request-body';
 
@@ -12,6 +12,8 @@ export async function POST(request: NextRequest) {
   if (!body.ok) return new Response(null, { status: body.status, headers });
   const input = exerciseCoachInputSchema.safeParse(body.body);
   if (!input.success) return Response.json({ error: 'invalid' }, { status: 400, headers });
-  const advice = 'sample' in input.data ? await publicExerciseCoach(input.data.sample) : exerciseCoachAdvice(input.data);
+  const advice = 'sample' in input.data
+    ? await publicExerciseCoach(input.data.sample)
+    : await personalizedExerciseCoach(input.data);
   return Response.json(advice, { headers });
 }

@@ -224,7 +224,7 @@ export function ExerciseClient({
   const [confirmed, setConfirmed] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const [reviewingSample, setReviewingSample] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(true);
   const [coachState, setCoachState] = useState<
     | { status: 'idle' }
     | { status: 'loading' }
@@ -232,8 +232,9 @@ export function ExerciseClient({
     | { status: 'ready'; advice: ExerciseCoachResponse }
   >({ status: 'idle' });
   const audioRef = useRef<ReturnType<typeof createAudioCoach> | null>(null);
-  const audioEnabledRef = useRef(false);
+  const audioEnabledRef = useRef(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const activeCapture = useRef<Capture | null>(null);
   const request = useRef<{ controller: AbortController; report: Report } | null>(null);
@@ -268,6 +269,8 @@ export function ExerciseClient({
     releaseCapture(capture);
     const overlay = overlayRef.current;
     if (overlay) overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height);
+    const frameCanvas = videoCanvasRef.current;
+    if (frameCanvas) frameCanvas.getContext('2d')?.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
     return capture;
   }
 
@@ -341,7 +344,13 @@ export function ExerciseClient({
       draw(width, height);
       const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
       const trackedFrame = tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
-      if (source === 'live_camera' && overlayRef.current) {
+      if (source === 'uploaded_video' && videoCanvasRef.current) {
+        const frameCanvas = videoCanvasRef.current;
+        if (frameCanvas.width !== width) frameCanvas.width = width;
+        if (frameCanvas.height !== height) frameCanvas.height = height;
+        frameCanvas.getContext('2d')?.drawImage(canvas, 0, 0, width, height);
+      }
+      if (overlayRef.current) {
         drawPoseOverlay(overlayRef.current, width, height, trackedFrame?.joints ?? [], {
           angle: trackedFrame?.angle,
           targetAngle,
@@ -379,7 +388,7 @@ export function ExerciseClient({
         lastWarning = formWarning;
       }
       const currentFraming = framing;
-      const currentAngle = source === 'live_camera' && trackedFrame ? Math.round(trackedFrame.angle / 5) * 5 : null;
+      const currentAngle = trackedFrame ? Math.round(trackedFrame.angle / 5) * 5 : null;
       setScreen((current) => current.phase === 'running' && (
         currentFraming !== current.framing || currentAngle !== current.currentAngle ||
         validReps !== current.validReps || shallowReps !== current.shallowReps ||
@@ -617,7 +626,8 @@ export function ExerciseClient({
   const saving = saveStatus?.state === 'saving';
   const sample = screen.phase === 'result' && example !== null && screen.fileSha256 === example.sha256;
   const poseCycles = sample ? screen.cycles : undefined;
-  const showVideo = capturing && (screen.phase !== 'running' || screen.source === 'live_camera');
+  const showVideo = capturing;
+  const showVideoCanvas = screen.phase === 'running' && screen.source === 'uploaded_video';
   const diagnostics = screen.phase === 'result' ? analyzeExerciseDiagnostics({
     movement,
     reason: 'measured',
@@ -674,7 +684,7 @@ export function ExerciseClient({
           aria-pressed={audioEnabled}
           onClick={() => setAudioEnabled((prev) => !prev)}
         >
-          Ovozli murabbiy
+          Ovozli murabbiy · {audioEnabled ? 'Yoqilgan' : 'O‘chirilgan'}
         </button>
         {!preview && <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
           <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
@@ -703,7 +713,8 @@ export function ExerciseClient({
         </div>
       )}
       <div className={styles.preview} hidden={!showVideo}>
-        <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" aria-label="Mashq videosi" />
+        <video ref={videoRef} className={styles.video} width={640} height={480} muted playsInline preload="none" hidden={showVideoCanvas} aria-label="Mashq videosi" />
+        <canvas ref={videoCanvasRef} className={styles.video} width={640} height={480} hidden={!showVideoCanvas} aria-label="Mashq kadrlari" />
         <canvas ref={overlayRef} className={styles.overlay} aria-hidden="true" />
       </div>
       <label className={styles.file} htmlFor="exercise-video">

@@ -7,11 +7,18 @@ internal class ExerciseMotionTracker(plan: ExercisePlan, private val live: Boole
     private val pose = PoseTracker(plan.movement, plan.targetAngle, plan.targetReps, plan.maxShallow, liveCamera = live)
     private var angle: Double? = null
     private var previousSide: Int? = null
+    private var lastFrame: PoseFrameUpdate? = null
+    private var lastWidth: Int = 0
+    private var lastHeight: Int = 0
 
     fun update(points: List<NormalizedLandmark>?, width: Int, height: Int, timestamp: Long) {
-        angle = pose.update(points.orEmpty().map {
+        lastWidth = width
+        lastHeight = height
+        val update = pose.update(points.orEmpty().map {
             PoseLandmarkPoint(it.x(), it.y(), it.visibility().orElse(0f))
-        }, width, height, timestamp)?.angle
+        }, width, height, timestamp)
+        lastFrame = update
+        angle = update?.angle
         if (chair != null) {
             val knee = points?.let { pickKnee(it, width, height, previousSide, live) }
             chair.update(timestamp, knee?.angle, knee?.visibility ?: 0.0, knee?.side)
@@ -19,8 +26,17 @@ internal class ExerciseMotionTracker(plan: ExercisePlan, private val live: Boole
         }
     }
 
-    fun cameraFrame() = ExerciseCameraFrame(chair?.ready ?: pose.isReady(),
-        if (chair != null) chair.angle else angle, result())
+    fun cameraFrame(mirrored: Boolean = false) = ExerciseCameraFrame(
+        ready = chair?.ready ?: pose.isReady(),
+        angle = if (chair != null) chair.angle else angle,
+        result = result(),
+        joints = lastFrame?.joints.orEmpty(),
+        torsoJoints = lastFrame?.torsoJoints,
+        formWarning = lastFrame?.formWarning,
+        frameWidth = lastWidth,
+        frameHeight = lastHeight,
+        mirrored = mirrored,
+    )
 
     fun result(): ExerciseMeasurement {
         val result = pose.result()

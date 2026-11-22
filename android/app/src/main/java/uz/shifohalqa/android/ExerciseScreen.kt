@@ -47,6 +47,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.LocalDate
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import org.json.JSONObject
 
 private val samplePlan = ExercisePlan("sample", 100, 5)
@@ -72,6 +74,111 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     var videoResult by remember { mutableStateOf<ExerciseVideoResult?>(null) }
     var videoProgress by remember { mutableStateOf(0) }
     var showSampleAi by rememberSaveable { mutableStateOf(false) }
+    var audioEnabled by rememberSaveable { mutableStateOf(true) }
+    var aiCoachAdvice by remember { mutableStateOf<PublicExerciseAdvice?>(null) }
+    var aiCoachLoading by remember { mutableStateOf(false) }
+    var aiCoachError by remember { mutableStateOf<String?>(null) }
+    val coachScope = rememberCoroutineScope()
+    val audioCoach = remember(context) { UzbekAudioCoach(context) }
+
+    DisposableEffect(audioCoach) {
+        onDispose { audioCoach.release() }
+    }
+    LaunchedEffect(audioEnabled) {
+        if (!audioEnabled) audioCoach.stopAll()
+    }
+
+    var lastReadySpoken by remember { mutableStateOf(false) }
+    var lastValidSpoken by remember { mutableStateOf(0) }
+    var lastShallowSpoken by remember { mutableStateOf(0) }
+    var lastWarningSpoken by remember { mutableStateOf<PoseFormWarning?>(null) }
+    var lastWarningMs by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(running) {
+        if (!running) {
+            lastReadySpoken = false
+            lastValidSpoken = 0
+            lastShallowSpoken = 0
+            lastWarningSpoken = null
+            lastWarningMs = 0L
+        }
+    }
+
+    LaunchedEffect(frame, running, audioEnabled) {
+        if (!running || !audioEnabled) return@LaunchedEffect
+        val current = frame ?: return@LaunchedEffect
+        if (current.ready && !lastReadySpoken) {
+            audioCoach.speakReady()
+            lastReadySpoken = true
+        } else if (!current.ready && lastReadySpoken) {
+            audioCoach.speakLost()
+            lastReadySpoken = false
+        }
+        if (current.result.validReps > lastValidSpoken) {
+            lastValidSpoken = current.result.validReps
+            audioCoach.speakRep(lastValidSpoken)
+        } else if (current.result.shallowReps > lastShallowSpoken) {
+            lastShallowSpoken = current.result.shallowReps
+            audioCoach.speakDeeper()
+        } else {
+            val warning = current.formWarning
+            val now = System.currentTimeMillis()
+            if (warning != null && (warning != lastWarningSpoken || now - lastWarningMs >= 4_500L)) {
+                audioCoach.speakWarning(warning)
+                lastWarningSpoken = warning
+                lastWarningMs = now
+            } else if (warning == null) {
+                lastWarningSpoken = null
+            }
+        }
+    }
+
+    fun requestCoachForResult(measurement: ExerciseMeasurement, activePlan: ExercisePlan) {
+        aiCoachAdvice = null
+        aiCoachError = null
+        if (mobile == null) {
+            measurement.pose?.let { pose ->
+                val diag = analyzePoseDiagnostics(pose)
+                aiCoachAdvice = PublicExerciseAdvice("deterministic_coach", diag.patientCoachingUz, diag.focusCueUz, "shifo-biomechanics-v2")
+            }
+            return
+        }
+        aiCoachLoading = true
+        coachScope.launch {
+            try {
+                val pose = measurement.pose
+                val payload = JSONObject().apply {
+                    put("movement", activePlan.movement.apiKey)
+                    put("targetAngle", activePlan.targetAngle)
+                    put("targetReps", activePlan.targetReps)
+                    put("maxShallow", activePlan.maxShallow)
+                    put("validReps", measurement.validReps)
+                    put("shallowReps", measurement.shallowReps)
+                    put("minAngle", measurement.minAngle ?: JSONObject.NULL)
+                    pose?.avgCycleSeconds?.let { put("avgCycleSeconds", it) }
+                    pose?.interruptedCycles?.let { put("interruptedCycles", it) }
+                    pose?.incompleteCycles?.let { put("incompleteCycles", it) }
+                    pose?.biomechanics?.let { bio ->
+                        put(
+                            "formMetrics",
+                            JSONObject().apply {
+                                bio.trunkLeanMaxDeg?.let { put("trunkLeanMaxDeg", it) }
+                                bio.elbowDriftMaxDeg?.let { put("elbowDriftMaxDeg", it) }
+                                bio.shoulderTiltMaxDeg?.let { put("shoulderTiltMaxDeg", it) }
+                                put("compensationCycles", bio.compensationCycles)
+                                bio.tempoSpreadSeconds?.let { put("tempoSpreadSeconds", it) }
+                            },
+                        )
+                    }
+                }
+                aiCoachAdvice = mobile.requestExerciseCoach(payload)
+            } catch (_: MobileFailure) {
+                aiCoachError = "AI murabbiy javob bermadi; lokal biomexanika tahlili ko‘rsatildi."
+            } finally {
+                aiCoachLoading = false
+            }
+        }
+    }
 
     fun startVideo(input: ExerciseClip) {
         finished = null
@@ -97,6 +204,9 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
             if (videoResult?.measurement?.savable != true) {
                 notice = "Videodan yetarli o‘lchov olinmadi. Boshqa video tanlang yoki takrorlarni qo‘lda kiriting."
                 manual = true
+            } else {
+                val analysisPlan = if (selected.isPublic) samplePlan else plan ?: samplePlan
+                videoResult?.measurement?.let { requestCoachForResult(it, analysisPlan) }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -204,15 +314,24 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                     },
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                reading?.angle?.let { Text("${movement.jointLabelUz} burchagi ${it.roundToInt()}°") }
-                reading?.result?.pose?.biomechanics?.currentFormWarning?.let { Text(it.labelUz) }
+                reading?.angle?.let { Text("${movement.jointLabelUz} burchagi ${it.roundToInt()}° · maqsad ${plan.targetAngle}°") }
+                val activeWarning = reading?.formWarning ?: reading?.result?.pose?.biomechanics?.currentFormWarning
+                Badge(
+                    activeWarning?.let { "AI maslahat: ${it.labelUz}" } ?: "Texnika: Me’yor",
+                    if (activeWarning != null) Amber else Mint,
+                    if (activeWarning != null) AmberInk else Green,
+                )
                 PrimaryAction("To‘xtatish") {
                     running = false
-                    finished = reading?.result?.takeIf { it.savable }
+                    val savable = reading?.result?.takeIf { it.savable }
+                    finished = savable
                     frame = null
-                    if (finished == null) {
+                    if (savable == null) {
                         notice = "Yetarli o‘lchov olinmadi. Qayta urinishingiz yoki takrorlarni qo‘lda kiritishingiz mumkin."
                         manual = true
+                    } else {
+                        if (audioEnabled) audioCoach.speakDone()
+                        requestCoachForResult(savable, plan)
                     }
                 }
                 OutlinedButton(onClick = ::reportPain, modifier = Modifier.fillMaxWidth(), enabled = !ui.saving) {
@@ -257,6 +376,9 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                         })
                     } else {
                         Text("Rejadagi maqsad · ${plan.targetReps} takror", style = MaterialTheme.typography.bodyLarge)
+                        TextButton(onClick = { audioEnabled = !audioEnabled }) {
+                            Text("Ovozli sanoq: ${if (audioEnabled) "Yoqilgan" else "O‘chirilgan"}")
+                        }
                         PrimaryAction("Kamerani boshlash", enabled = !ui.saving && clip == null) {
                             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                                 PackageManager.PERMISSION_GRANTED) startCamera()
@@ -273,6 +395,18 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                             Text("To‘liq ${result.validReps} · Chala ${result.shallowReps}")
                             result.pose?.let { Text(analyzePoseDiagnostics(it).patientCoachingUz) }
                             result.minAngle?.let { Text("${if (movement.direction == PoseDirection.Extend) "Eng katta" else "Eng kichik"} burchak ${it.roundToInt()}°") }
+                            if (aiCoachLoading) PatientNotice("AI murabbiy maslahat tayyorlamoqda…")
+                            aiCoachAdvice?.let { advice ->
+                                Text("AI murabbiy (${advice.source}${if (advice.model.isNotBlank()) " · ${advice.model}" else ""})", color = Green, style = MaterialTheme.typography.labelLarge)
+                                Text(advice.text)
+                                Text("Keyingi e’tibor: ${advice.cue}", color = Muted)
+                            }
+                            aiCoachError?.let { Text(it, color = Muted) }
+                            if (mobile != null && !aiCoachLoading) {
+                                TextButton(onClick = { requestCoachForResult(result, plan) }) {
+                                    Text("AI murabbiy maslahatini yangilash")
+                                }
+                            }
                             PrimaryAction("Natijani saqlash", enabled = !ui.saving) {
                                 submit(result.asEvidence(), "Kamera o‘lchovi", runDate) { finished = null }
                             }

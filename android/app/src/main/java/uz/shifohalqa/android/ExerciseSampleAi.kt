@@ -10,7 +10,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 
-internal data class PublicExerciseAdvice(val source: String, val text: String, val cue: String)
+internal data class PublicExerciseAdvice(
+    val source: String,
+    val text: String,
+    val cue: String,
+    val model: String = "",
+)
 
 internal enum class SampleAiProvider(val value: String, val label: String) {
     OpenRouter("openrouter", "AI bilan tahlil"),

@@ -25,18 +25,23 @@ import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class ExercisePlan(val id: String, val targetAngle: Int, val targetReps: Int)
+internal data class ExercisePlan(
+    val id: String, val targetAngle: Int, val targetReps: Int,
+    val movement: PoseMovement = PoseMovement.ChairStand, val maxShallow: Int = 1,
+)
 internal data class ExerciseReview(val body: String, val retake: Boolean)
 internal data class ExerciseAttempt(
     val id: String, val date: String, val title: String, val reps: Int?, val shallow: Int?, val level: Int,
     val review: ExerciseReview?,
+    val movement: PoseMovement = PoseMovement.ChairStand,
 )
 
 internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<ExerciseAttempt>, val json: String) {
     companion object {
         fun parse(data: JSONObject): ExerciseView {
             val plan = data.optJSONObject("plan")?.let {
-                ExercisePlan(it.getString("id"), it.getInt("targetAngle"), it.getInt("targetReps"))
+                ExercisePlan(it.getString("id"), it.getInt("targetAngle"), it.getInt("targetReps"),
+                    PoseMovement.fromApiKey(it.optString("movement")), it.optInt("maxShallow", 1))
             }
             val attempts = data.getJSONArray("attempts")
             val history = List(attempts.length()) { index ->
@@ -54,7 +59,7 @@ internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<Exe
                 }
                 ExerciseAttempt(entry.getString("id"), entry.getString("scheduledDate"), title,
                     entry.optInt("validReps", -1).takeIf { it >= 0 },
-                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review)
+                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review, PoseMovement.fromApiKey(entry.optString("movement")))
             }
             return ExerciseView(plan, history, data.toString())
         }
@@ -175,7 +180,7 @@ class ExerciseSyncWorker(context: Context, params: WorkerParameters) : Coroutine
 
 internal fun exerciseToday(): LocalDate = LocalDate.now(ZoneId.of("Asia/Tashkent"))
 
-internal fun ChairStandResult.asEvidence(fileSha256: String? = null): JSONObject = JSONObject()
+internal fun ExerciseMeasurement.asEvidence(fileSha256: String? = null): JSONObject = (pose?.toExerciseApiPayload() ?: JSONObject())
     .put("source", if (fileSha256 == null) "live_camera" else "uploaded_video")
     .put("patientConfirmed", true).put("fileSha256", fileSha256 ?: JSONObject.NULL)
     .put("validReps", validReps).put("shallowReps", shallowReps)

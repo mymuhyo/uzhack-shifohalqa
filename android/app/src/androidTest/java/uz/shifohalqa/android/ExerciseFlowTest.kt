@@ -45,6 +45,15 @@ class ExerciseFlowTest {
         compose.onNodeWithText("OpenRouter va Baidu uchun veb-panelga ulang.").assertExists()
     }
 
+    @Test fun choosesAnotherMovementForOfflinePractice() {
+        compose.onNodeWithText("O‘tirib-turish mashqi").performScrollTo().performClick()
+        compose.onNodeWithText("Mashq turini tanlash").performClick()
+        compose.onNodeWithText("Qo‘l ko‘tarish").performClick()
+        compose.onNodeWithText("Qo‘lni yelkadan ko‘tarish").assertExists()
+        compose.onNodeWithText("Kamerani boshlash").assertExists()
+        compose.onNodeWithText("Video tanlash va tahlil qilish").assertExists()
+    }
+
     @Test fun painStopsCameraAndKeepsEmergencyAccess() {
         compose.onNodeWithText("O‘tirib-turish mashqi").performScrollTo().performClick()
         compose.onNodeWithText("Kamerani boshlash").performClick()

@@ -10,6 +10,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 
+internal data class PublicExerciseAdvice(val source: String, val text: String, val cue: String)
+
 internal enum class SampleAiProvider(val value: String, val label: String) {
     OpenRouter("openrouter", "OpenRouter bilan tahlil"),
     Baidu("baidu", "Baidu bilan izohlash"),
@@ -39,6 +41,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
     var busy by remember { mutableStateOf(false) }
     var observation by remember { mutableStateOf<SampleAiReport.Observation?>(null) }
     var explanation by remember { mutableStateOf<SampleAiReport.Explanation?>(null) }
+    var advice by remember { mutableStateOf<PublicExerciseAdvice?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
 
     PatientCard {
@@ -47,6 +50,20 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
         if (mobile == null) {
             Text("OpenRouter va Baidu uchun veb-panelga ulang.")
         } else {
+            TextButton(enabled = !busy, onClick = {
+                busy = true
+                notice = null
+                scope.launch {
+                    try {
+                        advice = mobile.publicExerciseCoach()
+                    } catch (failure: MobileFailure) {
+                        notice = if (failure.kind == MobileFailureKind.Expired) "AI murabbiy uchun veb-panelga qayta ulang."
+                            else "Murabbiy javob bermadi. Keyinroq qayta urinib ko‘ring."
+                    } finally {
+                        busy = false
+                    }
+                }
+            }) { Text("Namuna uchun murabbiy izohi") }
             val providers = if (cycles == null) SampleAiProvider.entries.filter { it != SampleAiProvider.Baidu }
                 else SampleAiProvider.entries
             providers.forEach { provider ->
@@ -75,6 +92,11 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
                     }
                 }) { Text(provider.label) }
             }
+        }
+        advice?.let {
+            Text(if (it.source == "openrouter") "AI murabbiy · ommaviy namuna" else "Qoidaviy murabbiy")
+            Text(it.text)
+            Text(it.cue)
         }
         if (busy) PatientNotice("AI namunani tahlil qilmoqda…")
         observation?.let {

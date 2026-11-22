@@ -29,13 +29,13 @@ import kotlin.math.acos
 import kotlin.math.abs
 import kotlin.math.hypot
 
-internal data class ExerciseCameraFrame(val ready: Boolean, val angle: Double?, val result: ChairStandResult)
+internal data class ExerciseCameraFrame(val ready: Boolean, val angle: Double?, val result: ExerciseMeasurement)
 internal data class Knee(val side: Int, val angle: Double, val visibility: Double)
 
 @Composable
 internal fun ExerciseCamera(
     modifier: Modifier,
-    targetAngle: Int,
+    plan: ExercisePlan,
     onFrame: (ExerciseCameraFrame) -> Unit,
     onError: () -> Unit,
 ) {
@@ -52,7 +52,7 @@ internal fun ExerciseCamera(
     }
     AndroidView(factory = { view }, modifier = modifier)
 
-    DisposableEffect(view, lifecycle, targetAngle) {
+    DisposableEffect(view, lifecycle, plan) {
         val active = AtomicBoolean(true)
         val main = ContextCompat.getMainExecutor(context)
         val executor = Executors.newSingleThreadExecutor()
@@ -67,9 +67,8 @@ internal fun ExerciseCamera(
             .build()
         var provider: ProcessCameraProvider? = null
         var detector: PoseLandmarker? = null
-        val tracker = ChairStandTracker(targetAngle)
+        val tracker = ExerciseMotionTracker(plan, live = true)
         var lastTime = Long.MIN_VALUE
-        var previousSide: Int? = null
 
         fun reportError() = main.execute { if (active.get()) latestError.value() }
 
@@ -100,10 +99,8 @@ internal fun ExerciseCamera(
                 val sideways = rotation == 90 || rotation == 270
                 val width = if (sideways) proxy.height else proxy.width
                 val height = if (sideways) proxy.width else proxy.height
-                val knee = points?.let { pickKnee(it, width, height, previousSide) }
-                tracker.update(time, knee?.angle, knee?.visibility ?: 0.0, knee?.side)
-                previousSide = knee?.side
-                val frame = ExerciseCameraFrame(tracker.ready, tracker.angle, tracker.result())
+                tracker.update(points, width, height, time)
+                val frame = tracker.cameraFrame()
                 main.execute { if (active.get()) latestFrame.value(frame) }
             } catch (_: Exception) {
                 reportError()

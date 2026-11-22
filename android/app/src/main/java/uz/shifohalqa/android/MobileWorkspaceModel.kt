@@ -38,15 +38,32 @@ internal data class ExerciseUi(
     val message: String? = null,
 )
 
+internal data class StepUi(
+    val count: Int = 0,
+    val goal: Int = 3000,
+    val achieved: Boolean = false,
+    val source: String = "device_sensor",
+    val sensorAvailable: Boolean = false,
+    val permissionGranted: Boolean = false,
+    val syncing: Boolean = false,
+    val synced: Boolean = false,
+    val syncError: String? = null,
+)
+
 internal class MobileWorkspaceModel(application: Application) : AndroidViewModel(application) {
     private val connections = DemoConnectionStore(application)
     private val repository = ExerciseRepository(application)
+    private val stepStore = StepTrackerStore(application)
+    private val stepSensor = StepSensorController(application, ::onSensorReading)
     private var session: DemoConnection? = null
     private var expiration: Job? = null
     private var exerciseObserver: Job? = null
+    private var stepSyncJob: Job? = null
     var state by mutableStateOf(MobileWorkspaceState(restoring = true))
         private set
     var exercise by mutableStateOf(ExerciseUi())
+        private set
+    var steps by mutableStateOf(initialStepUi(application, stepStore.snapshot()))
         private set
 
     init {
@@ -56,6 +73,85 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
                 restored == null -> state = MobileWorkspaceState()
                 restored.expired -> expire()
                 else -> activate(restored)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        stepSensor.stop()
+        super.onCleared()
+    }
+
+    fun refreshStepPermission() {
+        val ctx = getApplication<Application>()
+        val granted = hasStepPermission(ctx)
+        val sensorAvail = hasStepSensor(ctx)
+        if (granted && sensorAvail && session != null) stepSensor.start()
+        steps = steps.copy(sensorAvailable = sensorAvail, permissionGranted = granted)
+    }
+
+    fun simulateSteps(delta: Int = 500) {
+        val snap = stepStore.addSimulated(delta)
+        val goal = state.day?.steps?.goal ?: steps.goal
+        steps = steps.copy(
+            count = snap.count,
+            goal = goal,
+            achieved = snap.count >= goal,
+            source = snap.source,
+            synced = !snap.needsSync,
+            syncError = null,
+        )
+        scheduleStepSync(350L)
+    }
+
+    private fun onSensorReading(rawValue: Float) {
+        val snap = stepStore.onSensorCounter(rawValue)
+        val goal = state.day?.steps?.goal ?: steps.goal
+        viewModelScope.launch {
+            steps = steps.copy(
+                count = snap.count,
+                goal = goal,
+                achieved = snap.count >= goal,
+                source = snap.source,
+                synced = !snap.needsSync,
+                syncError = null,
+            )
+            if (snap.needsSync) scheduleStepSync(1_200L)
+        }
+    }
+
+    private fun scheduleStepSync(delayMs: Long) {
+        val current = session ?: return
+        stepSyncJob?.cancel()
+        stepSyncJob = viewModelScope.launch {
+            delay(delayMs)
+            syncStepsNow(current)
+        }
+    }
+
+    private suspend fun syncStepsNow(current: DemoConnection) {
+        val snap = stepStore.snapshot()
+        if (!snap.needsSync || session !== current) return
+        steps = steps.copy(syncing = true, syncError = null)
+        try {
+            val res = current.api.saveSteps(current.token, snap.count, snap.source)
+            if (session !== current) return
+            val updated = stepStore.markSynced(snap.date, res.count, res.source)
+            steps = steps.copy(
+                count = updated.count,
+                goal = res.goal,
+                achieved = res.achieved,
+                source = res.source,
+                syncing = false,
+                synced = !updated.needsSync,
+                syncError = null,
+            )
+        } catch (failure: MobileFailure) {
+            if (session !== current) return
+            if (failure.kind == MobileFailureKind.Expired) {
+                expire()
+            } else {
+                steps = steps.copy(syncing = false, synced = false, syncError = "Oflayn saqlandi — internetda sinxronlanadi")
             }
         }
     }
@@ -77,6 +173,7 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
             }
         }
         viewModelScope.launch { repository.resume(current) }
+        refreshStepPermission()
         viewModelScope.launch { refresh(current) }
     }
 
@@ -92,6 +189,43 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
         val advice = current.api.publicExerciseCoach(current.token)
         if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
         return advice
+    }
+
+    suspend fun requestExerciseCoach(payload: JSONObject): PublicExerciseAdvice {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val advice = current.api.requestExerciseCoach(current.token, payload)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        return advice
+    }
+
+    suspend fun dorimosScanSample(taskId: String, sampleId: String): DorimosOutcome {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val outcome = current.api.dorimosScanSample(current.token, taskId, sampleId)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        return outcome
+    }
+
+    suspend fun dorimosScanPhoto(taskId: String, jpegBytes: ByteArray): DorimosOutcome {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val outcome = current.api.dorimosScanPhoto(current.token, taskId, jpegBytes)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        return outcome
+    }
+
+    suspend fun dorimosConfirm(taskId: String, confirmToken: String): DorimosOutcome {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val outcome = current.api.dorimosConfirm(current.token, taskId, confirmToken)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        if (outcome == DorimosOutcome.Saved || outcome == DorimosOutcome.AlreadySaved) refresh(current)
+        return outcome
+    }
+
+    suspend fun dorimosManual(taskId: String): DorimosOutcome {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val outcome = current.api.dorimosManual(current.token, taskId)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        if (outcome == DorimosOutcome.Saved || outcome == DorimosOutcome.AlreadySaved) refresh(current)
+        return outcome
     }
 
     fun refreshExercise() {
@@ -226,7 +360,23 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
     private suspend fun refresh(current: DemoConnection) {
         try {
             val day = current.api.today(current.token)
-            if (session === current) state = state.copy(day = day, refreshing = false)
+            if (session !== current) return
+            state = state.copy(day = day, refreshing = false)
+            val serverSteps = day.steps
+            val merged = if (serverSteps != null) {
+                stepStore.mergeServerSteps(day.date, serverSteps.count, serverSteps.source)
+            } else {
+                stepStore.snapshot()
+            }
+            val goal = serverSteps?.goal ?: steps.goal
+            steps = steps.copy(
+                count = merged.count,
+                goal = goal,
+                achieved = merged.count >= goal,
+                source = serverSteps?.source ?: merged.source,
+                synced = !merged.needsSync,
+            )
+            if (merged.needsSync) syncStepsNow(current)
         } catch (failure: MobileFailure) {
             if (session !== current) return
             if (failure.kind == MobileFailureKind.Expired) expire()
@@ -241,6 +391,9 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
 
     private fun clearSession() {
         session = null
+        stepSyncJob?.cancel()
+        stepSyncJob = null
+        stepSensor.stop()
         expiration?.cancel()
         expiration = null
         exerciseObserver?.cancel()
@@ -249,6 +402,14 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
         connections.clear()
     }
 }
+
+private fun initialStepUi(application: Application, snap: StepSnapshot) = StepUi(
+    count = snap.count,
+    source = snap.source,
+    sensorAvailable = hasStepSensor(application),
+    permissionGranted = hasStepPermission(application),
+    synced = !snap.needsSync,
+)
 
 private fun MobileFailureKind.explanation(): String = when (this) {
     MobileFailureKind.InvalidAddress -> "Veb-panelning HTTPS manzilini kiriting."

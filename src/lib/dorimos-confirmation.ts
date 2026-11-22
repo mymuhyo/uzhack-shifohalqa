@@ -1,14 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { boxReading } from './dorimos-contract';
-import { dorimosSampleIds } from './dorimos-samples';
+import { boxReading, dorimosBoxSourceIds } from './dorimos-contract';
 
 const lifetimeMs = 10 * 60 * 1000;
 const tokenPattern = /^([A-Za-z0-9_-]{1,2200})\.([A-Za-z0-9_-]{43})$/;
 const confirmation = z.strictObject({
   workspaceId: z.uuid(),
   taskId: z.uuid(),
-  sampleId: z.enum(dorimosSampleIds),
+  sampleId: z.enum(dorimosBoxSourceIds),
   reading: boxReading,
   expiresAt: z.int().positive(),
 });

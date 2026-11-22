@@ -226,6 +226,7 @@ internal fun DayOverview(total: Int, recorded: Int) {
 internal fun MedicationCard(
     title: String, displayTime: String, entry: MedicationEntry?,
     onRecord: (MedicationSheet) -> Unit, onReply: (() -> Unit)?, enabled: Boolean = true,
+    boxAvailable: Boolean = false, boxDone: Boolean = false, onDorimos: (() -> Unit)? = null,
 ) {
     PatientCard {
         Row(horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -246,6 +247,13 @@ internal fun MedicationCard(
             entry.reason?.let { Text(it.label, color = Muted, style = MaterialTheme.typography.bodyLarge) }
             if (onReply != null) {
                 PrimaryAction(if (entry.replyShown) "Javobni o‘qish" else "Qaydni ko‘rish", onClick = onReply)
+            }
+        }
+        if (boxDone) {
+            Badge("DoriMos: quti tekshirildi ✓", Mint, Green)
+        } else if (boxAvailable && onDorimos != null) {
+            OutlinedButton(onClick = onDorimos, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+                Text("DoriMos · qutini kamera bilan tekshirish")
             }
         }
     }

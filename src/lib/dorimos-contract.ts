@@ -4,6 +4,7 @@ import { dorimosSampleIds } from './dorimos-samples';
 
 const modelName = z.string().min(1).max(128);
 const comparison = z.enum(['match', 'name_mismatch', 'strength_mismatch', 'name_and_strength_mismatch']);
+export const dorimosBoxSourceIds = [...dorimosSampleIds, 'camera_photo'] as const;
 
 export const boxReading = z.object({
   label: medicationBoxLabelSchema,
@@ -17,7 +18,7 @@ export const medicationBoxEvidenceSchema = z.union([
   z.strictObject({
     kind: z.literal('medication_box'),
     result: comparison,
-    sampleId: z.enum(dorimosSampleIds),
+    sampleId: z.enum(dorimosBoxSourceIds),
     expected: medicationBoxLabelSchema,
     reading: boxReading,
   }),

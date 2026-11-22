@@ -1,11 +1,16 @@
 package uz.shifohalqa.android
 
+import android.Manifest
+import android.os.Build
 import android.view.View
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,7 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,10 +59,15 @@ private data class MobileSheetRequest(val task: MobileTask, val sheet: Medicatio
 @Composable
 internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () -> Unit) {
     val state = mobile.state
+    val stepState = mobile.steps
     var tab by rememberSaveable { mutableStateOf(PatientTab.Today) }
     var focusedReplyId by rememberSaveable { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<MobileSheetRequest?>(null) }
+    var dorimosTask by remember { mutableStateOf<MobileTask?>(null) }
     val busy = state.refreshing || state.saving
+    val stepPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        mobile.refreshStepPermission()
+    }
     LaunchedEffect(tab) { if (tab == PatientTab.Reply) mobile.refresh() }
     BackHandler(enabled = tab == PatientTab.Reply && sheet == null) { tab = PatientTab.Today }
 
@@ -67,12 +79,22 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             PatientPage {
                 when (tab) {
-                    PatientTab.Today -> ConnectedToday(state, onRecord = { task, type ->
-                        sheet = MobileSheetRequest(task, type)
-                    }, onReply = { recordId ->
-                        focusedReplyId = recordId
-                        tab = PatientTab.Reply
-                    })
+                    PatientTab.Today -> ConnectedToday(
+                        state = state,
+                        steps = stepState,
+                        onRequestStepPermission = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                stepPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                            }
+                        },
+                        onSimulateSteps = { mobile.simulateSteps(500) },
+                        onRecord = { task, type -> sheet = MobileSheetRequest(task, type) },
+                        onDorimos = { task -> dorimosTask = task },
+                        onReply = { recordId ->
+                            focusedReplyId = recordId
+                            tab = PatientTab.Reply
+                        },
+                    )
                     PatientTab.Reply -> ConnectedReplies(state.day, focusedReplyId)
                 }
                 state.message?.let { PatientNotice(it) }
@@ -81,7 +103,7 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
                 }
                 TextButton(onClick = mobile::refresh, enabled = !busy) { Text("Yangilash") }
                 if (tab == PatientTab.Today) {
-                    PrimaryAction("O‘tirib-turish mashqi", onClick = onExercise)
+                    PrimaryAction(mobile.exercise.plan?.movement?.titleUz ?: "Reabilitatsiya mashqi", onClick = onExercise)
                     TextButton(onClick = mobile::disconnect, enabled = !busy) { Text("Ulanishni uzish") }
                 }
             }
@@ -96,18 +118,26 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
             mobile.record(request.task.id, it)
         }
     }
+    dorimosTask?.let { task ->
+        DorimosSheet(task = task, mobile = mobile, onDismiss = { dorimosTask = null })
+    }
 }
 
 @Composable
 private fun ConnectedToday(
     state: MobileWorkspaceState,
+    steps: StepUi,
+    onRequestStepPermission: () -> Unit,
+    onSimulateSteps: () -> Unit,
     onRecord: (MobileTask, MedicationSheet) -> Unit,
+    onDorimos: (MobileTask) -> Unit,
     onReply: (String) -> Unit,
 ) {
     SoftReveal(0) { PageTitle("Bugungi vazifalar") }
     val day = state.day ?: return
     Text("Assalomu alaykum, ${day.patientName}", color = Muted, style = MaterialTheme.typography.bodyLarge)
     Text(displayDate(day.date), color = Muted, style = MaterialTheme.typography.labelLarge)
+    DailyStepsCard(steps, onRequestStepPermission, onSimulateSteps)
     if (day.tasks.isEmpty()) {
         PatientCard {
             SectionTitle("Bugunga dori vazifasi yo‘q")
@@ -126,7 +156,52 @@ private fun ConnectedToday(
                 entry = record?.let { MedicationEntry(it.reason, replyShown = it.reply != null) },
                 onRecord = { onRecord(task, it) }, onReply = reviewAction,
                 enabled = !state.refreshing && !state.saving,
+                boxAvailable = task.boxAvailable,
+                boxDone = task.boxDone,
+                onDorimos = { onDorimos(task) },
             )
+        }
+    }
+}
+
+@Composable
+private fun DailyStepsCard(
+    steps: StepUi,
+    onRequestPermission: () -> Unit,
+    onSimulateSteps: () -> Unit,
+) {
+    val progress = (steps.count.toFloat() / steps.goal.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val sourceLabel = when (steps.source) {
+        "demo_sim" -> "Demo simulyatsiya · auto-sync"
+        "self_report" -> "Vebdan kiritilgan"
+        else -> if (steps.sensorAvailable && steps.permissionGranted) "Telefon sensori · auto-sync" else "Qadam hisobi"
+    }
+    val syncLabel = when {
+        steps.syncing -> "Sinxronlanmoqda…"
+        steps.syncError != null -> steps.syncError
+        steps.count == 0 -> "Yurish yoki simulyatsiya bilan boshlanadi"
+        steps.synced -> "Shifokor paneliga yuborildi"
+        else -> "Sinxronlash kutilmoqda…"
+    }
+    PatientCard {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("Bugungi qadamlar")
+            Badge(
+                if (steps.achieved) "Maqsad bajarildi" else "Jarayonda",
+                if (steps.achieved) Mint else Amber,
+                if (steps.achieved) Green else AmberInk,
+            )
+        }
+        Text("${steps.count} / ${steps.goal} qadam", color = Ink, style = MaterialTheme.typography.headlineSmall)
+        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Green, trackColor = Mint)
+        Text("$sourceLabel · $syncLabel", color = Muted, style = MaterialTheme.typography.bodyMedium)
+        if (steps.sensorAvailable && !steps.permissionGranted) {
+            OutlinedButton(onClick = onRequestPermission, modifier = Modifier.fillMaxWidth()) {
+                Text("Telefon qadam sensorini yoqish")
+            }
+        }
+        OutlinedButton(onClick = onSimulateSteps, modifier = Modifier.fillMaxWidth()) {
+            Text("+500 qadam qo‘shish (demo simulyatsiya)")
         }
     }
 }

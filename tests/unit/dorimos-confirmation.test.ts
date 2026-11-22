@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { issueBoxConfirmation, readBoxConfirmation } from '../../src/lib/dorimos-confirmation';
+import { detectBoxImageMimeType } from '../../src/lib/dorimos-server';
 
 const secret = 'test-signing-secret-with-at-least-32-characters';
 const scope = {
@@ -41,5 +42,14 @@ describe('DoriMos patient confirmation', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('supports camera_photo confirmation and validates PNG/JPEG image magic bytes', () => {
+    const cameraInput = { ...input, sampleId: 'camera_photo' } as const;
+    const token = issueBoxConfirmation(cameraInput, secret);
+    expect(readBoxConfirmation(token, scope, secret)).toMatchObject(cameraInput);
+    expect(detectBoxImageMimeType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]))).toBe('image/png');
+    expect(detectBoxImageMimeType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
+    expect(detectBoxImageMimeType(new Uint8Array([0x47, 0x49, 0x46, 0x38]))).toBeNull();
   });
 });

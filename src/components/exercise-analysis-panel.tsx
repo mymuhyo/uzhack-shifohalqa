@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { exerciseAnalysis, type ExerciseAnalysis } from '@/lib/exercise-analysis';
+import { exerciseAnalysis, type ExerciseAnalysis, type ExerciseProvider } from '@/lib/exercise-analysis';
 import {
   compareExerciseObservations, exerciseExplanation, type ExerciseComparison, type ExerciseExplanation,
 } from '@/lib/exercise-explanation';
@@ -14,7 +14,7 @@ const viewLabels = {
   unclear: 'Klipdan harakatni ishonchli ajratib bo‘lmadi.',
 };
 
-function BaiduExplanation({ comparison }: { comparison: ExerciseComparison }) {
+function SampleExplanation({ comparison, name }: { comparison: ExerciseComparison; name: string }) {
   const [result, setResult] = useState<ExerciseExplanation | null>(null);
   const [pending, setPending] = useState(false);
   const request = useRef<AbortController | null>(null);
@@ -46,10 +46,10 @@ function BaiduExplanation({ comparison }: { comparison: ExerciseComparison }) {
   return (
     <div className={styles.analysisResult}>
       <button type="button" className={styles.primary} onClick={explain} aria-disabled={pending || result?.status === 'explained'}>
-        {pending ? 'Baidu izoh tayyorlamoqda…' : 'Natijani Baidu bilan izohlash'}
+        {pending ? `${name} izoh tayyorlamoqda…` : `Natijani ${name} bilan izohlash`}
       </button>
       <div role="status">
-        {result?.status === 'unavailable' && <p>Baidu izohi hozir mavjud emas. Keyinroq qayta urinib ko‘ring.</p>}
+        {result?.status === 'unavailable' && <p>{name} izohi hozir mavjud emas. Keyinroq qayta urinib ko‘ring.</p>}
         {result?.status === 'explained' && <>
           <p>{result.summary}</p>
           <p className={styles.modelName}>{result.model} · Namuna izohi</p>
@@ -59,8 +59,11 @@ function BaiduExplanation({ comparison }: { comparison: ExerciseComparison }) {
   );
 }
 
-export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: MeasuredCycle[] }) {
-  const name = 'OpenRouter';
+export function ExerciseAnalysisPanel({ provider, poseCycles }: {
+  provider: Exclude<ExerciseProvider, 'gemini'>;
+  poseCycles?: MeasuredCycle[];
+}) {
+  const name = provider === 'opencode' ? 'OpenCode Console' : 'OpenRouter';
   const headingId = useId();
   const [report, setReport] = useState<ExerciseAnalysis | null>(null);
   const [pending, setPending] = useState(false);
@@ -81,7 +84,7 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: MeasuredCyc
       const response = await fetch('/api/demo/exercise-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'openrouter' }),
+        body: JSON.stringify({ provider }),
         signal: controller.signal,
       });
       const parsed = exerciseAnalysis.safeParse(await response.json());
@@ -97,9 +100,9 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: MeasuredCyc
   return (
     <section className={styles.aiPanel} aria-labelledby={headingId}>
       <h2 id={headingId}>{name} kuzatuvi</h2>
-      <p>OpenRouter ommaviy CDC klipining tahrirlangan nusxasi yoki undan olingan kadrlarni kuzatadi.</p>
+      <p>{name} ommaviy CDC klipining tahrirlangan nusxasini{provider === 'openrouter' && ' yoki undan olingan kadrlarni'} kuzatadi.</p>
       <button type="button" className={styles.primary} onClick={review} aria-disabled={pending || report?.status === 'observed'}>
-        {pending ? 'OpenRouter tahlil qilmoqda…' : report?.status === 'observed' ? 'Namuna tahlil qilindi' : 'Namunani OpenRouter bilan tahlil qilish'}
+        {pending ? `${name} tahlil qilmoqda…` : report?.status === 'observed' ? 'Namuna tahlil qilindi' : `Namunani ${name} bilan tahlil qilish`}
       </button>
       {report?.status === 'unavailable' && <p role="status">{name} tahlili hozir mavjud emas. MediaPipe o‘lchovlari yuqorida.</p>}
       {report?.status === 'observed' && (
@@ -123,7 +126,7 @@ export function ExerciseAnalysisPanel({ poseCycles }: { poseCycles?: MeasuredCyc
         </div>
       )}
       {comparison && (
-        <BaiduExplanation key={comparison.comparison} comparison={comparison.comparison} />
+        <SampleExplanation key={comparison.comparison} comparison={comparison.comparison} name={provider === 'opencode' ? name : 'Baidu'} />
       )}
     </section>
   );

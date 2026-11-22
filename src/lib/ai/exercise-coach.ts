@@ -29,7 +29,7 @@ export const aiCoachPayloadSchema = z.object({
 });
 
 export const exerciseCoachResponseSchema = z.object({
-  source: z.enum(['openrouter', 'deterministic_coach']),
+  source: z.enum(['openrouter', 'opencode', 'deterministic_coach']),
   model: z.string(),
   formScore: z.number().int().min(0).max(100),
   severity: z.enum(['ok', 'yellow', 'red']),

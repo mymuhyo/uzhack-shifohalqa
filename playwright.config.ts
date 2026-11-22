@@ -15,6 +15,8 @@ const databaseUrl = process.env.SHIFO_E2E_DATABASE_URL ?? '';
 const serverScript = databaseUrl ? 'start' : 'dev';
 const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
 const useExerciseOpenRouter = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
+const useExerciseOpenCode = process.env.SHIFO_E2E_EXERCISE_OPENCODE === '1';
+if (useExerciseOpenRouter && useExerciseOpenCode) throw new Error('Select one live exercise provider');
 const telegramPort = readPort('SHIFO_E2E_TELEGRAM_PORT', 3420);
 const telegramChatId = (process.env.SHIFO_E2E_TELEGRAM_CHAT_ID ??= String(randomInt(100_000_000_000, 900_000_000_000)));
 
@@ -32,8 +34,13 @@ export default defineConfig({
       DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
       ...(useLiveOcr ? {} : { GEMINI_API_KEY: '', CLOUDFLARE_ACCOUNT_ID: '', CLOUDFLARE_API_TOKEN: '' }),
       ...(useLiveOcr || useExerciseOpenRouter ? {} : { OPENROUTER_API_KEY: '' }),
+      ...(useLiveOcr || useExerciseOpenCode ? {} : { OPENCODE_API_KEY: '' }),
+      ...(useExerciseOpenRouter ? { AI_COMPLETION_PROVIDER: 'openrouter' } : {}),
+      ...(useExerciseOpenCode ? { AI_COMPLETION_PROVIDER: 'opencode' } : {}),
       EXERCISE_OPENROUTER_DEMO: String(useExerciseOpenRouter),
+      EXERCISE_OPENCODE_DEMO: String(useExerciseOpenCode),
       EXERCISE_COACH_OPENROUTER_DEMO: 'false',
+      EXERCISE_COACH_OPENCODE_DEMO: 'false',
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       NEXT_TELEMETRY_DISABLED: '1',
       SESSION_SECRET: randomBytes(32).toString('hex'),

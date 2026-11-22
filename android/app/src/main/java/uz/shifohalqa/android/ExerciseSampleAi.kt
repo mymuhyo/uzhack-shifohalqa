@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 internal data class PublicExerciseAdvice(val source: String, val text: String, val cue: String)
 
 internal enum class SampleAiProvider(val value: String, val label: String) {
-    OpenRouter("openrouter", "OpenRouter bilan tahlil"),
-    Baidu("baidu", "Baidu bilan izohlash"),
+    OpenRouter("openrouter", "AI bilan tahlil"),
+    Baidu("baidu", "AI bilan izohlash"),
 }
 
 internal sealed interface SampleAiReport {
@@ -48,7 +48,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
         SectionTitle("AI tahlilchi · CDC namunasi")
         Text("Mustaqil AI kuzatuvi faqat ommaviy CDC videosiga ishlatiladi.")
         if (mobile == null) {
-            Text("OpenRouter va Baidu uchun veb-panelga ulang.")
+            Text("AI tahlili uchun veb-panelga ulang.")
         } else {
             TextButton(enabled = !busy, onClick = {
                 busy = true
@@ -94,7 +94,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
             }
         }
         advice?.let {
-            Text(if (it.source == "openrouter") "AI murabbiy · ommaviy namuna" else "Qoidaviy murabbiy")
+            Text(if (it.source == "openrouter" || it.source == "opencode") "AI murabbiy · ommaviy namuna" else "Qoidaviy murabbiy")
             Text(it.text)
             Text(it.cue)
         }

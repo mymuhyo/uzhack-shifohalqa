@@ -1,5 +1,9 @@
 # ShifoHalqa · Demo benchmarklari
 
+## OpenCode Console
+
+22-noyabr 2026 (MYT). Vitest’dagi taqlidiy HTTP javoblari Console’ga aynan repodagi tahrirlangan CDC MP4, sintetik quti tasviri va qat’iy belgilangan matnli so‘rovlar ketishini tekshirdi. Console API kaliti bo‘lmagani sababli jonli javob, kechikish, OCR aniqligi va video sanoq aniqligi o‘lchanmadi.
+
 ## Cloudflare Clef va Clairic Flash
 
 22-noyabr 2026 (MYT) · ajratilgan integratsiya muhitidagi `scripts/dorimos-benchmark.ts` · repodagi 10 ta sintetik quti. Clef sifatni tekshirdi, Clairic Flash o‘qilgan maydonlarni qaytardi. Zaxira provayderi o‘chirilgan edi.

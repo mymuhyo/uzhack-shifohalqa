@@ -10,6 +10,7 @@ import {
   type MedicationBoxReading,
 } from './medication-box';
 import { requestOpenRouterCompletion } from './openrouter';
+import { configuredAiCompletion, openCodeTextModel, requestOpenCodeCompletion, type AiCompletion } from './opencode';
 import { readCloudflareBox } from './dorimos-cloudflare';
 
 export { compareMedicationBox, medicationBoxLabelSchema, medicationBoxReadingSchema } from './medication-box';
@@ -135,12 +136,16 @@ async function readDecisionGates(
 }
 
 async function extractBoxLabel(
+  provider: AiCompletion['provider'],
   key: string,
   model: string,
   image: ImageBlock,
   signal: AbortSignal,
 ): Promise<{ label: MedicationBoxLabel; model: string } | null> {
-  const result = await requestOpenRouterCompletion(key, {
+  const result = provider === 'opencode' ? await requestOpenCodeCompletion(key, {
+    model, prompt: extractionPrompt, schema: extractionJsonSchema, maxOutputTokens: 512,
+    media: { mimeType: image.mime_type, data: image.data },
+  }, signal) : await requestOpenRouterCompletion(key, {
     model,
     max_tokens: 512,
     ...(model === defaultOcrModel ? { reasoning: { enabled: false } } : {}),
@@ -167,35 +172,35 @@ function cloudflareCredentials() {
 }
 
 export function isMedicationBoxAiConfigured() {
-  return Boolean(cloudflareCredentials() || (process.env.GEMINI_API_KEY?.trim() && process.env.OPENROUTER_API_KEY?.trim()));
+  return Boolean(cloudflareCredentials() || (process.env.GEMINI_API_KEY?.trim() && configuredAiCompletion()));
 }
 
 /** For server-owned synthetic fixtures. The caller owns access checks, confirmation and storage. */
 export async function readMedicationBox(input: BoxImageInput): Promise<MedicationBoxReading> {
   const parsed = boxImageInput.parse(input);
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  const completion = configuredAiCompletion();
   const cloudflare = cloudflareCredentials();
   const signal = AbortSignal.timeout(requestDeadlineMs);
 
   if (cloudflare) {
-    const canFallback = Boolean(geminiKey && openRouterKey);
+    const canFallback = Boolean(geminiKey && completion);
     const cloudflareSignal = canFallback ? AbortSignal.any([signal, AbortSignal.timeout(cloudflareWindowMs)]) : signal;
     const reading = await readCloudflareBox(cloudflare.accountId, cloudflare.apiToken, parsed.image, parsed.mimeType, parsed.expected, cloudflareSignal);
     if (reading.status !== 'manual' || !canFallback || signal.aborted) return reading;
   }
-  if (!geminiKey || !openRouterKey) return { status: 'manual', reason: 'missing_key' };
-  return readGeminiOpenRouterBox(parsed, geminiKey, openRouterKey, signal);
+  if (!geminiKey || !completion) return { status: 'manual', reason: 'missing_key' };
+  return readGeminiBox(parsed, geminiKey, completion, signal);
 }
 
-async function readGeminiOpenRouterBox(
+async function readGeminiBox(
   { image, mimeType, expected }: BoxImageInput,
   geminiKey: string,
-  openRouterKey: string,
+  { provider, key }: AiCompletion,
   signal: AbortSignal,
 ): Promise<MedicationBoxReading> {
-  const primaryModel = process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
-  const fallbackModel = process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
+  const primaryModel = provider === 'opencode' ? openCodeTextModel : process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
+  const fallbackModel = provider === 'opencode' ? primaryModel : process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
   const decisionModel = process.env.GEMINI_DECISION_MODEL?.trim() || 'gemini-decision-1';
   const imageBlock: ImageBlock = { type: 'image', data: Buffer.from(image).toString('base64'), mime_type: mimeType };
 
@@ -214,10 +219,10 @@ async function readGeminiOpenRouterBox(
     const primaryWindow = primaryModel === fallbackModel ? signal : AbortSignal.any([signal, AbortSignal.timeout(primaryWindowMs)]);
     let reading: Awaited<ReturnType<typeof extractBoxLabel>>;
     try {
-      reading = await extractBoxLabel(openRouterKey, primaryModel, imageBlock, primaryWindow);
+      reading = await extractBoxLabel(provider, key, primaryModel, imageBlock, primaryWindow);
     } catch (error) {
       if (signal.aborted || primaryModel === fallbackModel) throw error;
-      reading = await extractBoxLabel(openRouterKey, fallbackModel, imageBlock, signal);
+      reading = await extractBoxLabel(provider, key, fallbackModel, imageBlock, signal);
     }
     if (!reading) return { status: 'retake', reason: 'extraction_unreadable', gates };
     return { status: 'needs_confirmation', ...reading, decisionModel, confidence, gates };

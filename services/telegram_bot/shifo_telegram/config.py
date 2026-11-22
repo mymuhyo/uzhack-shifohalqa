@@ -19,7 +19,8 @@ def _app_url(value: str) -> str:
         raise ValueError("TELEGRAM_APP_URL must be an HTTPS URL.") from None
     if url.scheme != "https" or not valid_host or has_credentials or "?" in value or "#" in value:
         raise ValueError("TELEGRAM_APP_URL must be an HTTPS URL without credentials, query, or fragment.")
-    return urlunsplit((url.scheme, url.netloc, url.path or "/", "", ""))
+    path = f"{url.path.rstrip('/')}/"
+    return urlunsplit((url.scheme, url.netloc, path, "", ""))
 
 
 @dataclass(frozen=True)

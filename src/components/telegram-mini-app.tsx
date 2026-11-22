@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useSyncExternalStore } from 'react';
+import Script from 'next/script';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 type TelegramWindow = Window & {
   Telegram?: {
@@ -13,23 +14,42 @@ type TelegramWindow = Window & {
   };
 };
 
-const subscribeNoop = () => () => {};
+const listeners = new Set<() => void>();
+const subscribeTelegram = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+const notifyTelegram = () => {
+  listeners.forEach((listener) => listener());
+};
 const readInTelegram = () => Boolean((window as TelegramWindow).Telegram?.WebApp?.initData);
 const readInTelegramServer = () => false;
 
 export function TelegramMiniApp({ demoEnabled }: { demoEnabled: boolean }) {
-  const inTelegram = useSyncExternalStore(subscribeNoop, readInTelegram, readInTelegramServer);
+  const inTelegram = useSyncExternalStore(subscribeTelegram, readInTelegram, readInTelegramServer);
 
-  useEffect(() => {
+  const syncTelegramWebApp = useCallback(() => {
     const webApp = (window as TelegramWindow).Telegram?.WebApp;
     if (webApp) {
       webApp.ready?.();
       webApp.expand?.();
+      notifyTelegram();
     }
+  }, []);
+
+  useEffect(() => {
+    const webApp = (window as TelegramWindow).Telegram?.WebApp;
+    webApp?.ready?.();
+    webApp?.expand?.();
   }, []);
 
   return (
     <div className="ledger">
+      <Script
+        src="https://telegram.org/js/telegram-web-app.js"
+        strategy="afterInteractive"
+        onReady={syncTelegramWebApp}
+      />
       <section aria-labelledby="tg-intro-heading">
         <span className="status-pill status-ok">
           {inTelegram ? 'Telegram Mini App muhiti' : 'Mini App ko‘rinishi'}

@@ -268,3 +268,13 @@ class ConfigTests(TestCase):
             with patch.dict(os.environ, {"TELEGRAM_APP_URL": "https://username:password@demo.example.test/"}):
                 with self.assertRaisesRegex(ValueError, "HTTPS"):
                     Config.from_env(require_database=False)
+            with patch.dict(os.environ, {"TELEGRAM_APP_URL": "https://demo.example.test/subpath"}):
+                self.assertEqual(
+                    Config.from_env(require_database=False).app_url,
+                    "https://demo.example.test/subpath/",
+                )
+            with patch.dict(os.environ, {"TELEGRAM_APP_URL": "https://demo.example.test"}):
+                self.assertEqual(
+                    Config.from_env(require_database=False).app_url,
+                    "https://demo.example.test/",
+                )

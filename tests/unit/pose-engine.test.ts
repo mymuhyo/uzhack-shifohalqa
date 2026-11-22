@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createPoseTracker } from '../../src/lib/pose/engine';
 
@@ -36,7 +37,34 @@ function cycle(bottom: number) {
   ];
 }
 
+const sharedTraces = readFileSync(new URL('../fixtures/chair-stand/live.tsv', import.meta.url), 'utf8')
+  .trim().split('\n').slice(1).map(row => row.split('\t'));
+
+it.each(sharedTraces)('matches the Android live trace %s', (_name, step, gapAt, gap, visibility, valid, shallow, angles) => {
+  const tracker = createPoseTracker({ targetAngle: 100, liveCamera: true });
+  angles.split(' ').forEach((angle, index) => {
+    tracker.update(landmarks(Number(angle), landscape, Number(visibility)), {
+      ...landscape,
+      timestampMs: index * Number(step) + (Number(gapAt) >= 0 && index >= Number(gapAt) ? Number(gap) : 0),
+    });
+  });
+  expect(tracker.result()).toMatchObject({ validReps: Number(valid), shallowReps: Number(shallow) });
+});
+
 describe('sit-to-stand pose tracker', () => {
+  it('counts elbow bending with arm landmarks and ignores knee movement', () => {
+    const tracker = createPoseTracker({ movement: 'elbow_bend', targetAngle: 80 });
+    const kneeEnd = feed(tracker, cycle(70));
+    expect(tracker.result()).toMatchObject({ validReps: 0, analyzedFrames: 0 });
+    cycle(70).forEach((angle, index) => {
+      const points = landmarks(angle, landscape);
+      [11, 13, 15].forEach((joint, offset) => { points[joint] = points[23 + 2 * offset]; });
+      tracker.update(points, { ...landscape, timestampMs: kneeEnd + index * 50 });
+    });
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(tracker.cycles()[0].minAngle).toBeCloseTo(70);
+  });
+
   it('requires five usable consecutive frames and does not count repeated timestamps', () => {
     const tracker = createPoseTracker({ targetAngle });
     const timestampMs = feed(tracker, [172, 172, 172, 172]);
@@ -92,6 +120,13 @@ describe('sit-to-stand pose tracker', () => {
     const measured = tracker.result();
     expect(measured).toMatchObject({ validReps: 1, shallowReps: 1 });
     expect(measured.minAngle).toBeCloseTo(105);
+    expect(tracker.cycles()).toEqual([
+      { fromMs: expect.any(Number), toMs: expect.any(Number), minAngle: expect.closeTo(105), reachesTarget: true },
+      { fromMs: expect.any(Number), toMs: expect.any(Number), minAngle: expect.closeTo(120), reachesTarget: false },
+    ]);
+    const [first, second] = tracker.cycles();
+    expect(first.fromMs).toBeLessThan(first.toMs);
+    expect(first.toMs).toBeLessThan(second.fromMs);
     expect(measured.motionSignature).toHaveLength(20);
     expect(Math.min(...measured.motionSignature!)).toBeCloseTo(105);
     expect(measured.motionSignature![19]).toBeGreaterThanOrEqual(160);
@@ -160,6 +195,51 @@ describe('sit-to-stand pose tracker', () => {
 
     expect(tracker.result().confidence).toBeCloseTo(0.48);
     expect(tracker.result().analyzedFrames).toBe(10);
+  });
+
+  it('keeps a clearly visible leg when the other leg has a higher visibility score', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    cycle(95).forEach((angle, index) => {
+      const points = landmarks(angle, landscape, 0.84);
+      const other = landmarks(angle, landscape, index >= 6 && index % 2 === 0 ? 0.99 : 0.79);
+      [23, 25, 27].forEach(joint => { points[joint + 1] = other[joint]; });
+      tracker.update(points, { ...landscape, timestampMs: index * 80 });
+    });
+
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+  });
+
+  it('keeps a supported bottom and return at four measured frames per second', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const angles = [174, 174, 174, 174, 174, 174, 152, 130, 95, 95, 130, 152, 174, 174];
+    angles.forEach((angle, index) => {
+      tracker.update(landmarks(angle, landscape), { ...landscape, timestampMs: index * 250 });
+    });
+
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(tracker.cycles()[0].minAngle).toBeCloseTo(95);
+  });
+
+  it('does not join an unfinished live cycle across a long pause in frame delivery', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const nextTime = feed(tracker, cycle(95).slice(0, 17));
+    feed(tracker, cycle(95).slice(17), nextTime + 500);
+
+    expect(tracker.result()).toMatchObject({ validReps: 0, shallowReps: 0 });
+    expect(tracker.feedback()).toMatchObject({ interruptedCycles: 1, incompleteCycles: 0 });
+  });
+
+  it('waits for the starting pose and distinguishes an incomplete movement from lost tracking', () => {
+    const tracker = createPoseTracker({ targetAngle, liveCamera: true });
+    const constant = (angle: number) => Array<number>(7).fill(angle);
+    const seated = feed(tracker, constant(95));
+    expect(tracker.isTracking()).toBe(true);
+    expect(tracker.feedback().ready).toBe(false);
+    const standing = feed(tracker, constant(174), seated);
+    expect(tracker.feedback().ready).toBe(true);
+    feed(tracker, [...constant(145), ...constant(174)], standing);
+    expect(tracker.feedback()).toEqual({ ready: true, interruptedCycles: 0, incompleteCycles: 1 });
+    expect(tracker.cycles()).toHaveLength(0);
   });
 
   it('retains the quality penalty if the camera loses tracking before any completed rep', () => {

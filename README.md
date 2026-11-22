@@ -24,7 +24,7 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 - **Production:** https://shifohalqa.vercel.app (Vercel `shifohalqa`, faqat `main` dan)
 - **DB:** Neon `shifohalqa/main` · UzHack sintetik demosi
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
-- **AI:** Hybrid — on-device MediaPipe Pose (L3) + `gemini-4-hydrogen` (OCR/extract) + `gemini-decision-1` (calibrated gate/score, Decisions API `v1beta`)
+- **AI:** Hybrid — on-device MediaPipe Pose (L3) + OpenRouter (synthetic label OCR, public sample observation and Uzbek explanation) + `gemini-decision-1` (quality checks via Decisions API `v1beta`)
 
 ## O'qish tartibi
 | Fayl | Maqsad |
@@ -72,7 +72,7 @@ Playwright lokal serverda alohida sessiya kaliti bilan ishlaydi. Standart brauze
 
 Ma’lumotlar bazasi bilan E2E Python servisini ham ishga tushiradi. Avval `uv sync --project services/telegram_bot --locked` bilan uning bog‘liqliklarini o‘rnating. Python unit testlari uchun `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests` ishlating. E2E Telegramga chiqmasdan, bitta sintetik chatga bog‘langan navbatni haqiqiy Neon’da sinaydi.
 
-Jonli DoriMos brauzer testini qo‘shish uchun `SHIFO_E2E_LIVE_GEMINI=1` va `GEMINI_API_KEY` belgilang. Standart E2E tashqi Gemini so‘rovlarisiz ishlaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
+Jonli DoriMos brauzer sinovi uchun `SHIFO_E2E_LIVE_DORIMOS=1`, `GEMINI_API_KEY` va `OPENROUTER_API_KEY` kerak. Standart E2E tashqi AI provayderlarini chaqirmaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
 
 ```bash
 node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/dorimos-benchmark.ts
@@ -117,17 +117,23 @@ Railway Variables ichidagi `TELEGRAM_DATABASE_URL` Neon `shifohalqa/main` dagi c
 
 `android/` ni Android Studio’da alohida loyiha sifatida oching. Mustaqil demo oqimida «Bugun» → «Icha olmadim» → «Dori tugadi» → «Qaydni saqlash» → «Qaydni ko‘rish» → «Namuna javobni ochish» ishlaydi. «Ichdim» yo‘li ham bor. Mahalliy qayd qurilmada saqlanadi. «Javoblar» bo‘limidagi «Demoni qayta boshlash» tasdiqdan keyin uni o‘chiradi.
 
+«O‘tirib-turish mashqi» Android jonli kamerasida **MediaPipe Full** ishlaydi. «Video tanlash va tahlil qilish» galereyadagi ikki daqiqagacha bo‘lgan klipni telefonda **MediaPipe Heavy** bilan tahlil qiladi. O‘lchovni tasdiqlasangiz, panelga L2 xulosasi yuboriladi. Kamera xulosasi L3 sifatida baholanadi. Ikkala model APK tarkibida. Kamera to‘xtatilgach, o‘lchovni saqlash, qayta urinish yoki qo‘lda kiritish mumkin. «Og‘riq bor» kamerani darhol yopadi. «Tez yordam · 103» telefon terish ekranini ochadi.
+
+«AI tahlilchi · CDC namunasi» ulangan demo ish joyida serverda `EXERCISE_OPENROUTER_DEMO=true` va `OPENROUTER_API_KEY` bilan ommaviy namunani tahlil qiladi. MP4 so‘roviga OpenRouter 402 qaytarsa, ayni namunaning 9 kadridan foydalanadi va UI buni ko‘rsatadi. Heavy o‘lchovi mavjud bo‘lsa, OpenRouter orqali Baidu solishtiruvni o‘zbekcha izohlaydi. Galereya videosi va kadrlar telefonda qoladi.
+
 JDK 17 yoki undan yangirog‘i, Android SDK API 37 va Build Tools 36.0.0 kerak. Demo Android 8.0 (API 26) yoki undan yangi qurilmaga o‘rnatiladi. Emulyator yoki test qurilmasi ulanganida ikkinchi buyruq UI oqimlarini tekshiradi.
 
 ```bash
 cd android
-./gradlew :app:assembleDebug :app:lintDebug
+./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-Debug APK `android/app/build/outputs/apk/debug/app-debug.apk` faylida hosil bo‘ladi.
+Debug APK `android/app/build/outputs/apk/debug/app-debug.apk` faylida hosil bo‘ladi. ARM64 telefon uchun `./gradlew :app:assembleDebug -PshifoAbi=arm64-v8a` bitta arxitekturali kichikroq APK beradi. Emulyator sinovi uchun parametrsiz build ishlating.
 
 ### Androidni veb-panelga ulash
+
+Ajratilgan worktree’da `npm run lane -- dev` va `npm run lane -- android-test` ishlating. Launcher emulyatorning lokal 3000 portini tegishli worktree portiga ulaydi.
 
 Lokal server `DEMO_MODE=true`, `DEMO_ANDROID_ENABLED=true`, `SESSION_SECRET` va ajratilgan test bazasi bilan ishlashi kerak. Debug APK uchun ADB orqali serverni telefonga yo‘naltiring. Bir nechta qurilma ulangan bo‘lsa, `adb -s SERIAL` bilan sinov telefonini tanlang.
 
@@ -143,7 +149,9 @@ adb reverse tcp:3000 tcp:3000
 2. Androidda «Veb-panelga ulash»ni bosing va bir martalik kodni kiriting. Debug manzil `http://127.0.0.1:3000`. Ommaviy muhitda HTTPS manzil talab qilinadi.
 3. Androidda dori sababini saqlang. Shifokor brauzerda aynan shu qaydni ochib javob beradi. Androiddagi «Javoblar» orqali yoki «Yangilash»ni bosib javobni ko‘ring.
 
-Sessiya 8 soat amal qiladi va ilova jarayoni tugaganda qurilmada qayta ulash kerak bo‘ladi. Yangi juftlash kodi shu ish joyidagi oldingi Android sessiyasini tugatadi. [Android API kontrakti](docs/INTERFACES.md#android-demo-api)
+Mashq uchun shifokor veb-panelda «Mashqni biriktirish»ni bosadi. Androidda «O‘tirib-turish mashqi»ni oching va reja chiqqach kamera yoki qo‘lda qayd yo‘lini tanlang. Internet uzilganda ilova «Telefonda saqlandi, hali yuborilmadi»ni ko‘rsatadi. Aloqa tiklangach qayd yuboriladi. Shifokor «Mashq qaydlari»dan aynan shu yozuvga javob beradi. Androidda mashq ekranidagi «Yangilash» orqali javob ko‘rinadi.
+
+Sessiya 8 soat amal qiladi. Android uni Keystore orqali shifrlab saqlaydi. Yangi juftlash kodi eski sessiyani tugatadi. Muddati o‘tgan sessiyadagi jo‘natilmagan qayd ayni demo ish joyiga qayta ulangach yuboriladi. [Android API kontrakti](docs/INTERFACES.md#android-demo-api)
 
 ## Halollik qoidasi (muzokaraga yopiq)
 **AI o'lchaydi → kod qoidalari bayroq ko'taradi → shifokor qaror qiladi.** Hech qachon "AI isbotladi/tashxis qo'ydi" yozilmaydi; simulyatsiya qismlar ochiq belgilanadi; har submission bilan "what works / what's simulated" + AI-use note keladi.

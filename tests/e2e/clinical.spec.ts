@@ -29,8 +29,10 @@ test('returns the reply and L4 to the exact older log in the clinical loop', asy
   await page.getByLabel('Sistolik bosim').fill('144');
   await page.getByLabel('Diastolik bosim').fill('80');
   await page.getByRole('button', { name: 'Qaydni yuborish' }).click();
+  const savedNotes = page.getByText('Qayd saqlandi');
+  await expect(savedNotes).toHaveCount(2);
   await page.reload();
-  await expect(page.getByText('Qayd saqlandi')).toHaveCount(2);
+  await expect(savedNotes).toHaveCount(2);
 
   await enterRole(page, 'doctor');
   const queue = page.getByRole('region', { name: 'Bemorlar navbati' });

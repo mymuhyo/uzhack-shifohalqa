@@ -1,16 +1,18 @@
+import Link from 'next/link';
 import { isDemoEnabled } from '@/lib/demo-session';
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
+  const demoEnabled = isDemoEnabled();
   return (
     <main className="frame entry" id="content" tabIndex={-1}>
       <div className="entry-intro">
-        <h1>Uy davolanishini kuzatish</h1>
-        <p className="lede">Bemorning dorisi tugadi. Shifokor buni qanday biladi va bemor uning javobini qayerda ko‘radi?</p>
-        <p className="role-hint">Bu sintetik demo. Ikkala rolni bitta brauzerda sinang.</p>
+        <h1>Uy mashqini kamera bilan o‘lchang</h1>
+        <p className="lede">O‘tirib-turish sikllari, tizza burchagi va har bir sikl vaqti brauzerda hisoblanadi.</p>
+        {demoEnabled && <Link className="text-action" href="/demo/mashq">Mashq demosini ochish</Link>}
       </div>
-      {isDemoEnabled() ? (
+      {demoEnabled ? (
         <form className="role-picker" action="/api/demo/login" method="post">
           <button className="role-button" type="submit" name="role" value="doctor" aria-describedby="doctor-hint">
             Shifokor sifatida kirish <span aria-hidden="true">↗</span>

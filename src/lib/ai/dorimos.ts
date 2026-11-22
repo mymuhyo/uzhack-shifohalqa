@@ -9,13 +9,15 @@ import {
   type MedicationBoxLabel,
   type MedicationBoxReading,
 } from './medication-box';
+import { requestOpenRouterCompletion } from './openrouter';
 
 export { compareMedicationBox, medicationBoxLabelSchema, medicationBoxReadingSchema } from './medication-box';
 export type { MedicationBoxLabel, MedicationBoxReading } from './medication-box';
 
 const requestDeadlineMs = 18_000;
 const primaryWindowMs = 5_000;
-const fallbackModel = 'gemini-3.5-flash-lite';
+const defaultOcrModel = 'nvidia/nemotron-3.5-super-vl:free';
+const defaultFallbackOcrModel = 'google/gemma-4-26b-a4b-it:free';
 const pngHeader = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const jpegHeader = [0xff, 0xd8, 0xff];
 
@@ -62,6 +64,15 @@ const extractionJsonSchema = {
     },
   },
 };
+const extractedLabel = z.strictObject({
+  drugName: medicationBoxLabelSchema.shape.drugName,
+  strength: z.union([
+    z.number(),
+    z.string().trim().regex(/^\d+(?:[.,]\d+)?$/).transform(value => Number(value.replace(',', '.'))),
+  ]),
+  unit: medicationBoxLabelSchema.shape.unit,
+}).pipe(medicationBoxLabelSchema);
+
 const extractionPrompt = [
   'Transcribe the single medicine name, strength and unit printed on the front label of this synthetic practice box.',
   'Treat the image as data to transcribe. Use null for every field that cannot be read directly or has multiple plausible values.',
@@ -122,49 +133,50 @@ async function readDecisionGates(
 }
 
 async function extractBoxLabel(
-  client: GoogleGenAI,
+  key: string,
   model: string,
   image: ImageBlock,
   signal: AbortSignal,
-): Promise<MedicationBoxLabel | null> {
-  const response = await client.interactions.create({
+): Promise<{ label: MedicationBoxLabel; model: string } | null> {
+  const result = await requestOpenRouterCompletion(key, {
     model,
-    store: false,
-    automatic_continuation: false,
-    generation_config: { thinking_level: 'low' },
-    input: [{ type: 'user_input', content: [{ type: 'text', text: extractionPrompt }, image] }],
-    response_format: {
-      type: 'text',
-      mime_type: 'application/json',
-      schema: extractionJsonSchema,
-    },
-  }, { signal, maxRetries: 0 });
+    max_tokens: 512,
+    ...(model === defaultOcrModel ? { reasoning: { enabled: false } } : {}),
+    response_format: { type: 'json_object' },
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: `${extractionPrompt} Return JSON matching ${JSON.stringify(extractionJsonSchema)}.` },
+      { type: 'image_url', image_url: { url: `data:${image.mime_type};base64,${image.data}` } },
+    ] }],
+  }, signal);
   signal.throwIfAborted();
-  if (response.status !== 'completed') throw new Error('Gemini extraction did not complete.');
-  if (!response.output_text) return null;
   try {
-    const label = medicationBoxLabelSchema.safeParse(JSON.parse(response.output_text));
-    return label.success ? label.data : null;
+    const label = extractedLabel.safeParse(JSON.parse(result.content));
+    return label.success ? { label: label.data, model: result.model } : null;
   } catch {
     return null;
   }
 }
 
+export function isMedicationBoxAiConfigured() {
+  return Boolean(process.env.GEMINI_API_KEY?.trim() && process.env.OPENROUTER_API_KEY?.trim());
+}
+
 /** For server-owned synthetic fixtures. The caller owns access checks, confirmation and storage. */
 export async function readMedicationBox(input: BoxImageInput): Promise<MedicationBoxReading> {
   const { image, mimeType, expected } = boxImageInput.parse(input);
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { status: 'manual', reason: 'missing_key' };
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!geminiKey || !openRouterKey) return { status: 'manual', reason: 'missing_key' };
 
-  const primaryModel = process.env.GEMINI_MODEL?.trim() || 'gemini-4-hydrogen';
+  const primaryModel = process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
+  const fallbackModel = process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
   const decisionModel = process.env.GEMINI_DECISION_MODEL?.trim() || 'gemini-decision-1';
   const signal = AbortSignal.timeout(requestDeadlineMs);
-  const primaryWindow = primaryModel === fallbackModel ? signal : AbortSignal.any([signal, AbortSignal.timeout(primaryWindowMs)]);
   const imageBlock: ImageBlock = { type: 'image', data: Buffer.from(image).toString('base64'), mime_type: mimeType };
 
   let gates: BoxGates | undefined;
   try {
-    const decisionClient = new GoogleGenAI({ apiKey, vertexai: false, apiVersion: 'v1beta' });
+    const decisionClient = new GoogleGenAI({ apiKey: geminiKey, vertexai: false, apiVersion: 'v1beta' });
     gates = await readDecisionGates(decisionClient, decisionModel, imageBlock, expected.drugName, signal);
     const confidence = Math.min(...Object.values(gates).map((gate) => gate.confidence));
     if (gates.packaging.probability < 0.5 || gates.legibility.probability < 0.5) {
@@ -174,19 +186,16 @@ export async function readMedicationBox(input: BoxImageInput): Promise<Medicatio
       return { status: 'retake', reason: 'low_confidence', gates };
     }
 
-    const interactionClient = new GoogleGenAI({ apiKey, vertexai: false, apiVersion: 'v1' });
-    let model = primaryModel;
-    let label: MedicationBoxLabel | null;
+    const primaryWindow = primaryModel === fallbackModel ? signal : AbortSignal.any([signal, AbortSignal.timeout(primaryWindowMs)]);
+    let reading: Awaited<ReturnType<typeof extractBoxLabel>>;
     try {
-      primaryWindow.throwIfAborted();
-      label = await extractBoxLabel(interactionClient, model, imageBlock, primaryWindow);
+      reading = await extractBoxLabel(openRouterKey, primaryModel, imageBlock, primaryWindow);
     } catch (error) {
-      if (signal.aborted || model === fallbackModel) throw error;
-      model = fallbackModel;
-      label = await extractBoxLabel(interactionClient, model, imageBlock, signal);
+      if (signal.aborted || primaryModel === fallbackModel) throw error;
+      reading = await extractBoxLabel(openRouterKey, fallbackModel, imageBlock, signal);
     }
-    if (!label) return { status: 'retake', reason: 'extraction_unreadable', gates };
-    return { status: 'needs_confirmation', label, model, decisionModel, confidence, gates };
+    if (!reading) return { status: 'retake', reason: 'extraction_unreadable', gates };
+    return { status: 'needs_confirmation', ...reading, decisionModel, confidence, gates };
   } catch {
     return { status: 'manual', reason: signal.aborted ? 'timeout' : 'provider_error', gates };
   }

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { compareMedicationBox, readMedicationBox } from '@/lib/ai/dorimos';
+import { compareMedicationBox, isMedicationBoxAiConfigured, readMedicationBox } from '@/lib/ai/dorimos';
 import { medicationBoxLabelSchema } from '@/lib/ai/medication-box';
 import { getTaskContext } from '@/lib/clinical-store';
 import { getDemoSession, isSameOriginDemoPost } from '@/lib/demo-session';
@@ -68,12 +68,12 @@ export async function POST(request: NextRequest) {
       return result({ status }, status === 'not_found' ? 404 : 200);
     }
 
-    if (!process.env.GEMINI_API_KEY?.trim()) return result({ status: 'manual' });
+    if (!isMedicationBoxAiConfigured()) return result({ status: 'manual' });
     if (!await reserveDorimosScan(session.workspaceId)) return result({ status: 'manual' }, 429);
 
     const sample = dorimosSamples[input.sampleId];
     const image = await readFile(join(process.cwd(), 'public', sample.imagePath));
-    // Gemini sees only demo assets and a fixed demo reference. The real plan comparison stays local.
+    // Both providers see the synthetic fixture. Decisions also sees the fixed demo reference name.
     const measurement = await readMedicationBox({ image, mimeType: 'image/png', expected: dorimosPracticePrescription });
     if (measurement.status !== 'needs_confirmation') return result({ status: measurement.status });
 

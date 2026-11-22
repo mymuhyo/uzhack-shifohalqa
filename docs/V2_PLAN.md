@@ -1,4 +1,50 @@
-# V2 · Uy davosidagi to‘siqqa javob
+# V2 · Androidda uy reabilitatsiyasi
+
+**Joriy yo‘nalish.** Bemor Kotlin va Compose ilovasida uy mashqini bajaradi. Jonli kamera MediaPipe Full, galereya videosi MediaPipe Heavy bilan telefonda ishlaydi. Ommaviy CDC namunasida Androiddan ham serverdagi AI tahlilchini ochish mumkin. Klinik reja va urinishga javob web panelda. Hakam Android o‘rnatmasdan CDC klipi, sintetik og‘riq xabari va javob oqimini brauzerda o‘tadi. Telegram yordamchi bildirishnoma va havola kanali.
+
+| Bosqich | Qabul mezoni |
+|---|---|
+| Android kamera va qo‘lda qayd | Kadrda tayanch nuqtalari yetarli bo‘lsa holat va takror sanog‘i ko‘rinadi. Yetarli bo‘lmasa qayta urinish yoki qo‘lda qayd ochiladi. To‘xtatish, og‘riq va fon rejimi kamerani yopadi. |
+| Klinik halqa | Mashq rejasi, urinish, alohida og‘riq xabari va aynan shu qaydga shifokor javobi bir demo ish joyida ishlaydi. Android va web javobni ko‘rsatadi. |
+| Sust aloqa | Oldingi reja telefondan ochiladi. Yuborilmagan xabar va server olgan xabar turli holatda ko‘rinadi. Qayta yuborish ikki yozuv yaratmaydi. |
+| Sifat o‘lchovi | Arzon Android va nazorat telefonida qo‘lda belgilangan 24 urinish. Yaroqli namunalarning kamida 90 foizida takror soni mos. Fizioterapevtning to‘g‘ri javobgacha faol vaqti uchun 10× faraz alohida tajribada tekshiriladi. |
+
+Keyingi native ishlar qo‘lda bosim, DoriMos, «Yaqinim» va qadam qaydi. Ular uchun navbatdagi mahsulot bo‘laklari tanlanadi.
+
+## Avvalgi V2 · Brauzerda mashq o‘lchovi va ommaviy klip tahlili
+
+**Joriy ustuvorlik.** Hakam «Mashq demosini ochish»dan tayyor klipni ishga tushiradi. Jonli kamerada MediaPipe kadr ustida o‘lchanayotgan son–tizza–to‘piq chizig‘ini va joriy burchakni ko‘rsatadi. Kadrlar tahlilidan to‘liq sikllar sanaladi. Natija har bir sikl vaqti, eng kichik burchagi va demo maqsadiga yetganini beradi. OpenRouter o‘sha ommaviy klip yoki uning 9 kadrini mustaqil tahlil qiladi. Hakam ikki sanoqni solishtiradi. Ma’lumotlar bazasi yoki akkaunt mashq demosini ochish uchun kerak emas.
+
+| Ish | Hajm | Bog‘liqlik | Qabul mezoni va holat |
+|---|---|---|---|
+| Jonli CV va har bir sikl dalili | O‘rta | MediaPipe, masofaviy modelga bog‘liqlik yo‘q | Haqiqiy dekodlangan kadrda tayanch chizig‘i va burchak chiqadi. Natijada sikllar va vaqtlar bor. Yomon kadrda qayta urinish taklif qilinadi. `exp/mashq-cv-ai` filialida. |
+| Videoni mustaqil OpenRouter tahlili | O‘rta | Ommaviy CDC klipi, server kaliti va demo flag | Model klipni CV sanoqisiz tahlil qiladi. Ikki o‘lchov ko‘rinadi. OpenRouter ishlamasa CV natijasi turadi. Real kamera va yuklangan shaxsiy video brauzerda qoladi. `exp/mashq-cv-ai` filialida. |
+| Mahalliy video tahlil vaqti | O‘rta | Bir xil klipda oldingi va ketma-ket dekoder o‘lchovi | Kadr izlash soni kamayadi. Ikkita sikl va bo‘sh kadrni rad etish o‘z kuchida. OpenRouter tugmasi CV tahlili ketayotganda ham ishlaydi. |
+| Telefon va alohida kadr sinovlari | O‘rta | Jismoniy Android/iOS, mos litsenziyali turli kliplar, qo‘lda belgilangan sikllar | To‘liq va chala harakat, kadrdan chiqish, yorug‘lik va kamera burchagi bo‘yicha etalon bilan solishtiring. Qurilma, brauzer, muvaffaqiyat va rad holatlarini yozing. |
+| Ovozli jonli kuzatuv | O‘rta | Telefon sinovi, qo‘llanadigan provayder shartlari | Keyingi tajriba. CV belgilagan «kadrda ko‘rinmayapti» kabi o‘lchov holatlaridan ovoz chiqishi va brauzerda ovozni darhol to‘xtatish tekshiriladi. Gemini Live uchun faqat shu maqsadga ruxsat berilgan namuna muhitida alohida sinov. |
+
+**Lokal sinash.** `DEMO_MODE=true` va alohida `SESSION_SECRET` bilan ishga tushiring. `/demo/mashq` da **CDC namunasini sinash** ni bosing. OpenRouter tugmasi uchun `EXERCISE_OPENROUTER_DEMO=true` va serverdagi `OPENROUTER_API_KEY` kerak. Jonli provayder brauzer testini `SHIFO_E2E_EXERCISE_OPENROUTER=1 npm run lane -- e2e -- tests/e2e/exercise-preview.spec.ts --workers=1` bilan tanlang. [OpenRouter video kirishi](https://openrouter.ai/docs/guides/overview/multimodal/videos)
+
+## Telefon sinovidan keyingi ketma-ketlik
+
+Vercel’dagi demo `ffdc850`dan chiqarilgan. Lokal `1c7ddd7` hisoblagich tuzatishi bilan loyiha egasi Android brauzerida 8 to‘liq va 2 chala takror hamda yashil tayanch chizig‘ini ko‘rdi. Bajarilgan takrorlarning etalon sanog‘i yozilmagan. Ushbu sinov kamera oqimi ishlaganini tasdiqlaydi. [Benchmark](BENCHMARK.md#jonli-kamerada-sekin-kadr-oqimi)
+
+| Tartib | Ish | Hajm va bog‘liqlik | Qabul mezoni |
+|---|---|---|---|
+| 1 | Web relizni yakunlash | Kichik. Kamera tuzatishi va egasi roziligi | Test ma’lumotlari bilan Chrome Android’da oldindan belgilangan takrorlar, kadrdan chiqish va qayta kirish tekshiriladi. Boshqa qurilmada, imkon bo‘lsa iOS Safari’da, CDC va kamera oqimi qaytariladi. Hakam yo‘riqnomasida kamera, CDC va OpenRouter qadamlarini ko‘rsating. Qabuldan keyin ikkala HTTPS domenda yangi reliz, demo rollari va OpenRouter namunasi ochiladi. |
+| 2 | O‘lchov sifatini yaxshilash | O‘rta. 1 va qo‘lda belgilangan test misollari | Kamera tayyorligini tik turgan holat aniqlangandan keyin ko‘rsating. Takror sanalmaganida kadr yetishmasligi va tugallanmagan siklni ajrating. Iloji boricha turli yorug‘lik, burchak va tezlikda qo‘lda belgilangan sikllar bo‘yicha o‘tkazib yuborilgan, ortiqcha va chala sanalgan takrorlarni yozing. Test natijasini o‘lchov ishonchidan alohida ko‘rsating. |
+| 3 | Telegram Mini App’da mashqni ochish | Kichik sinov. 1 va alohida test bot | Bot menyusi bor HTTPS mashq sahifasini Telegram ichida ochadi. CDC klipi Android va iOS’dagi Telegram klientida tekshiriladi. Jonli kamera shu muhitda tekshiriladi, ruxsat yoki API yetishmasa brauzerda ochish tugmasi ishlaydi. Birinchi versiya ommaviy namuna bilan ishlaydi. Mavjud bildirishnomalar saqlanadi. [Telegram Mini Apps](https://core.telegram.org/bots/webapps) |
+| 4 | Mashq bo‘yicha tahlil va ovoz | O‘rta. 2 va bir xil etalon sinovlar | Dastlab CV’dagi «kadrga qayting», sikl va tizza burchagi kabi kuzatuvlardan tushunarli yakun tuzing. Gemini Live’ni ommaviy namuna bilan alohida solishtiring. Ovozli yo‘l aniqroq fikr yoki tezroq qayta aloqa bersagina demo oqimiga qo‘shiladi. Shaxsiy kadrlar qurilmada qoladi. |
+| 5 | Android’da mashq sinov APKsi | O‘rta. 2 va bir xil tayanch nuqtalari testlari | Mavjud Compose ilovasiga bitta nativ mashq ekrani qo‘shiladi. CameraX va qurilmadagi pose modeli bilan takror, tayanch chizig‘i va tizza burchagi ko‘rinadi. Shu trayektoriyalar web bilan solishtiriladi. Debug APK, lint va ulangan qurilmadagi UI sinovi o‘tadi. Klinik qayd yuborishdan oldin mobil mashq API’si uchun alohida kontrakt kerak. [CameraX](https://developer.android.com/media/camera/camerax/analyze) |
+| 6 | Telegram bemor sessiyasi va Play sinov tarqatishi | Alohida ishlar. 3 yoki 5 natijasiga bog‘liq | Telegram sessiyasi kerak bo‘lsa server `initData`ni tekshiradi va tasdiqlangan bog‘lash orqali bemor rolini beradi. Android tarqatishda imzolangan build avval Play Internal Testing’da kichik guruhga beriladi. Hakam oqimi oddiy web havola orqali davom etadi. [Telegram sessiyasi](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app) · [Play sinov kanallari](https://support.google.com/googleplay/android-developer/answer/9845334) |
+
+Web, Telegram va Android bir xil vazifa va dalil kontraktiga ulanadi. Telegram birinchi bosqichda web interfeysni qayta ishlatadi. Android esa qurilmadagi kamera boshqaruvi va o‘lchov barqarorligi uchun alohida klient bo‘lib qoladi.
+
+**Mashq prototipi.** `exp/mashq-cv-ai` da kamera boshlang‘ich holat tasdiqlanganda «Sanoq tayyor»ni ko‘rsatadi va yakunda kuzatuv uzilgan sikllarni tugallanmagan harakatlardan ajratadi. `/demo/mashq/tirsak` da CDC klipi, jonli kamera va lokal video bor. O‘tirib-turish sahifasida AI va MediaPipe vaqt oraliqlari solishtiriladi. OpenRouter’ning bepul video modeli ixtiyoriy va server kaliti bilan yoqiladi. Mashqning asosiy o‘lchovi MediaPipe’da ishlaydi. [Benchmark](BENCHMARK.md)
+
+**Git va reliz.** Har commit bitta mantiqiy o‘zgarishni saqlaydi. Kerakli paytda ish filialini GitHub’ga push qilish mumkin. `main` push Vercel va Railway’ni ishga tushirishi mumkin. Vercel `promote` esa tekshirilgan buildga production domenlarini o‘tkazadi. Eksperimentni `main`ga birlashtirish va production reliz uchun egasi tasdig‘i olinadi. [Vercel promote](https://vercel.com/docs/deployments/promoting-a-deployment)
+
+## Oldingi V2 · Uy davosidagi to‘siqqa javob
 
 Hakam muvaffaqiyatni bitta natijadan ko‘ra oladi. Bemor dori tugaganini bildiradi, shifokor o‘sha yozuvga javob beradi, bemor javobni ko‘radi. Klinik natijani keyin bemor bilan tekshirish kerak. Task 2 uchun shu oqimdagi uzilishlarni tuzatamiz. [Audit](AUDIT.md) · [Uch mahsulot yo‘nalishi](FUTURE.md)
 
@@ -7,7 +53,7 @@ Hakam muvaffaqiyatni bitta natijadan ko‘ra oladi. Bemor dori tugaganini bildir
 | 1. Ish joyi va relizni solishtirish | Kichik | Ikkala papkaning tekshirilgan zaxirasi | Asosiy papkada reliz tarixi hamda Task 1 ning yakuniy ssenariysi bor. Ommaviy havolada asosiy oqim takrorlanadi. |
 | 2. Hakamning birinchi urinishini tuzatish | Kichik | 1 | Kirishda ikki rolning vazifasi tushunarli. Namuna rejaning odatiy sozlamasi dori tugaganini navbatga chiqaradi, shifokor buni o‘chirishi mumkin. 360 px ekranda rollar sahifasini pastga aylantirmasdan almashtirish mumkin. |
 | 3. Eski murojaatga yangi javobni yetkazish | O‘rta | Tanlangan log bo‘yicha ko‘rik va test bazasi | Shifokor oldingi haftadagi ochiq murojaatga bugun javob bersa, bemor javobni va murojaat sanasini ko‘radi. Aloqasiz eski dalil ochilmaydi. Haftalik ijro hisobi o‘zgarmaydi. |
-| 4. Media yo‘llarini barqarorlashtirish | O‘rta | Haqiqiy CDC klipi va sintetik Gemini namunasi | Yozilgan video kadrlar vaqtini fayldan olib tahlil qiladi. L2 uchun bemor tasdig‘i talab qilinadi. DoriMosda zaxira modelga vaqt qoladi, sifatsiz rasm qayta urinishga yuboriladi. |
+| 4. Media yo‘llarini barqarorlashtirish | O‘rta | Ommaviy CDC klipi va DoriMos sintetik namunasi | Yozilgan video kadrlar vaqtini fayldan olib tahlil qiladi. L2 uchun bemor tasdig‘i talab qilinadi. DoriMosda zaxira modelga vaqt qoladi, sifatsiz rasm qayta urinishga yuboriladi. |
 | 5. Topshirish va qayta sinash | Kichik | 2–4 | Lokal production build, unit va brauzer testlari natijalari yoziladi. Ko‘rik va L4 ma’nosi, namuna quti/video, kamera chegarasi, AI vazifasi tushuntiriladi. Jamoa tasdiqlagan muddat 22-noyabr 23:59 MYT. Topshirishdagi qabul tasdig‘i kabinetda saqlanadi. |
 | 6. Bir nechta bemorning murojaatini qabul qilish va topshirish | O‘rta · topshirishdan keyin | Klinika xodimining ish tartibi va alohida eksperimental filial | Ikki sintetik bemor bir xil sabab yuboradi. Mas’ul birini qabul qilib, boshqa xodimga topshira oladi. Noto‘g‘ri bemor yozuviga ko‘rik o‘tmaydi. Integratsiyadan oldin jamoa demoni sinaydi. |
 

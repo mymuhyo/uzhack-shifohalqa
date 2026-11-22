@@ -11,6 +11,8 @@ const chatReply = z.object({
   })).min(1),
 });
 
+const videoAttemptMs = { vercel: 6_000, opencode_go: 13_000, gemini: 6_000 };
+
 type FallbackInput = StructuredInput & {
   name: string;
   frames?: () => Promise<{ mimeType: 'image/jpeg'; data: string; prompt: string }>;
@@ -52,7 +54,9 @@ export async function requestFallbackCompletion<T>(
   const session = randomUUID();
   for (const { provider, key } of targets) {
     signal.throwIfAborted();
-    const attempt = AbortSignal.any([signal, AbortSignal.timeout(isVideo ? 8_000 : 4_500)]);
+    const attempt = targets.length === 1
+      ? signal
+      : AbortSignal.any([signal, AbortSignal.timeout(isVideo ? videoAttemptMs[provider] : 4_500)]);
     const auth = { Authorization: `Bearer ${key}` };
     try {
       if (provider === 'vercel') {
@@ -70,7 +74,7 @@ export async function requestFallbackCompletion<T>(
       const headers = { ...auth, 'User-Agent': 'ShifoHalqa/0.1', 'x-opencode-session': session };
       if (isVideo) {
         try {
-          const videoAttempt = AbortSignal.any([attempt, AbortSignal.timeout(4_000)]);
+          const videoAttempt = AbortSignal.any([attempt, AbortSignal.timeout(3_000)]);
           const result = await requestGeminiFormat('https://opencode.ai/inference/go/google/v1beta', headers,
             { ...input, model: 'gemini-4-argon' }, 'LOW', videoAttempt);
           return { provider, model: result.model, data: output.parse(JSON.parse(result.content)), usedFrames: false };

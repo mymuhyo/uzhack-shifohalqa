@@ -494,6 +494,26 @@ CREATE OR REPLACE TRIGGER telegram_queue_on_step_goal
   FOR EACH ROW
   EXECUTE FUNCTION shifohalqa.queue_telegram_doctor_step_goal();
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'shifohalqa_telegram_service') THEN
+    GRANT SELECT (workspace_id, patient_id, code_hash, expires_at, redeemed_at), UPDATE (redeemed_at), DELETE ON shifohalqa.telegram_patient_pairings TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, patient_id, link_id, chat_id, connected_at, paired_message_at, paired_update_id), INSERT (workspace_id, patient_id, chat_id, paired_message_at, paired_update_id), DELETE ON shifohalqa.telegram_patient_links TO shifohalqa_telegram_service;
+    GRANT SELECT, UPDATE (attempted_at, delivery_status, next_attempt_at) ON shifohalqa.telegram_patient_notices TO shifohalqa_telegram_service;
+    GRANT SELECT, UPDATE (attempted_at, delivery_status, next_attempt_at) ON shifohalqa.telegram_doctor_events TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, doctor_id, name) ON shifohalqa.patients TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, name) ON shifohalqa.doctors TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, patient_id, doctor_id, daily_step_goal, supply_follow_up) ON shifohalqa.plans TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, plan_id, type, title) ON shifohalqa.plan_items TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, plan_item_id, scheduled_date, status), UPDATE (status) ON shifohalqa.task_instances TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, patient_id, activity_date, step_count) ON shifohalqa.daily_step_counts TO shifohalqa_telegram_service;
+    GRANT SELECT (workspace_id, id, patient_id, movement, target_reps) ON shifohalqa.exercise_prescriptions TO shifohalqa_telegram_service;
+    GRANT SELECT (evidence_log_id, patient_reply, reviewed_at), INSERT (workspace_id, evidence_log_id, color, rule_key, detail) ON shifohalqa.flags TO shifohalqa_telegram_service;
+    GRANT SELECT (id, workspace_id, task_instance_id), INSERT (workspace_id, task_instance_id, level, source, ai_mode, payload) ON shifohalqa.evidence_logs TO shifohalqa_telegram_service;
+    GRANT INSERT (workspace_id, evidence_log_id, actor_id, action) ON shifohalqa.audit_events TO shifohalqa_telegram_service;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS shifohalqa.flag_followups (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL,

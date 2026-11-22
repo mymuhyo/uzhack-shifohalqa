@@ -126,19 +126,11 @@ function releaseCapture(capture: Capture | null) {
 async function loadLandmarker() {
   const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
   const files = await FilesetResolver.forVisionTasks('/models/wasm');
-  try {
-    return await PoseLandmarker.createFromOptions(files, {
-      baseOptions: { modelAssetPath: '/models/pose_landmarker_lite.task', delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    });
-  } catch {
-    return PoseLandmarker.createFromOptions(files, {
-      baseOptions: { modelAssetPath: '/models/pose_landmarker_lite.task', delegate: 'CPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    });
-  }
+  return PoseLandmarker.createFromOptions(files, {
+    baseOptions: { modelAssetPath: '/models/pose_landmarker_lite.task', delegate: 'CPU' },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
 }
 
 async function sha256(file: Blob): Promise<string> {

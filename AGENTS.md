@@ -4,6 +4,11 @@ Work in `~/Projects/uzhack` on local `main` for submission fixes. The public dem
 
 Read [V2_PLAN](docs/V2_PLAN.md) for current work, [SPEC](docs/SPEC.md) for the product contract and [INTERFACES](docs/INTERFACES.md) before changing an engine. [SUBMISSION](tasks/task-2/SUBMISSION.md) is the judge's browser walkthrough.
 
+## Session commits and handoff
+
+- Before ending a session, commit completed changes on the current branch. Group related edits into a focused commit with a clear message and split independent changes into separate commits. Run the relevant checks and review the staged diff. Stage only changes that belong to the task.
+- Report the branch, commit, check results and any unfinished work so the next agent can pick up from there. If there are no completed changes, report the remaining work without creating an empty commit.
+
 ## Run and verify
 
 - Node ≥22. Run `npm ci`, then `npm run dev`. Set `DEMO_MODE=true` and a random `SESSION_SECRET` of at least 32 characters in ignored `.env.local`. The judge workflow needs a populated schema and an isolated database. With no DB, only role/session navigation is available.

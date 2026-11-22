@@ -15,7 +15,7 @@ internal class ExerciseMotionTracker(plan: ExercisePlan, private val live: Boole
         if (chair != null) {
             val knee = points?.let { pickKnee(it, width, height, previousSide, live) }
             chair.update(timestamp, knee?.angle, knee?.visibility ?: 0.0, knee?.side)
-            previousSide = knee?.side
+            previousSide = if (knee != null && chair.ready) knee.side else null
         }
     }
 

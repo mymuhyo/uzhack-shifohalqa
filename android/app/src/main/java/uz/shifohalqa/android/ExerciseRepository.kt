@@ -150,7 +150,7 @@ internal class ExerciseRepository(context: Context) {
         val request = OneTimeWorkRequestBuilder<ExerciseSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInputData(workDataOf("attemptId" to id)).build()
-        WorkManager.getInstance(app).enqueueUniqueWork("exercise-$id", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        WorkManager.getInstance(app).enqueueUniqueWork("exercise-$id", ExistingWorkPolicy.KEEP, request)
     }
 }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fallbackAiProvider } from '../ai-provider';
 import {
   analyzeExerciseDiagnostics,
   exerciseErrorCodeSchema,
@@ -29,7 +30,7 @@ export const aiCoachPayloadSchema = z.object({
 });
 
 export const exerciseCoachResponseSchema = z.object({
-  source: z.enum(['openrouter', 'opencode', 'deterministic_coach']),
+  source: z.enum(['openrouter', 'opencode', 'deterministic_coach', ...fallbackAiProvider.options]),
   model: z.string(),
   formScore: z.number().int().min(0).max(100),
   severity: z.enum(['ok', 'yellow', 'red']),

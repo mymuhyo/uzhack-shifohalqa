@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { fallbackAiProvider } from './ai-provider';
 
-export const exerciseProvider = z.enum(['gemini', 'openrouter', 'opencode']);
+export const exerciseProvider = z.enum(['gemini', 'openrouter', 'opencode', 'auto']);
 export type ExerciseProvider = z.infer<typeof exerciseProvider>;
 export const exerciseAnalysisRequest = z.strictObject({ provider: exerciseProvider.optional() });
 
@@ -13,7 +14,10 @@ export const videoObservation = z.strictObject({
 );
 
 export const exerciseAnalysis = z.discriminatedUnion('status', [
-  z.strictObject({ status: z.literal('observed'), model: z.string(), observation: videoObservation, input: z.enum(['video', 'frames']) }),
+  z.strictObject({
+    status: z.literal('observed'), model: z.string(), provider: fallbackAiProvider.optional(),
+    observation: videoObservation, input: z.enum(['video', 'frames']),
+  }),
   z.strictObject({ status: z.literal('unavailable') }),
 ]);
 

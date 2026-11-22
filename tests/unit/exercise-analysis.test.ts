@@ -66,6 +66,49 @@ it('routes the bundled clip to Console only with explicit provider and public de
   });
 });
 
+it('falls back from Vercel to Go and then Gemini with the correct media and credentials', async () => {
+  vi.stubEnv('AI_COMPLETION_PROVIDER', 'auto');
+  vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test-key');
+  vi.stubEnv('OPENCODE_GO_API_KEY', 'go-test-key');
+  vi.stubEnv('GEMINI_API_KEY', 'gemini-test-key');
+  vi.stubEnv('EXERCISE_AI_DEMO', 'true');
+  const observation = { view: 'side_visible', seatedAtSeconds: [2, 6] };
+  const fetch = vi.fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(new Response(null, { status: 403 }))
+    .mockResolvedValueOnce(new Response(null, { status: 429 }))
+    .mockResolvedValueOnce(new Response(null, { status: 429 }))
+    .mockResolvedValueOnce(Response.json({
+      modelVersion: 'gemini-3.5-flash-lite',
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(observation) }] } }],
+    }));
+  vi.stubGlobal('fetch', fetch);
+  const { availableExerciseProviders, reviewExerciseSample } = await import('../../src/lib/ai/exercise-video');
+  expect(availableExerciseProviders()).toEqual(['auto']);
+  await expect(reviewExerciseSample('auto')).resolves.toMatchObject({
+    status: 'observed', provider: 'gemini', observation, input: 'video',
+  });
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    'https://ai-gateway.vercel.sh/v1/chat/completions',
+    'https://opencode.ai/inference/go/google/v1beta/models/gemini-4-argon:generateContent',
+    'https://opencode.ai/inference/go/openai/v1/chat/completions',
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
+  ]);
+  const [vercel, goVideo, goFrames, gemini] = fetch.mock.calls.map(([, options]) => options);
+  expect(vercel?.headers).toMatchObject({ Authorization: 'Bearer gateway-test-key' });
+  expect(goVideo?.headers).toMatchObject({ Authorization: 'Bearer go-test-key', 'User-Agent': 'ShifoHalqa/0.1' });
+  expect((goFrames?.headers as Record<string, string>)['x-opencode-session'])
+    .toBe((goVideo?.headers as Record<string, string>)['x-opencode-session']);
+  expect(gemini?.headers).toMatchObject({ 'x-goog-api-key': 'gemini-test-key' });
+  const clip = (await readFile('public/demo/pose-cdc-lower-body.mp4')).toString('base64');
+  const frames = (await readFile('public/demo/pose-cdc-contact-sheet.jpg')).toString('base64');
+  expect(JSON.parse(String(vercel?.body)).messages[0].content[1]).toEqual({
+    type: 'file', file: { filename: 'sample.mp4', file_data: `data:video/mp4;base64,${clip}` },
+  });
+  expect(JSON.parse(String(goFrames?.body)).messages[0].content[1]).toEqual({
+    type: 'image_url', image_url: { url: `data:image/jpeg;base64,${frames}` },
+  });
+});
+
 it('sends only the bundled cropped clip and shares concurrent OpenRouter calls', async () => {
   enableFreeRouter();
   const model = 'nvidia/nemotron-3.5-super-vl:free';

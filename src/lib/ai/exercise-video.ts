@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { type ExerciseAnalysis, type ExerciseProvider, videoObservation } from '../exercise-analysis';
 import { OpenRouterHttpError, requestOpenRouterCompletion } from './openrouter';
 import { configuredAiCompletion, openCodeVideoModel, requestOpenCodeCompletion, type AiCompletion } from './opencode';
+import { requestFallbackCompletion } from './completion-fallback';
 
 const observationPrompt = 'Observe this short public motion demonstration. Count complete standing → seated → standing cycles only. For each complete cycle report one approximate seated timestamp in seconds from the start of the clip, in increasing order. Ignore incomplete cycles. Classify the side view as side_visible when hip, knee and ankle are broadly visible, partly_visible when any joint is obscured, or unclear with an empty array if tracking is unreliable. Report only these observations. Do not infer joint angles, diagnose, or advise the performer.';
 const framePrompt = 'This contact sheet contains 9 consecutive frames shown in row-major order from left to right and top to bottom, at seconds 0 through 8. The final 0.8 seconds are unsampled. Use only what is visible. Several seated frames with no standing frame between them represent one seated phase.';
@@ -11,6 +12,9 @@ const frameModel = 'nvidia/nemotron-3.5-super-vl:free';
 
 export function availableExerciseProviders(): ExerciseProvider[] {
   const completion = configuredAiCompletion();
+  if (completion?.provider === 'auto') {
+    return process.env.EXERCISE_AI_DEMO === 'true' ? ['auto'] : [];
+  }
   if (completion?.provider === 'opencode') {
     return process.env.EXERCISE_OPENCODE_DEMO === 'true' ? ['opencode'] : [];
   }
@@ -53,9 +57,26 @@ async function observe(key: string, model: string, input: 'video' | 'frames', si
   return { status: 'observed', model: reply.model, observation, input };
 }
 
-async function observePublicSample({ provider, key }: AiCompletion): Promise<ExerciseAnalysis> {
+async function observePublicSample(completion: AiCompletion): Promise<ExerciseAnalysis> {
   const signal = AbortSignal.timeout(25_000);
   try {
+    if (completion.provider === 'auto') {
+      const clip = await readFile(join(process.cwd(), 'public/demo/pose-cdc-lower-body.mp4'));
+      const result = await requestFallbackCompletion(completion.targets, {
+        name: 'exercise_observation', prompt: observationPrompt, schema, maxOutputTokens: 1536,
+        media: { mimeType: 'video/mp4', data: clip.toString('base64') },
+        frames: async () => ({
+          mimeType: 'image/jpeg',
+          data: (await readFile(join(process.cwd(), 'public/demo/pose-cdc-contact-sheet.jpg'))).toString('base64'),
+          prompt: `${framePrompt} ${observationPrompt}`,
+        }),
+      }, videoObservation, signal);
+      return result ? {
+        status: 'observed', provider: result.provider, model: result.model,
+        observation: result.data, input: result.usedFrames ? 'frames' : 'video',
+      } : { status: 'unavailable' };
+    }
+    const { provider, key } = completion;
     if (provider === 'opencode') {
       const clip = await readFile(join(process.cwd(), 'public/demo/pose-cdc-lower-body.mp4'));
       const reply = await requestOpenCodeCompletion(key, {

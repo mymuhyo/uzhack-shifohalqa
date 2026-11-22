@@ -5,6 +5,7 @@ import {
 } from './exercise-coach';
 import { OpenRouterHttpError, requestOpenRouterCompletion } from './openrouter';
 import { configuredAiCompletion, openCodeTextModel, requestOpenCodeCompletion, type AiCompletion } from './opencode';
+import { requestFallbackCompletion } from './completion-fallback';
 
 const validityMs = 5 * 60 * 1000;
 const cache = new Map<string, { expiresAt: number; result: Promise<ExerciseCoachResponse> }>();
@@ -18,7 +19,6 @@ async function readPublicAdvice(sample: PublicCoachSample, completion: AiComplet
   });
   const base = exerciseCoachAdvice(fixed);
   if (!completion) return base;
-  const { provider, key } = completion;
   const prompt = [
     'Ommaviy sintetik mashq namunasidagi texnika haqida o‘zbekcha qisqa izoh yozing.',
     'Tashxis, dori yoki mashq rejasi tavsiyasini bermang. Berilgan ko‘rsatkichlardan tashqariga chiqmang.',
@@ -37,6 +37,13 @@ async function readPublicAdvice(sample: PublicCoachSample, completion: AiComplet
   };
   const signal = AbortSignal.timeout(15_000);
   try {
+    if (completion.provider === 'auto') {
+      const result = await requestFallbackCompletion(completion.targets, {
+        name: 'public_exercise_coach', prompt, schema, maxOutputTokens: 1024,
+      }, aiCoachPayloadSchema, signal);
+      return result ? { ...base, ...result.data, source: result.provider, model: result.model } : base;
+    }
+    const { provider, key } = completion;
     const result = provider === 'opencode' ? await requestOpenCodeCompletion(key, {
       model: openCodeTextModel, prompt, schema, maxOutputTokens: 640,
     }, signal) : await requestOpenRouterCompletion(key, {
@@ -67,8 +74,12 @@ async function readPublicAdvice(sample: PublicCoachSample, completion: AiComplet
 
 export async function publicExerciseCoach(sample: PublicCoachSample) {
   const completion = configuredAiCompletion();
-  const enabled = completion?.provider === 'opencode'
-    ? process.env.EXERCISE_COACH_OPENCODE_DEMO : process.env.EXERCISE_COACH_OPENROUTER_DEMO;
+  const flags = {
+    auto: process.env.EXERCISE_COACH_AI_DEMO,
+    opencode: process.env.EXERCISE_COACH_OPENCODE_DEMO,
+    openrouter: process.env.EXERCISE_COACH_OPENROUTER_DEMO,
+  };
+  const enabled = completion && flags[completion.provider];
   if (!completion || enabled?.trim() !== 'true') return readPublicAdvice(sample, null);
   const cacheKey = `${completion.provider}:${sample}`;
   const retained = cache.get(cacheKey);

@@ -23,7 +23,7 @@ export default function About() {
         </section>
         <section>
           <h2>AI qayerda ishlaydi?</h2>
-          <p>MediaPipe video kadrlarini brauzerda tahlil qiladi. Cloudflare sozlanganida Clef sintetik quti sifatini tekshiradi va Clairic Flash yozuvini o‘qiydi. Zaxira yo‘lida sifatni Gemini Decisions tekshiradi, yozuvni esa OpenRouter yoki OpenCode Console orqali model o‘qiydi. Tanlangan provayder ommaviy mashq namunasini ham kuzatadi. Moslikni dastur qoidasi tekshiradi va navbatdagi qayd bo‘yicha shifokor qaror qiladi.</p>
+          <p>MediaPipe video kadrlarini brauzerda tahlil qiladi. Cloudflare sozlanganida Clef sintetik quti sifatini tekshiradi va Clairic Flash yozuvini o‘qiydi. Zaxira yo‘lida sifatni Gemini Decisions tekshiradi, yozuvni esa serverda sozlangan AI modeli o‘qiydi. Ommaviy mashq namunasini tahlil qilishda ham serverdagi AI sozlamalari ishlatiladi. Moslikni dastur qoidasi tekshiradi va navbatdagi qayd bo‘yicha shifokor qaror qiladi.</p>
           <p>Kodlash va sinovlarda Codex, uning subagentlari va hujjat qidiruv vositalari ishlatildi.</p>
         </section>
       </div>

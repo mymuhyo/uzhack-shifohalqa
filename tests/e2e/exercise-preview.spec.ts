@@ -35,15 +35,16 @@ test('measures the public elbow demo using the arm joints', async ({ page }) => 
   const cycles = page.getByRole('table', { name: /tirsak burchagi/ });
   await expect(cycles.getByRole('row')).toHaveCount(2);
   await expect(page.getByText(/Yuklangan video · To‘liq/)).toContainText('To‘liq 1 · Chala 0');
-  await expect(page.getByRole('heading', { name: /(?:OpenRouter|OpenCode Console) kuzatuvi/ })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /(?:OpenRouter|OpenCode Console|AI) kuzatuvi/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Natijani yuborish' })).toHaveCount(0);
 });
 
 test('asks the live provider to observe the fixed clip and leaves MediaPipe evidence separate', async ({ page, baseURL }) => {
   const openCode = process.env.SHIFO_E2E_EXERCISE_OPENCODE === '1';
-  test.skip(!openCode && process.env.SHIFO_E2E_EXERCISE_OPENROUTER !== '1', 'Enable the live synthetic video provider test');
-  const provider = openCode ? 'opencode' : 'openrouter';
-  const name = openCode ? 'OpenCode Console' : 'OpenRouter';
+  const auto = process.env.SHIFO_E2E_EXERCISE_AUTO === '1';
+  test.skip(!auto && !openCode && process.env.SHIFO_E2E_EXERCISE_OPENROUTER !== '1', 'Enable the live synthetic video provider test');
+  const provider = auto ? 'auto' : openCode ? 'opencode' : 'openrouter';
+  const name = auto ? 'AI' : openCode ? 'OpenCode Console' : 'OpenRouter';
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/demo/mashq');
   await page.getByRole('button', { name: 'CDC namunasini sinash' }).click();
@@ -62,6 +63,7 @@ test('asks the live provider to observe the fixed clip and leaves MediaPipe evid
   expect(response.status()).toBe(200);
   const report = await response.json();
   expect(report).toMatchObject({ status: 'observed' });
+  if (auto) expect(['vercel', 'opencode_go', 'gemini']).toContain(report.provider);
   expect(response.request().postDataJSON()).toEqual({ provider });
   const panel = page.getByRole('region', { name: `${name} kuzatuvi` });
   expect(['video', 'frames']).toContain(report.input);

@@ -100,6 +100,9 @@ const errorCodeLabels: Record<ExerciseErrorCode, string> = {
 const coachSourceLabels: Record<ExerciseCoachResponse['source'], string> = {
   openrouter: 'Baidu AI murabbiy',
   opencode: 'OpenCode Console AI murabbiy',
+  vercel: 'Vercel AI Gateway murabbiyi',
+  opencode_go: 'OpenCode Go murabbiyi',
+  gemini: 'Gemini AI murabbiy',
   deterministic_coach: 'Biomexanik murabbiy',
 };
 

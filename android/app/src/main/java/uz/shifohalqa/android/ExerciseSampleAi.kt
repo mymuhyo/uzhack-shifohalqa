@@ -94,7 +94,7 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
             }
         }
         advice?.let {
-            Text(if (it.source == "openrouter" || it.source == "opencode") "AI murabbiy · ommaviy namuna" else "Qoidaviy murabbiy")
+            Text(if (it.source == "deterministic_coach") "Qoidaviy murabbiy" else "AI murabbiy · ommaviy namuna")
             Text(it.text)
             Text(it.cue)
         }

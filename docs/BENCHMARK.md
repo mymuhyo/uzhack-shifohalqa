@@ -1,5 +1,11 @@
 # ShifoHalqa · Demo benchmarklari
 
+## Vercel AI Gateway va OpenCode Go
+
+22-noyabr 2026 (MYT) · lokal server adapterida bir martalik jonli sinov. Vercel GPT-OSS 20B taqqoslash izohini 3,10 s, murabbiy izohini 3,18 s da qaytardi. CDC MP4 uchun Vercel 403, Go’dagi Gemini 4 Argon haftalik limit sababli 429 qaytardi. Go’dagi Hy4 Flash Free ommaviy namunaning 9 kadriga 3,23 s da javob berdi. Uchta o‘tirish vaqti (2, 4, 6 s) qaytdi, MediaPipe esa ikki to‘liq sikl topdi. Uchinchi provayderga o‘tish taqlidiy HTTP bilan tekshirildi, jonli Gemini API sinovida kalit mavjud emas edi.
+
+DoriMos’ning alohida Cloudflare oqimi tiniq sintetik quti uchun Clairic Flash natijasini bemor tasdig‘iga 1,84 s da chiqardi.
+
 ## OpenCode Console
 
 22-noyabr 2026 (MYT). Vitest’dagi taqlidiy HTTP javoblari Console’ga aynan repodagi tahrirlangan CDC MP4, sintetik quti tasviri va qat’iy belgilangan matnli so‘rovlar ketishini tekshirdi. Console API kaliti bo‘lmagani sababli jonli javob, kechikish, OCR aniqligi va video sanoq aniqligi o‘lchanmadi.

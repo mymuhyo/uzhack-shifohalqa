@@ -94,3 +94,41 @@ it('uses Console for both text features and sends only the public sample or the 
     expect(JSON.parse(String(options?.body)).contents).toEqual([{ role: 'user', parts: [{ text: expect.any(String) }] }]);
   }
 });
+
+it('uses only Vercel when the first configured provider returns valid structured text', async () => {
+  vi.stubEnv('AI_COMPLETION_PROVIDER', 'auto');
+  vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test-key');
+  vi.stubEnv('OPENCODE_GO_API_KEY', 'go-test-key');
+  vi.stubEnv('GEMINI_API_KEY', 'gemini-test-key');
+  const summary = 'Ikki kuzatuvdagi to‘liq sikllar soni mos keldi.';
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+    model: 'openai/gpt-oss-20b',
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ summary }) } }],
+  }));
+  vi.stubGlobal('fetch', fetch);
+  const { explainExerciseComparison } = await import('../../src/lib/ai/exercise-explanation');
+  await expect(explainExerciseComparison('match')).resolves.toMatchObject({ status: 'explained', provider: 'vercel', summary });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(fetch.mock.calls[0][0]).toBe('https://ai-gateway.vercel.sh/v1/chat/completions');
+});
+
+it('tries Go when Vercel returns HTTP 200 with invalid structured text', async () => {
+  vi.stubEnv('AI_COMPLETION_PROVIDER', 'auto');
+  vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test-key');
+  vi.stubEnv('OPENCODE_API_KEY', 'shared-go-test-key');
+  vi.stubEnv('OPENCODE_GO_API_KEY', '');
+  vi.stubEnv('GEMINI_API_KEY', 'gemini-test-key');
+  const summary = 'MediaPipe va video kuzatuvi bir-biriga mos keldi.';
+  const chat = (content: string) => Response.json({
+    choices: [{ finish_reason: 'stop', message: { content } }],
+  });
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(chat('{"summary":" "}'))
+    .mockResolvedValueOnce(chat('```json\n' + JSON.stringify({ summary }) + '\n```'));
+  vi.stubGlobal('fetch', fetch);
+  const { explainExerciseComparison } = await import('../../src/lib/ai/exercise-explanation');
+  await expect(explainExerciseComparison('match')).resolves.toMatchObject({
+    status: 'explained', provider: 'opencode_go', model: 'hy4-flash-free', summary,
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls[1][1]?.headers).toMatchObject({ Authorization: 'Bearer shared-go-test-key' });
+});

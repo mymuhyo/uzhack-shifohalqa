@@ -3,6 +3,7 @@ import {
 } from '../exercise-explanation';
 import { requestOpenRouterCompletion } from './openrouter';
 import { configuredAiCompletion, openCodeTextModel, requestOpenCodeCompletion, type AiCompletion } from './opencode';
+import { requestFallbackCompletion } from './completion-fallback';
 
 const model = 'baidu/ernie-5.5-flash-preview:free';
 const observations: Record<ExerciseComparison, string> = {
@@ -15,7 +16,7 @@ const observations: Record<ExerciseComparison, string> = {
 };
 
 async function requestExplanation(
-  { provider, key }: AiCompletion,
+  completion: AiCompletion,
   comparison: ExerciseComparison,
 ): Promise<ExerciseExplanation> {
   const prompt = `Bu ommaviy CDC mashq klipi bo‘yicha demo natijasi. Quyidagi kuzatuvni sodda, lotin yozuvidagi o‘zbek tilida bir yoki ikki qisqa jumlada ifodalang. Faqat berilgan faktlarni yozing. Son, sabab, tashxis yoki maslahat qo‘shmang. Kuzatuv: ${observations[comparison]}`;
@@ -27,6 +28,15 @@ async function requestExplanation(
   };
   const signal = AbortSignal.timeout(15_000);
   try {
+    if (completion.provider === 'auto') {
+      const result = await requestFallbackCompletion(completion.targets, {
+        name: 'exercise_explanation', prompt, schema, maxOutputTokens: 1024,
+      }, exerciseExplanationText, signal);
+      return result ? {
+        status: 'explained', provider: result.provider, model: result.model, summary: result.data.summary,
+      } : { status: 'unavailable' };
+    }
+    const { provider, key } = completion;
     const { model: routedModel, content } = provider === 'opencode' ? await requestOpenCodeCompletion(key, {
       model: openCodeTextModel, prompt, schema, maxOutputTokens: 512,
     }, signal) : await requestOpenRouterCompletion(key, {

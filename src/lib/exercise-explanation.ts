@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fallbackAiProvider } from './ai-provider';
 import type { videoObservation } from './exercise-analysis';
 import type { MeasuredCycle } from './pose/engine';
 
@@ -8,7 +9,7 @@ export const exerciseExplanationRequest = z.strictObject({ comparison: exerciseC
 
 export const exerciseExplanationText = z.strictObject({ summary: z.string().trim().min(1).max(360) });
 export const exerciseExplanation = z.discriminatedUnion('status', [
-  z.strictObject({ status: z.literal('explained'), model: z.string().min(1), ...exerciseExplanationText.shape }),
+  z.strictObject({ status: z.literal('explained'), model: z.string().min(1), provider: fallbackAiProvider.optional(), ...exerciseExplanationText.shape }),
   z.strictObject({ status: z.literal('unavailable') }),
 ]);
 export type ExerciseExplanation = z.infer<typeof exerciseExplanation>;

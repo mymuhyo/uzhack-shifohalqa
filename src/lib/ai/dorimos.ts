@@ -11,6 +11,7 @@ import {
 } from './medication-box';
 import { requestOpenRouterCompletion } from './openrouter';
 import { configuredAiCompletion, openCodeTextModel, requestOpenCodeCompletion, type AiCompletion } from './opencode';
+import { requestFallbackCompletion } from './completion-fallback';
 import { readCloudflareBox } from './dorimos-cloudflare';
 
 export { compareMedicationBox, medicationBoxLabelSchema, medicationBoxReadingSchema } from './medication-box';
@@ -75,6 +76,10 @@ const extractedLabel = z.strictObject({
   ]),
   unit: medicationBoxLabelSchema.shape.unit,
 }).pipe(medicationBoxLabelSchema);
+const unreadableLabel = z.strictObject({
+  drugName: z.string().nullable(), strength: z.number().nullable(), unit: z.string().nullable(),
+}).refine(label => Object.values(label).includes(null));
+const fallbackExtraction = z.union([extractedLabel, unreadableLabel]);
 
 const extractionPrompt = [
   'Transcribe the single medicine name, strength and unit printed on the front label of this synthetic practice box.',
@@ -136,7 +141,7 @@ async function readDecisionGates(
 }
 
 async function extractBoxLabel(
-  provider: AiCompletion['provider'],
+  provider: 'openrouter' | 'opencode',
   key: string,
   model: string,
   image: ImageBlock,
@@ -196,11 +201,9 @@ export async function readMedicationBox(input: BoxImageInput): Promise<Medicatio
 async function readGeminiBox(
   { image, mimeType, expected }: BoxImageInput,
   geminiKey: string,
-  { provider, key }: AiCompletion,
+  completion: AiCompletion,
   signal: AbortSignal,
 ): Promise<MedicationBoxReading> {
-  const primaryModel = provider === 'opencode' ? openCodeTextModel : process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
-  const fallbackModel = provider === 'opencode' ? primaryModel : process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
   const decisionModel = process.env.GEMINI_DECISION_MODEL?.trim() || 'gemini-decision-1';
   const imageBlock: ImageBlock = { type: 'image', data: Buffer.from(image).toString('base64'), mime_type: mimeType };
 
@@ -216,6 +219,21 @@ async function readGeminiBox(
       return { status: 'retake', reason: 'low_confidence', gates };
     }
 
+    if (completion.provider === 'auto') {
+      const result = await requestFallbackCompletion(completion.targets, {
+        name: 'medication_box', prompt: extractionPrompt, schema: extractionJsonSchema, maxOutputTokens: 1024,
+        media: { mimeType, data: imageBlock.data },
+      }, fallbackExtraction, signal);
+      if (!result) return { status: 'manual', reason: 'provider_error', gates };
+      const label = medicationBoxLabelSchema.safeParse(result.data);
+      return label.success
+        ? { status: 'needs_confirmation', label: label.data, model: result.model, decisionModel, confidence, gates }
+        : { status: 'retake', reason: 'extraction_unreadable', gates };
+    }
+
+    const { provider, key } = completion;
+    const primaryModel = provider === 'opencode' ? openCodeTextModel : process.env.OPENROUTER_OCR_MODEL?.trim() || defaultOcrModel;
+    const fallbackModel = provider === 'opencode' ? primaryModel : process.env.OPENROUTER_OCR_FALLBACK_MODEL?.trim() || defaultFallbackOcrModel;
     const primaryWindow = primaryModel === fallbackModel ? signal : AbortSignal.any([signal, AbortSignal.timeout(primaryWindowMs)]);
     let reading: Awaited<ReturnType<typeof extractBoxLabel>>;
     try {

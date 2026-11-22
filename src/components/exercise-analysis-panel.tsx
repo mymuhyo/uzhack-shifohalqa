@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { fallbackAiProviderNames } from '@/lib/ai-provider';
 import { exerciseAnalysis, type ExerciseAnalysis, type ExerciseProvider } from '@/lib/exercise-analysis';
 import {
   compareExerciseObservations, exerciseExplanation, type ExerciseComparison, type ExerciseExplanation,
@@ -52,7 +53,7 @@ function SampleExplanation({ comparison, name }: { comparison: ExerciseCompariso
         {result?.status === 'unavailable' && <p>{name} izohi hozir mavjud emas. Keyinroq qayta urinib ko‘ring.</p>}
         {result?.status === 'explained' && <>
           <p>{result.summary}</p>
-          <p className={styles.modelName}>{result.model} · Namuna izohi</p>
+          <p className={styles.modelName}>{result.provider && `${fallbackAiProviderNames[result.provider]} · `}{result.model} · Namuna izohi</p>
         </>}
       </div>
     </div>
@@ -63,7 +64,7 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: {
   provider: Exclude<ExerciseProvider, 'gemini'>;
   poseCycles?: MeasuredCycle[];
 }) {
-  const name = provider === 'opencode' ? 'OpenCode Console' : 'OpenRouter';
+  const name = { auto: 'AI', opencode: 'OpenCode Console', openrouter: 'OpenRouter' }[provider];
   const headingId = useId();
   const [report, setReport] = useState<ExerciseAnalysis | null>(null);
   const [pending, setPending] = useState(false);
@@ -73,6 +74,8 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: {
   const comparison = poseCycles && compareExerciseObservations(
     poseCycles, report?.status === 'observed' ? report.observation : undefined,
   );
+  const observationName = report?.status === 'observed' && report.provider
+    ? fallbackAiProviderNames[report.provider] : name;
 
   async function review() {
     if (request.current || report?.status === 'observed') return;
@@ -100,7 +103,7 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: {
   return (
     <section className={styles.aiPanel} aria-labelledby={headingId}>
       <h2 id={headingId}>{name} kuzatuvi</h2>
-      <p>{name} ommaviy CDC klipining tahrirlangan nusxasini{provider === 'openrouter' && ' yoki undan olingan kadrlarni'} kuzatadi.</p>
+      <p>{name} ommaviy CDC klipining tahrirlangan nusxasini{provider !== 'opencode' && ' yoki undan olingan kadrlarni'} kuzatadi.</p>
       <button type="button" className={styles.primary} onClick={review} aria-disabled={pending || report?.status === 'observed'}>
         {pending ? `${name} tahlil qilmoqda…` : report?.status === 'observed' ? 'Namuna tahlil qilindi' : `Namunani ${name} bilan tahlil qilish`}
       </button>
@@ -111,22 +114,22 @@ export function ExerciseAnalysisPanel({ provider, poseCycles }: {
           {report.observation.view !== 'unclear' && (
             <>
               <p className={styles.counter}>
-                {poseCycles && `MediaPipe: ${poseCycles.length} sikl · `}{name}: {report.observation.seatedAtSeconds.length} sikl
+                {poseCycles && `MediaPipe: ${poseCycles.length} sikl · `}{observationName}: {report.observation.seatedAtSeconds.length} sikl
               </p>
               {report.observation.seatedAtSeconds.length > 0 && (
-                <p>{name} bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
+                <p>{observationName} bo‘yicha o‘tirish vaqtlari, taxminan {report.observation.seatedAtSeconds.map(time => time.toLocaleString('uz-Latn-UZ', { maximumFractionDigits: 1 })).join(' s · ')} s.</p>
               )}
               {poseCycles && comparison && <p>
                 {poseCycles.length === report.observation.seatedAtSeconds.length ? 'Sikllar soni mos keldi.' : 'Sikllar soni farq qildi.'}
-                {poseCycles.length > 0 && ` MediaPipe topgan ${poseCycles.length} sikldan ${comparison.alignedCycles} tasining vaqt oralig‘iga ${name} belgilagan o‘tirish vaqti tushdi.`}
+                {poseCycles.length > 0 && ` MediaPipe topgan ${poseCycles.length} sikldan ${comparison.alignedCycles} tasining vaqt oralig‘iga ${observationName} belgilagan o‘tirish vaqti tushdi.`}
               </p>}
             </>
           )}
-          <p className={styles.modelName}>{report.model} · {report.input === 'frames' ? 'Ommaviy namunadan 9 kadr' : 'Ommaviy namuna videosi'}</p>
+          <p className={styles.modelName}>{report.provider && `${observationName} · `}{report.model} · {report.input === 'frames' ? 'Ommaviy namunadan 9 kadr' : 'Ommaviy namuna videosi'}</p>
         </div>
       )}
       {comparison && (
-        <SampleExplanation key={comparison.comparison} comparison={comparison.comparison} name={provider === 'opencode' ? name : 'Baidu'} />
+        <SampleExplanation key={comparison.comparison} comparison={comparison.comparison} name={provider === 'openrouter' ? 'Baidu' : name} />
       )}
     </section>
   );

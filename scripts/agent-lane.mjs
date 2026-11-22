@@ -10,7 +10,7 @@ const lanes = {
   codex: { host: 'codex.localhost', dev: 3030, webTest: 3040, telegramTest: 3041, emulator: 5580 },
   antigravity: { host: 'antigravity.localhost', dev: 3130, webTest: 3140, telegramTest: 3141, emulator: 5582 },
 };
-const managedEnv = /^(?:DATABASE_URL(?:_UNPOOLED)?$|SHIFO_|DEMO_|SESSION_SECRET$|NEXT_PUBLIC_APP_URL$|PORT$|PG[A-Z_]|NEON_|GEMINI_|CLOUDFLARE_|DORIMOS_PROVIDER$|AI_COMPLETION_PROVIDER$|OPENROUTER_|OPENCODE_|EXERCISE_|TELEGRAM_|UV_PROJECT_ENVIRONMENT$|ANDROID_SERIAL$|ANDROID_AVD_HOME$|ANDROID_ADB_SERVER_PORT$|ADB_SERVER_SOCKET$)/;
+const managedEnv = /^(?:DATABASE_URL(?:_UNPOOLED)?$|SHIFO_|DEMO_|SESSION_SECRET$|NEXT_PUBLIC_APP_URL$|PORT$|PG[A-Z_]|NEON_|GEMINI_|CLOUDFLARE_|DORIMOS_PROVIDER$|AI_COMPLETION_PROVIDER$|AI_GATEWAY_API_KEY$|VERCEL_OIDC_TOKEN$|OPENROUTER_|OPENCODE_|EXERCISE_|TELEGRAM_|UV_PROJECT_ENVIRONMENT$|ANDROID_SERIAL$|ANDROID_AVD_HOME$|ANDROID_ADB_SERVER_PORT$|ADB_SERVER_SOCKET$)/;
 
 function launch(command, args, { cwd = root, env, capture = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -72,10 +72,15 @@ async function main() {
     CLOUDFLARE_API_TOKEN: '',
     OPENROUTER_API_KEY: '',
     OPENCODE_API_KEY: '',
+    AI_GATEWAY_API_KEY: '',
+    VERCEL_OIDC_TOKEN: '',
+    OPENCODE_GO_API_KEY: '',
     EXERCISE_OPENROUTER_DEMO: 'false',
     EXERCISE_COACH_OPENROUTER_DEMO: 'false',
     EXERCISE_OPENCODE_DEMO: 'false',
     EXERCISE_COACH_OPENCODE_DEMO: 'false',
+    EXERCISE_AI_DEMO: 'false',
+    EXERCISE_COACH_AI_DEMO: 'false',
     TELEGRAM_DATABASE_URL: '',
     TELEGRAM_BOT_TOKEN: '',
     UV_NO_CACHE: '1',
@@ -95,12 +100,17 @@ async function main() {
 
   const cloudflareConfigured = local.DORIMOS_PROVIDER?.trim().toLowerCase() !== 'gemini' &&
     Boolean(local.CLOUDFLARE_ACCOUNT_ID && local.CLOUDFLARE_API_TOKEN);
-  const completionKey = local.AI_COMPLETION_PROVIDER?.trim() === 'opencode' ? local.OPENCODE_API_KEY : local.OPENROUTER_API_KEY;
+  const completionProvider = local.AI_COMPLETION_PROVIDER?.trim();
+  const autoKey = local.AI_GATEWAY_API_KEY || local.OPENCODE_GO_API_KEY || local.OPENCODE_API_KEY || local.GEMINI_API_KEY;
+  const completionKey = completionProvider === 'auto'
+    ? autoKey
+    : completionProvider === 'opencode' ? local.OPENCODE_API_KEY : local.OPENROUTER_API_KEY;
   const runLive = async ([command, ...commandArgs]) => {
     for (const key of ['DORIMOS_PROVIDER', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN',
       'CLOUDFLARE_DECISION_MODEL', 'CLOUDFLARE_EXTRACTION_MODEL', 'GEMINI_API_KEY', 'GEMINI_DECISION_MODEL', 'OPENROUTER_API_KEY', 'OPENROUTER_OCR_MODEL',
       'OPENROUTER_OCR_FALLBACK_MODEL', 'EXERCISE_OPENROUTER_DEMO', 'EXERCISE_COACH_OPENROUTER_DEMO', 'OPENROUTER_EXERCISE_MODEL',
-      'AI_COMPLETION_PROVIDER', 'OPENCODE_API_KEY', 'EXERCISE_OPENCODE_DEMO', 'EXERCISE_COACH_OPENCODE_DEMO']) {
+      'AI_COMPLETION_PROVIDER', 'OPENCODE_API_KEY', 'EXERCISE_OPENCODE_DEMO', 'EXERCISE_COACH_OPENCODE_DEMO',
+      'AI_GATEWAY_API_KEY', 'OPENCODE_GO_API_KEY', 'EXERCISE_AI_DEMO', 'EXERCISE_COACH_AI_DEMO']) {
       if (local[key] !== undefined) env[key] = local[key];
     }
     if (laneConfig.SHIFO_LIVE_ISOLATED === 'true') return launch(command, commandArgs, { env });
@@ -147,15 +157,19 @@ async function main() {
       const liveOcr = action === 'e2e' && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
       const liveOpenRouter = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
       const liveOpenCode = process.env.SHIFO_E2E_EXERCISE_OPENCODE === '1';
-      if (liveOcr || liveOpenRouter || liveOpenCode) {
-        const ocrKey = liveOpenRouter ? local.OPENROUTER_API_KEY : liveOpenCode ? local.OPENCODE_API_KEY : completionKey;
+      const liveAuto = process.env.SHIFO_E2E_EXERCISE_AUTO === '1';
+      if (liveOcr || liveOpenRouter || liveOpenCode || liveAuto) {
+        const ocrKey = liveOpenRouter ? local.OPENROUTER_API_KEY
+          : liveOpenCode ? local.OPENCODE_API_KEY : liveAuto ? autoKey : completionKey;
         if ((liveOpenRouter && !local.OPENROUTER_API_KEY) || (liveOpenCode && !local.OPENCODE_API_KEY) ||
+          (liveAuto && !autoKey) ||
           (liveOcr && !cloudflareConfigured && !(local.GEMINI_API_KEY && ocrKey))) {
           throw new Error('Add the required lane-specific API keys to .env.local');
         }
         if (liveOcr) env.SHIFO_E2E_LIVE_DORIMOS = '1';
         if (liveOpenRouter) env.SHIFO_E2E_EXERCISE_OPENROUTER = '1';
         if (liveOpenCode) env.SHIFO_E2E_EXERCISE_OPENCODE = '1';
+        if (liveAuto) env.SHIFO_E2E_EXERCISE_AUTO = '1';
         await runLive(command);
       } else {
         await launch(command[0], command.slice(1), { env });

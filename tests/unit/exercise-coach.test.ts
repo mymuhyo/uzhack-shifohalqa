@@ -3,7 +3,10 @@ import { exerciseCoachInputSchema } from '../../src/lib/ai/exercise-coach';
 import { publicExerciseCoach } from '../../src/lib/ai/public-exercise-coach';
 import { requestOpenRouterCompletion } from '../../src/lib/ai/openrouter';
 
-vi.mock('../../src/lib/ai/openrouter', () => ({ requestOpenRouterCompletion: vi.fn() }));
+vi.mock(import('../../src/lib/ai/openrouter'), async (load) => ({
+  ...await load(),
+  requestOpenRouterCompletion: vi.fn(),
+}));
 
 it('rejects extra data in a public sample request and submits only server-owned sample metrics', async () => {
   expect(exerciseCoachInputSchema.safeParse({ sample: 'chair_stand', video: 'private' }).success).toBe(false);
@@ -19,6 +22,15 @@ it('rejects extra data in a public sample request and submits only server-owned 
     expect(results[0]).toMatchObject({ source: 'openrouter' });
     expect(results[1]).toEqual(results[0]);
     expect(completion).toHaveBeenCalledOnce();
-    expect(completion.mock.calls[0][1]).toMatchObject({ messages: [{ content: expect.stringContaining('"validReps":2') }] });
+    expect(completion.mock.calls[0][1]).toMatchObject({
+      messages: [{ content: expect.stringContaining('"validReps":2') }],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          strict: true,
+          schema: { required: ['patientAdviceUz', 'focusCueUz', 'doctorInsightUz'], additionalProperties: false },
+        },
+      },
+    });
   } finally { vi.unstubAllEnvs(); }
 });

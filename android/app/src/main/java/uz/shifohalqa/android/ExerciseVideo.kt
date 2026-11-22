@@ -82,13 +82,17 @@ private suspend fun analyzeClip(
                 for (offset in 0L until duration step frameIntervalMs) {
                     coroutine.ensureActive()
                     val decoded = runInterruptible { extractor.getFrame(offset).get(15, TimeUnit.SECONDS) }
-                    if (decoded.presentationTimeMs > lastFrameTime) {
-                        lastFrameTime = decoded.presentationTimeMs
-                        val bitmap = decoded.bitmap
-                        val points = BitmapImageBuilder(bitmap).build().use { image ->
-                            landmarker.detectForVideo(image, lastFrameTime).landmarks().firstOrNull()
+                    try {
+                        if (decoded.presentationTimeMs > lastFrameTime) {
+                            lastFrameTime = decoded.presentationTimeMs
+                            val bitmap = decoded.bitmap
+                            val points = BitmapImageBuilder(bitmap).build().use { image ->
+                                landmarker.detectForVideo(image, lastFrameTime).landmarks().firstOrNull()
+                            }
+                            tracker.update(points, bitmap.width, bitmap.height, lastFrameTime)
                         }
-                        tracker.update(points, bitmap.width, bitmap.height, lastFrameTime)
+                    } finally {
+                        decoded.bitmap.recycle()
                     }
                     val progress = (offset * 100 / duration).toInt()
                     if (progress - lastProgress >= 10) {

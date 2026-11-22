@@ -136,7 +136,11 @@ internal class MobileApi private constructor(private val origin: URI) {
             connection.requestMethod = if (body == null) "GET" else "POST"
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 7_000
-            connection.readTimeout = if (endpoint == "exercise/sample-ai") 30_000 else 10_000
+            connection.readTimeout = when (endpoint) {
+                "exercise/sample-ai" -> 30_000
+                "exercise-coach" -> 20_000
+                else -> 10_000
+            }
             connection.useCaches = false
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Cache-Control", "no-store")

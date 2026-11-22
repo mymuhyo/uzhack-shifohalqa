@@ -1,5 +1,36 @@
 # ShifoHalqa · Demo benchmarklari
 
+## OpenRouter va Gemini Decisions · joriy yo‘l
+
+21-noyabr 2026 (MYT) · Codex worktree · Chromium, 390 × 844 px · haqiqiy API kalitlari va sintetik ish joyi. Har biri bir martalik kuzatuv.
+
+| Sinov | Kuzatilgan natija | Vaqt |
+|---|---|---:|
+| DoriMos · xira sintetik quti | Gemini Decisions qayta urinishni qaytardi. | 1,52 s |
+| DoriMos · tiniq 10 mg sintetik quti | Gemini Decisions sifat tekshiruvidan o‘tdi. OpenRouter’dagi Nemotron «NAMUNA DORI 10 mg»ni qaytardi. Bemor tasdig‘i L2 ni saqladi. | Tasdiq so‘ralguncha 3,01 s |
+| CDC · OpenRouter | MP4 kirishi bu hisobda HTTP 402 qaytardi. Nemotron 9 kadrli zaxirada `unclear` qaytardi. MediaPipe o‘lchovi mavjud. | 2,41 s |
+| CDC · OpenRouter orqali Baidu | `pose_only` toifasiga o‘zbekcha izoh qaytdi. | 1,47 s |
+
+9 kadrli JPEG serverdagi yuzsiz va ovozsiz CDC klipidan olinadi. Uni `ffmpeg -i public/demo/pose-cdc-lower-body.mp4 -vf 'fps=1:start_time=0,scale=180:-2,tile=3x3' -frames:v 1 -q:v 3 public/demo/pose-cdc-contact-sheet.jpg` orqali qayta hosil qilish mumkin. 9 kadrning sanoq aniqligi o‘lchanmagan. [API kontrakti](INTERFACES.md)
+
+## Android Full va Heavy
+
+21-noyabr 2026 (MYT), Codex Android emulyatori. Galereya yo‘liga ommaviy 8,8 soniyalik CDC WebM kontent URI orqali berildi. Heavy **60,9 soniyada** 88 ta kadrdan **2 ta to‘liq, 0 ta chala takror** topdi. Eng kichik burchak 93,5°. Tarmoq uzilgan takroriy yurishda ayni klip **23,4 soniyada 2 ta to‘liq, 0 ta chala takror** berdi. Full jonli kameradan kadr olish yo‘li ham emulyatorda tekshirildi va Android to‘plamidagi 6 ta test o‘tdi. Full va Heavy tezligi jismoniy telefonlarda alohida o‘lchanadi. ARM64 debug APK **69,4 MiB**. [Android video sinovi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)
+
+Androidga o‘rnatilgan model paketlari nuqtalar hisobini internetga chiqmasdan bajaradi. [Full float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task) · [Heavy float16/1](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task) · [Model kartasi](https://developers.google.com/ml-kit/images/vision/pose-detection/pose_model_card.pdf)
+
+Ommaviy CDC AI tahlili uchun mobil API sessiya chegarasi, shaxsiy video yoki matnni rad etish va kalitsiz holat Playwright’da tekshirildi. Provayderlarning jonli chaqiruvlari bu Android sinoviga kiritilmadi. [AI va L2 integratsiya sinovi](../tests/e2e/rehabilitation.spec.ts)
+
+## Android uy reabilitatsiyasi · Codex worktree
+
+21-noyabr 2026 (MYT), sintetik ish joyi. Web va Kotlin sanoqlari beshta umumiy test izida mos keldi. Ular to‘liq, chala, 4 kadr/soniya, kadr uzilishi va tayanch nuqtalari past ko‘rinishini qamrab oldi. Emulator-5580 da beshta Android UI sinovi o‘tdi. Kamera sinovi CameraX va MediaPipe’dan birinchi kadr kelishini, kamerani yopishni va qo‘lda qaydga o‘tishni tekshirdi.
+
+Tarmoq va ADB yo‘naltirishi uzilganida og‘riq xabari Room’da qoldi. Android jarayoni to‘xtatilib ilova qayta ochilgach ham «Telefonda saqlandi, hali yuborilmadi» ko‘rindi. Tarmoq tiklangach web panelida **919 ms** ichida bitta xabar chiqdi. Shifokorning javobi Androidda o‘sha qayd bilan ochildi. Bu bitta emulyator sinovida tarmoqni tiklashdan web panelida qayd ko‘rinishigacha o‘lchov.
+
+360 × 800 px Chromium’da hakamning namuna mashqi → og‘riq xabari → shifokor javobi → bemor javobni ko‘rishi ssenariysi avtomatlashtirilgan yurishda **6,2 soniya** oldi. MediaPipe bir xil ommaviy CDC namunasida ikki to‘liq siklni ko‘rsatdi. ARM64 debug APK hajmi **37,0 MiB**. [Umumiy test izlari](../tests/fixtures/chair-stand/live.tsv) · [Web sinovi](../tests/e2e/rehabilitation.spec.ts)
+
+Qabul sinovi uchun arzon Android va ikkinchi telefonda kamida 24 ta urinishni kuzatuvchi qo‘lda belgilaydi. Qurilma, yoritish, ko‘rinish, to‘liq va chala takror, qayta urinish sababi va o‘lchov vaqtini yozing. Yaroqli urinishlarda sanash mosligi va qayta urinish ulushini alohida hisoblang. Fizioterapevtning to‘g‘ri javobgacha faol vaqtini eski va yangi oqimda almashtirilgan sintetik holatlar bilan o‘lchang. 90% moslik va 10× faraz uchun jismoniy telefon hamda xodim ishtirokidagi natija hali olinmagan.
+
 ## MediaPipe
 
 20-noyabr 2026 (MYT) · `codex/dev` ish daraxti · lokal production build · Chromium 159.0.8154.6, Linux x64, 360 px viewport · `@mediapipe/tasks-vision` 1.2.3, Lite, CPU. Natija vaqti video tanlash yoki namuna tugmasini bosishdan boshlab o‘lchandi. Vaqt model yuklanishi va real vaqt rejimidagi video ijrosini ham o‘z ichiga oladi.
@@ -57,3 +88,61 @@ Yangi limitda to‘liq brauzer sinovi o‘tdi. Xira sintetik quti qayta urinishg
 ### Lokal V2 · yozilgan CDC klipi
 
 Avval ikki worker ostidagi bitta Chromium ishga tushirishda 1 to‘liq va 1 chala takror qaytdi. Kadrlar taqdimot vaqtiga bog‘lanib qolgan ekan. V2 yozilgan klipni 80 ms oralig‘idagi media nuqtalari bo‘yicha izlaydi va bir xil dekodlangan kadrni ikkinchi marta sanamaydi. To‘liq suite va uchta alohida takrorda har safar **2 to‘liq, 0 chala, 109 kadr, 0,861 ishonch, 88,3°**. Tugmadan natijagacha 9 130, 10 754, 10 836 va 8 688 ms o‘lchandi. Bu bitta klip va Chromium uchun natija. Kamera ochiq turgan jismoniy telefon shu V2 tekshiruviga kirmadi. [Sinov](../tests/e2e/exercise.spec.ts)
+
+### Mashq prototipi · Jonli kamera yo‘li
+
+Chromiumga ommaviy CDC WebM klipidan tayyorlangan 360×568 Y4M fayli aylanib turuvchi kamera manbasi qilib berildi. Dastlabki kamera so‘rovi oqimni 360×480 qilib kesdi va sinovda tizza burchagi chiqmagan. Brauzerga kadr nisbatini tanlash qoldirilgach, 390×844 ekranda tayanch chizig‘i va burchak ko‘rindi. To‘xtatishdan oldin ekranda 1 to‘liq va 4 chala takror ko‘rindi. Kamera yopildi, kadr yuboradigan POST so‘rovi kuzatilmadi. Takrorlanuvchi klipdagi bu sanoq **kamera yo‘lining ishlashini** tekshiradi. Bitta klipning etalon sanog‘i va jismoniy telefondagi aniqlik alohida tekshiriladi.
+
+### Mashq prototipi · CV va Gemini bir sahifada
+
+21-noyabr 2026 · Chromium, 360×800 · repodagi 8,792 soniyalik ommaviy CDC klipi. MediaPipe ikkita to‘liq siklni qaytardi. 1,2–4,2 s oralig‘idagi siklning minimumi 94°, 5,3–8,5 s oralig‘idagisi 88°. Tugmadan jadvalgacha 59 405 ms kuzatildi. Oldingi mahalliy sinovlar va hozirgi yuklama ostidagi o‘lchov bir xil tezlikni va’da qilishga yetarli emas.
+
+Gemini `gemini-3.5-flash-lite` shu klipni MediaPipe raqamlarisiz tahlil qildi va taxminan 2 s va 6 s da o‘tirish kuzatilganini qaytardi. Interfeys ikki modelning ikkita tugallangan sikl sanaganini ko‘rsatdi. Gemini tugmasidan tekshirilgan javobgacha 11 740 ms. Bu bir klipdagi moslik, boshqa odamlar va kamera sharoitlarida aniqlik o‘lchanmagan. [Mashq rejasi](V2_PLAN.md) · [Sinov](../tests/e2e/exercise-preview.spec.ts)
+
+Yakuniy CSS tuzatishidan keyin ayni 360×800 Chromium oqimi boshidan oxirigacha o‘tdi. Ikki CV sikli va Gemini vaqtlari aynan takrorlandi. Bu urinishda CV 58 578 ms, Gemini 18 752 ms oldi. Sahifa 360 px eniga sig‘di. Mashq tahlili endpointi foydalanuvchi videosi maydonini HTTP 400 bilan rad etdi.
+
+### Mashq prototipi · ketma-ket video dekodlash
+
+21-noyabr 2026 · Chromium, 360×800, bir xil ommaviy CDC klipi. O‘lchov tugma bosilishidan jadvalgacha. Seek vaqti brauzerdagi `seeking` va `seeked` hodisalari oralig‘ining yig‘indisi.
+
+| Yo‘l | Jami vaqt | Seek soni va yig‘indi vaqt | O‘lchov |
+|---|---:|---:|---|
+| Oldingi build | 54 103 ms | 110, 20 184 ms | 2 to‘liq, 0 chala |
+| Yangilangan WebCodecs/Mediabunny | 40 803 ms | 0 | 2 to‘liq, 0 chala |
+| O‘sha yangilangan buildda `VideoDecoder` o‘chirilgan | 63 589 ms | 110, 23 769 ms | 2 to‘liq, 0 chala |
+
+Uchala yo‘lda 1,2–4,2 s sikli 94°, 5,3–8,5 s sikli 88° bo‘ldi. Bir xil builddagi ikki alohida urinishda ketma-ket dekoder jami vaqtni taxminan 36% kamaytirdi. Bu mahalliy qurilmada bitta klip o‘lchovi. Odam ko‘rinmaydigan WebM 10 737 ms da qayta urinishga yo‘naltirildi. Kamera yoki video ma’lumotini jo‘natadigan POST kuzatilmadi.
+
+Yakuniy 360×800 brauzer sinovida CDC klipi ishga tushgach, CV tugashidan oldin alohida Gemini tugmasi bosildi. MediaPipe 37 145 ms da jadvalni ko‘rsatdi. Gemini so‘rovi 2 994 ms da, CV dan oldin tugadi va 2 s hamda 6 s ni qaytardi. Birinchi tugmadan ikkala natija ko‘rinishigacha 37 389 ms o‘tdi. Bu bitta brauzer urinishidagi tarmoq va qurilma natijasi.
+
+### Jonli kamerada sekin kadr oqimi
+
+21-noyabr 2026 (MYT). Sintetik tayanch nuqtalari testida eski hisoblagich ko‘rinish ballari almashganda yoki oqim 4 kadr/soniyaga tushganda 0 sikl qaytardi. Tuzatilgan hisoblagich har ikkala testda 1 ta to‘liq sikl topdi. Alohida test 400 ms dan uzoq uzilish ustidan sikl tuzilmasligini tekshirdi.
+
+Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniyada virtual kamera sifatida uzatdik. Ikki yurishda 2 sikl topildi, har safar 1 to‘liq va 1 chala. Birinchi siklning hisoblangan eng kichik burchagi 101° va 102° chiqdi, demo chegarasi 100°. Yozilgan klip rejimi 2 to‘liq va 0 chala sikl berdi. Virtual kamera to‘xtatilganda trek yopildi va POST so‘rovi kuzatilmadi.
+
+Jismoniy Android telefonida loyiha egasi lokal `1c7ddd7` tuzatishini sinab, ekranda **8 to‘liq, 2 chala** takror hamda tizza va to‘piq ustidagi yashil chiziq ko‘ringanini bildirdi. Bajarilgan takrorlarning qo‘lda belgilangan soni va burchaklari qayd etilmagan, shuning uchun aniqlik hisoblanmadi.
+
+### Tirsak demo klipi
+
+21-noyabr 2026 (MYT). 360×800 Chromium sinovida real MediaPipe CDC klipining bir to‘liq tirsak bukish va yozish siklini topdi. Natija 1 to‘liq, 0 chala. Namuna CDC videosining 46.2 soniyasidan olingan, 8.7 soniyaga kesilgan, bitta ijrochi atrofi qirqilgan va audio olib tashlangan. Bu bitta yozilgan klip natijasi. Tirsak uchun jismoniy kamera aniqligi hali o‘lchanmagan. [CDC klipi va litsenziya](https://commons.wikimedia.org/wiki/File:Muscle_Strengthening_at_Home_-_Bicep_Curls.webm)
+
+### O‘tirib-turish tahlilida zaxira model
+
+21-noyabr 2026 (MYT). Bevosita API sinovida `gemini-3.5-flash-lite` HTTP 503 qaytardi. `gemini-3.1-flash-lite` shu ommaviy klipda 2 s va 6 s vaqtlarini topdi. Yakuniy Chromium sinovida UI orqali zaxira modeldagi ayni natija 4 243 ms da olindi. OpenRouter yo‘li testdagi taqlidiy javob bilan tekshirildi. Jonli OpenRouter kaliti mavjud bo‘lmagani uchun undan o‘lchov olinmadi.
+
+Yakuniy buildda WebCodecs o‘chirilgan Chromium eski izlash bilan 56 078 ms da ayni ikki siklni berdi. Odam ko‘rinmaydigan klip ketma-ket yo‘lda 8 267 ms da qayta urinishni ko‘rsatdi. CDC klipining H.264 MP4 ga qayta kodlangan varianti fayl tanlash orqali 38 806 ms da 2 to‘liq va 0 chala sikl qaytardi. Ikki siklda 93° va 87° minimum o‘lchandi. MP4 brauzerda tahlil qilindi, Gemini paneli ochilmadi va POST kuzatilmadi.
+
+Jonli kamera uchun yakuniy virtual sinovlardan birida ekranga 0 to‘liq va 6 chala sikl chiqdi. Oldingi aylanuvchi klip urinishida 1 to‘liq va 4 chala bo‘lgan. Aylanma klip sikllari etalon sifatida ishlatilmadi. Alohida resurs sinovi 360×568 oqim saqlanishini, tayanch chizig‘i va joriy burchak chiqishini, «To‘xtatish» treklarni yakunlashini va POST bo‘lmasligini tekshirdi. USB orqali jismoniy telefon topilmadi. Jonli sikl aniqligi qurilma va kadr tezligi bilan alohida sinov talab qiladi.
+
+### Gemini zaxira modeli · ochiq reliz va lokal sinov
+
+21-noyabr 2026 (MYT) · Chromium, 360×800. Ochiq `ffdc850` relizida MediaPipe CDC klipini 11,1 soniyada o‘lchadi: 2 to‘liq, 0 chala sikl. Brauzer kamerani so‘ramadi va o‘lchov paytida POST yubormadi. Alohida Gemini tugmasi HTTP 503 qaytardi. Shu relizda sintetik dori qaydi shifokor tasdig‘idan keyin L4 va javobni oldi, bosim qaydi L0 bo‘lib qoldi.
+
+Lokal `exp/mashq-ishonchliligi` filialida haqiqiy Gemini brauzer sinovi zaxira `gemini-3.1-flash-lite` modelidan 4,4 soniyada 2 s va 6 s javobini oldi. HTTP 408, 429, 503 hamda bo‘sh va yaroqsiz natijadan tiklanish unit-testlarda alohida tekshirildi.
+
+### Baidu matnli izohi
+
+21-noyabr 2026 (MYT) · lokal production build · Chromium 360×800. MediaPipe ommaviy CDC klipida 2 to‘liq va 0 chala sikl ko‘rsatdi. Haqiqiy `baidu/ernie-5.5-flash-preview:free` bu natijani 1 894 ms da izohladi. Video modeli sinov javobida 2 s va 6 s kuzatilganda, Baidu haqiqiy API orqali moslikni 2 412 ms da izohladi. Vaqtlar tugma bosilgach server javobini kutishdan boshlab o‘lchandi. Brauzer yuborgan JSON faqat izoh toifasini o‘z ichiga oldi.
+
+Shu akkaunt bilan jonli OpenRouter video so‘rovlari Nemotron va Gemma 4 26B uchun HTTP 402 qaytardi. Xizmat video kirishi uchun kamida 1 AQSh dollari balans talab qildi. Baidu matn so‘rovlari HTTP 200 qaytardi.

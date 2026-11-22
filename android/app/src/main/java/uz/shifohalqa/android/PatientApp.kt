@@ -66,11 +66,21 @@ internal enum class PatientTab(val label: String, val glyph: Glyph) {
 internal fun PatientApp(demo: PatientDemo, mobile: MobileWorkspaceModel) {
     val mobileState = mobile.state
     var showPair by rememberSaveable { mutableStateOf(false) }
+    var showExercise by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(mobileState.connected) { if (mobileState.connected) showPair = false }
 
+    LaunchedEffect(mobileState.connected, mobileState.restoring) {
+        if (!mobileState.connected && !mobileState.restoring && mobileState.message != null) showExercise = false
+    }
     key(mobileState.connected) {
-        if (mobileState.connected) ConnectedPatientApp(mobile)
-        else OfflinePatientApp(demo, mobileState.message.takeUnless { showPair }, onPair = { showPair = true })
+        if (showExercise && !mobileState.restoring) {
+            ExerciseScreen(mobile.takeIf { mobileState.connected }, onBack = { showExercise = false })
+        } else if (mobileState.connected) {
+            ConnectedPatientApp(mobile, onExercise = { showExercise = true })
+        } else {
+            OfflinePatientApp(demo, mobileState.message.takeUnless { showPair }, onPair = { showPair = true },
+                onExercise = { showExercise = true })
+        }
     }
     if (showPair && !mobileState.connected) {
         MobilePairDialog(mobileState, mobile::pair, onDismiss = { showPair = false })
@@ -78,7 +88,7 @@ internal fun PatientApp(demo: PatientDemo, mobile: MobileWorkspaceModel) {
 }
 
 @Composable
-private fun OfflinePatientApp(demo: PatientDemo, notice: String?, onPair: () -> Unit) {
+private fun OfflinePatientApp(demo: PatientDemo, notice: String?, onPair: () -> Unit, onExercise: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(PatientTab.Today) }
     var sheet by remember { mutableStateOf<MedicationSheet?>(null) }
     BackHandler(enabled = tab == PatientTab.Reply && sheet == null) { tab = PatientTab.Today }
@@ -90,7 +100,7 @@ private fun OfflinePatientApp(demo: PatientDemo, notice: String?, onPair: () -> 
         BrandBar("Demo")
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             when (tab) {
-                PatientTab.Today -> TodayPage(demo.entry, { sheet = it }, { tab = PatientTab.Reply }, notice, onPair)
+                PatientTab.Today -> TodayPage(demo.entry, { sheet = it }, { tab = PatientTab.Reply }, notice, onPair, onExercise)
                 PatientTab.Reply -> ReplyPage(demo, onReset = { tab = PatientTab.Today })
             }
         }
@@ -145,7 +155,7 @@ internal fun Navigation(selected: PatientTab, onSelect: (PatientTab) -> Unit) {
 @Composable
 private fun TodayPage(
     entry: MedicationEntry?, onRecord: (MedicationSheet) -> Unit, onReply: () -> Unit,
-    notice: String?, onPair: () -> Unit,
+    notice: String?, onPair: () -> Unit, onExercise: () -> Unit,
 ) {
     PatientPage {
         SoftReveal(0) {
@@ -166,6 +176,7 @@ private fun TodayPage(
             }
         }
         TextButton(onClick = onPair) { Text("Veb-panelga ulash") }
+        PrimaryAction("O‘tirib-turish mashqi", onClick = onExercise)
     }
 }
 

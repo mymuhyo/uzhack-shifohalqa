@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless';
 import { expect, test, type Page } from 'playwright/test';
 
 const management = '/api/demo/telegram';
-const webhook = 'http://127.0.0.1:3420/api/telegram/webhook';
+const webhook = `http://127.0.0.1:${process.env.SHIFO_E2E_TELEGRAM_PORT ?? '3420'}/api/telegram/webhook`;
 const botUsername = 'shifohalqa_e2e_bot';
 const webhookSecret = 'shifohalqa-e2e-webhook-secret';
 const appUrl = 'https://shifohalqa.example.test/';

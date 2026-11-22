@@ -1,14 +1,17 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { compareAttempt } from './anticheat/compare-attempt';
 import type { ClinicalActor, MutationResult } from './clinical-types';
 import { getDatabase } from './db';
-import type { ExerciseInput, ExercisePlan } from './exercise-inputs';
+import type { ExerciseInput, ExercisePlan, ExerciseReview, MobileExerciseInput } from './exercise-inputs';
 import { exerciseSample } from './exercise-sample';
 import { deriveEvidenceLevel } from './rules/evidence-level';
 
 const exercisePlanRow = z.object({
   id: z.uuid(), targetAngle: z.int(), targetReps: z.int(), maxShallow: z.int(), painColor: z.enum(['red', 'yellow']),
+});
+const reviewRow = z.object({
+  decision: z.enum(['reviewed', 'retake']), body: z.string(), reviewedAt: z.iso.datetime(),
 });
 const attemptRow = z.object({
   id: z.uuid(), source: z.enum(['self_report', 'uploaded_video', 'live_camera']),
@@ -16,8 +19,18 @@ const attemptRow = z.object({
   reason: z.enum(['manual', 'pain', 'measured']), validReps: z.int().nullable(),
   shallowReps: z.int().nullable(), minAngle: z.number().nullable(), confidence: z.number().nullable(),
   primary: z.boolean(), sample: z.boolean(), similarMotion: z.boolean(), flagColor: z.enum(['red', 'yellow']).nullable(),
-  createdAt: z.iso.datetime(),
+  createdAt: z.iso.datetime(), scheduledDate: z.iso.date(), android: z.boolean(),
+  review: reviewRow.nullable(),
 });
+const receiptRow = z.object({
+  id: z.uuid(), level: z.number(), primary: z.boolean(), similarMotion: z.boolean(),
+  sample: z.boolean(), hash: z.string(),
+});
+export type ExerciseAttempt = z.infer<typeof attemptRow>;
+
+const tashkentDay = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tashkent', dateStyle: 'short' });
+export function exerciseDate() { return tashkentDay.format(new Date()); }
+
 const fingerprint = z.object({ fileSha256: z.string().nullable(), motionSignature: z.array(z.number()).nullable() });
 
 function requireDatabase() {
@@ -62,19 +75,61 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
     SELECT attempt.id, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
       min_angle AS "minAngle", confidence, is_primary AS "primary", similar_motion AS "similarMotion", flag_color AS "flagColor",
       attempt.file_sha256 IS NOT DISTINCT FROM ${exerciseSample.sha256} AS sample,
-      to_char(attempt.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"
+      attempt.client_attempt_id IS NOT NULL AS android, attempt.scheduled_date::text AS "scheduledDate",
+      to_char(attempt.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
+      CASE WHEN attempt.review_decision IS NOT NULL THEN jsonb_build_object(
+        'decision', attempt.review_decision, 'body', attempt.review_reply,
+        'reviewedAt', to_char(attempt.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+      ) END AS review
     FROM shifohalqa.exercise_attempts AS attempt
     JOIN shifohalqa.exercise_prescriptions AS plan ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
     WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
-    ORDER BY attempt.created_at DESC, attempt.id LIMIT 10
+      AND (
+        (${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL)
+        OR attempt.id IN (
+          SELECT recent.id FROM shifohalqa.exercise_attempts AS recent
+          WHERE recent.workspace_id = plan.workspace_id AND recent.prescription_id = plan.id
+          ORDER BY greatest(recent.created_at, recent.reviewed_at) DESC, recent.id LIMIT 30
+        )
+      )
+    ORDER BY
+      CASE WHEN ${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL
+        THEN CASE WHEN attempt.flag_color = 'red' THEN 0 ELSE 1 END ELSE 2 END,
+      CASE WHEN ${actor.role} = 'doctor' AND attempt.reason = 'pain' AND attempt.review_decision IS NULL
+        THEN attempt.created_at END,
+      greatest(attempt.created_at, attempt.reviewed_at) DESC, attempt.id
   `;
   return z.array(attemptRow).parse(rows);
 }
 
-export async function saveExercise(actor: ClinicalActor, input: ExerciseInput) {
+async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, hash: string) {
+  const [row] = await requireDatabase()`
+    SELECT id, level, is_primary AS "primary", similar_motion AS "similarMotion",
+      file_sha256 IS NOT DISTINCT FROM ${exerciseSample.sha256} AS sample, client_request_hash AS hash
+    FROM shifohalqa.exercise_attempts
+    WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${mobile.prescriptionId}
+      AND client_attempt_id = ${mobile.clientAttemptId}
+  `;
+  if (!row) return null;
+  const { hash: recordedHash, ...receipt } = receiptRow.parse(row);
+  return recordedHash === hash ? { status: 'saved', ...receipt } as const : { status: 'conflict' } as const;
+}
+
+export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, mobile?: MobileExerciseInput) {
   if (actor.role !== 'patient') return { status: 'invalid' } as const;
   const plan = await readExercisePlan(actor);
-  if (!plan) return { status: 'invalid' } as const;
+  if (!plan || (mobile && mobile.prescriptionId !== plan.id)) return { status: 'invalid' } as const;
+
+  // Preserve the original training day when an offline report reconnects after midnight.
+  const today = exerciseDate();
+  const hash = mobile ? createHash('sha256').update(JSON.stringify(mobile)).digest('hex') : null;
+  if (mobile && hash) {
+    const existing = await readReceipt(actor, mobile, hash);
+    if (existing) return existing;
+    if (mobile.scheduledDate > today) {
+      return { status: 'stale' } as const;
+    }
+  }
 
   const report = input.source === 'self_report' ? input : null;
   const measured = input.source !== 'self_report' ? input : null;
@@ -101,7 +156,9 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput) {
     ORDER BY (file_sha256 = ${fileSha256}) DESC NULLS LAST, created_at DESC LIMIT 100
   `) : [];
   const { duplicateFile, similarMotion } = compareAttempt({ fileSha256, motionSignature: sample ? null : motionSignature, previous });
-  if (duplicateFile) return { status: 'duplicate' } as const;
+  if (duplicateFile) {
+    return (mobile && hash ? await readReceipt(actor, mobile, hash) : null) ?? { status: 'duplicate' } as const;
+  }
 
   const flag = sample ? null : reason === 'pain' ? plan.painColor
     : similarMotion || (measured && measured.shallowReps > plan.maxShallow) ? 'yellow' : null;
@@ -114,14 +171,42 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput) {
   const [primaryRows, retryRows] = await sql.transaction((tx) => [true, false].map((primary) => tx`
     INSERT INTO shifohalqa.exercise_attempts (
       id, workspace_id, prescription_id, is_primary, source, ai_mode, level, reason,
-      valid_reps, shallow_reps, min_angle, confidence, analyzed_frames, file_sha256, motion_signature, similar_motion, flag_color
+      valid_reps, shallow_reps, min_angle, confidence, analyzed_frames, file_sha256, motion_signature, similar_motion, flag_color,
+      scheduled_date, client_attempt_id, client_request_hash
     )
     SELECT ${id}, ${actor.workspaceId}, ${plan.id}, ${primary}, ${input.source}, ${aiMode}, ${assessment.level}, ${reason},
       ${measurements.valid}, ${measurements.shallow}, ${measurements.minimum}, ${measurements.confidence}, ${measurements.frames},
-      ${fileSha256}, ${motionSignature ? JSON.stringify(motionSignature) : null}::jsonb, ${similarMotion}, ${flag}
+      ${fileSha256}, ${motionSignature ? JSON.stringify(motionSignature) : null}::jsonb, ${similarMotion}, ${flag},
+      ${mobile?.scheduledDate ?? today}::date, ${mobile?.clientAttemptId ?? null}::uuid, ${hash}
     WHERE NOT (${primary} AND (${reason} = 'pain' OR ${sample}))
     ON CONFLICT DO NOTHING RETURNING is_primary
   `));
-  if (!primaryRows[0] && !retryRows[0]) return { status: 'duplicate' } as const;
-  return { status: 'saved', level: assessment.level, primary: Boolean(primaryRows[0]), similarMotion, sample } as const;
+  if (!primaryRows[0] && !retryRows[0]) {
+    if (mobile && hash) {
+      const existing = await readReceipt(actor, mobile, hash);
+      if (existing) return existing;
+    }
+    return { status: 'duplicate' } as const;
+  }
+  return { status: 'saved', id, level: assessment.level, primary: Boolean(primaryRows[0]), similarMotion, sample } as const;
+}
+
+export async function reviewExerciseAttempt(actor: ClinicalActor, input: ExerciseReview): Promise<MutationResult> {
+  if (actor.role !== 'doctor') return 'not_found';
+  const [result] = await requireDatabase()`
+    WITH scoped AS (
+      SELECT attempt.id FROM shifohalqa.exercise_attempts AS attempt
+      JOIN shifohalqa.exercise_prescriptions AS plan
+        ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
+      WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
+        AND plan.doctor_id = ${actor.doctorId} AND attempt.id = ${input.attemptId}
+    ), reviewed AS (
+      UPDATE shifohalqa.exercise_attempts AS attempt
+      SET review_decision = ${input.decision}, review_reply = ${input.reply}, reviewed_at = CURRENT_TIMESTAMP
+      FROM scoped WHERE attempt.id = scoped.id AND attempt.review_decision IS NULL RETURNING attempt.id
+    )
+    SELECT CASE WHEN EXISTS (SELECT FROM reviewed) THEN 'saved'
+      WHEN EXISTS (SELECT FROM scoped) THEN 'already_saved' ELSE 'not_found' END AS status
+  `;
+  return z.enum(['saved', 'already_saved', 'not_found']).parse(result?.status);
 }

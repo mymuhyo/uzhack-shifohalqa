@@ -26,14 +26,6 @@ export const doctorReplyTemplatesMap: Record<string, readonly string[]> = {
     'Ikki kun dori qoldirilgan. Qabul vaqtini eslatmaga qo‘ying, nojo‘ya ta’sir bo‘lsa sababini yozing.',
     'Bugundan reja bo‘yicha davom eting; qiyinchilik bo‘lsa shifokor ko‘rigiga yoziling.',
   ],
-  exercise_pain: [
-    'Og‘riq paydo bo‘lgani sababli mashqni bugun to‘xtating, bo‘g‘imni zo‘riqtirmang.',
-    'Ko‘rikka kelguncha mashqni davom ettirmang; og‘riq kuchaysa 103 ga murojaat qiling.',
-  ],
-  exercise_shallow: [
-    'Maqsad burchagiga yetish qiyin bo‘lsa, harakatni sekinroq bajaring va og‘riq bo‘lsa to‘xtating.',
-    'Kamerani yon tomondan to‘liq ko‘rinadigan qilib qo‘yib, yana bir bor o‘lchab ko‘ring.',
-  ],
   urgent_symptom: [
     'Xabaringizni oldim. Tinch holatda dam oling, ahvol og‘irlashsa darhol 103 ga qo‘ng‘iroq qiling.',
     'Bugungi qabulga zudlik bilan keling, sizni ko‘rikka kiritamiz.',

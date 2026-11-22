@@ -575,10 +575,19 @@ export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSympt
       INSERT INTO shifohalqa.urgent_symptoms (workspace_id, patient_id, symptom, note)
       SELECT workspace_id, id, ${input.symptom}, ${input.note}
       FROM scoped
+      WHERE NOT EXISTS (
+        SELECT 1 FROM shifohalqa.urgent_symptoms AS existing
+        WHERE existing.workspace_id = scoped.workspace_id
+          AND existing.patient_id = scoped.id
+          AND existing.symptom = ${input.symptom}
+          AND existing.note = ${input.note}
+          AND existing.review_decision IS NULL
+      )
       RETURNING 1
     )
     SELECT CASE
       WHEN EXISTS (SELECT 1 FROM inserted) THEN 'saved'
+      WHEN EXISTS (SELECT 1 FROM scoped) THEN 'already_saved'
       ELSE 'not_found'
     END AS result
   `;

@@ -13,7 +13,7 @@ export function DoctorReviewForm({
   titleId,
 }: {
   action: string;
-  idFieldName: 'flagId' | 'symptomId' | 'attemptId';
+  idFieldName: 'flagId' | 'symptomId';
   idFieldValue: string;
   ruleKey: string;
   headingId: string;

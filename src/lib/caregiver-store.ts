@@ -115,12 +115,7 @@ export async function readCaregiverSummary(token: unknown) {
       WHERE item.type IN ('medication', 'vitals') AND clock.local_now::date >= plan.start_date
         AND clock.local_now::date + item.due_time <= clock.local_now
     ), today_flags AS (
-      SELECT flag.id, flag.rule_key, flag.decision,
-             EXISTS (
-               SELECT 1 FROM shifohalqa.flag_followups AS followup
-               WHERE followup.workspace_id = flag.workspace_id AND followup.flag_id = flag.id
-                 AND followup.kind = 'supply_resolved'
-             ) AS supply_resolved
+      SELECT flag.id, flag.decision
       FROM audited
       JOIN shifohalqa.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
       JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id

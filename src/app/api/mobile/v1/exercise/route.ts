@@ -24,7 +24,9 @@ export async function POST(request: Request) {
   try {
     const actor = await androidPatient(request);
     if (!actor) return mobileJson({ error: 'unauthorized' }, 401);
-    const input = mobileExerciseInput.safeParse(await readMobileBody(request));
+    const raw = await readMobileBody(request);
+    if (!raw.ok) return mobileJson({ error: raw.status === 413 ? 'too_large' : 'invalid' }, raw.status === 413 ? 413 : 400);
+    const input = mobileExerciseInput.safeParse(raw.body);
     if (!input.success) return mobileJson({ error: 'invalid' }, 400);
     const result = await saveExercise(actor, input.data.evidence, input.data);
     switch (result.status) {

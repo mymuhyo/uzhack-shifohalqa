@@ -7,7 +7,9 @@ export async function POST(request: Request) {
   try {
     const actor = await androidPatient(request);
     if (!actor) return mobileJson({ error: 'unauthorized' }, 401);
-    const input = evidenceForm.safeParse(await readMobileBody(request));
+    const raw = await readMobileBody(request);
+    if (!raw.ok) return mobileJson({ error: raw.status === 413 ? 'too_large' : 'invalid' }, raw.status === 413 ? 413 : 400);
+    const input = evidenceForm.safeParse(raw.body);
     if (!input.success || input.data.payload.kind !== 'medication') return mobileJson({ error: 'invalid' }, 400);
     const task = await getTaskContext(actor, input.data.taskId);
     const evidence = task && prepareEvidence(input.data, task);

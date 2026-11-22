@@ -23,8 +23,6 @@ export async function POST(request: NextRequest) {
   if (!input.ok) return reject(input.status);
   const parsed = actionSchema.safeParse(input.body);
   if (!parsed.success) return reject(400);
-  const botUsername = getTelegramBotUsername();
-  if (!botUsername) return reject(503);
 
   try {
     const workspace = await ensureDemoWorkspace(session.workspaceId);
@@ -40,6 +38,9 @@ export async function POST(request: NextRequest) {
       await disconnectDoctorTelegram(actor);
       return new Response(null, { status: 204, headers: responseHeaders });
     }
+
+    const botUsername = getTelegramBotUsername();
+    if (!botUsername) return reject(503);
 
     const code = await createTelegramPairing(actor);
     if (!code) return reject(409);

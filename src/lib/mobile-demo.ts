@@ -68,9 +68,8 @@ export async function androidPatient(request: Request): Promise<(ClinicalActor &
   return row ? { ...accessRow.parse(row), role: 'patient' } : null;
 }
 
-export async function readMobileBody(request: Request): Promise<unknown> {
-  const input = await readRequestJson(request, bodyLimit);
-  return input.ok ? input.body : null;
+export async function readMobileBody(request: Request) {
+  return readRequestJson(request, bodyLimit);
 }
 
 export function mobileJson(data: object, status = 200) {

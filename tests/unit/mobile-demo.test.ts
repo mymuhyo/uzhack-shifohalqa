@@ -28,8 +28,8 @@ describe('Android demo JSON', () => {
     const http = (contentType: string, body: string) => new Request('https://example.test/', {
       method: 'POST', headers: { 'Content-Type': contentType }, body,
     });
-    await expect(readMobileBody(http('text/plain', '{}'))).resolves.toBeNull();
-    await expect(readMobileBody(http('application/json', JSON.stringify('x'.repeat(3000))))).resolves.toBeNull();
-    await expect(readMobileBody(http('application/json; charset=utf-8', '{"value":1}'))).resolves.toEqual({ value: 1 });
+    await expect(readMobileBody(http('text/plain', '{}'))).resolves.toEqual({ ok: false, status: 400 });
+    await expect(readMobileBody(http('application/json', JSON.stringify('x'.repeat(3000))))).resolves.toEqual({ ok: false, status: 413 });
+    await expect(readMobileBody(http('application/json; charset=utf-8', '{"value":1}'))).resolves.toEqual({ ok: true, body: { value: 1 } });
   });
 });

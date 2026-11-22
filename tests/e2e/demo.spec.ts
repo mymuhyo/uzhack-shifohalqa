@@ -76,18 +76,11 @@ test('opens the Telegram Mini App route cleanly on a narrow screen', async ({ pa
   expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
 });
 
-test('opens the knee-lift, shoulder-raise, and seated-knee-ext preview routes cleanly on a narrow screen', async ({ page }) => {
+test('opens both public exercise previews without narrow-screen overflow', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
-  for (const [route, heading] of [
-    ['/demo/mashq/tizza', 'Tizza ko‘tarish tahlili'],
-    ['/demo/mashq/yelka', 'Qo‘lni yelkadan ko‘tarish tahlili'],
-    ['/demo/mashq/oyoq', 'O‘tirib oyoqni tekislash tahlili'],
-  ] as const) {
-    await page.goto(route);
-    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Mashq turlari' })).toBeVisible();
-    await expect(page.getByText(/alohida ochiq CDC klipi biriktirilmagan/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'CDC namunasini sinash' })).toHaveCount(0);
+  for (const route of ['/demo/mashq', '/demo/mashq/tirsak']) {
+    expect((await page.goto(route))?.ok()).toBe(true);
+    await expect(page.getByRole('button', { name: 'CDC namunasini sinash' })).toBeVisible();
     expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
   }
 });

@@ -224,6 +224,35 @@ test('closes the loop with 1-click doctor template, supply confirmation, retake 
   await expect(page.getByRole('button', { name: 'Xulosani nusxalash' })).toBeVisible();
 });
 
+test('deduplicates simultaneous supply confirmations for one reviewed flag', async ({ page, baseURL }) => {
+  await assignDemoPlan(page);
+  await enterRole(page, 'patient');
+  await page.getByText('Icha olmadim', { exact: true }).click();
+  await page.getByLabel('Nega icha olmadingiz?').selectOption('out_of_supply');
+  await page.getByRole('button', { name: 'Sababni yuborish' }).click();
+
+  await enterRole(page, 'doctor');
+  const entry = page.getByRole('article', { name: 'Dori tugadi' });
+  await entry.getByText('Ko‘rib chiqish', { exact: true }).click();
+  await entry.locator('.template-chip').first().click();
+  await entry.getByRole('button', { name: 'Qaydni tasdiqlash' }).click();
+  await enterRole(page, 'patient');
+  const form = page.locator('form[action="/api/demo/followup"]').filter({ hasText: 'Dorini oldim va ichdim' });
+  const flagId = await form.locator('input[name="flagId"]').inputValue();
+  const responses = await Promise.all(Array.from({ length: 6 }, () => page.request.post('/api/demo/followup', {
+    headers: { origin: baseURL! },
+    form: { flagId, kind: 'supply_resolved' },
+    maxRedirects: 0,
+  })));
+  expect(responses.map(response => response.status())).toEqual(Array(6).fill(303));
+  const redirects = responses.map(response => response.headers().location);
+  expect(redirects.filter(location => location === '/patient')).toHaveLength(1);
+  expect(redirects.filter(location => location === '/patient?result=already_saved')).toHaveLength(5);
+
+  await page.reload();
+  await expect(page.getByText('Sizning tasdiqingiz: Dorini oldim va ichdim.')).toBeVisible();
+});
+
 test('shows live BP zone preview, completes Teach-Back, and filters doctor queue', async ({ page }) => {
   await assignDemoPlan(page);
   await enterRole(page, 'patient');

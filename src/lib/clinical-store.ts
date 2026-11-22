@@ -493,6 +493,7 @@ export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInpu
             AND existing.kind = 'retake_medication'
             AND existing.payload->>'status' = 'taken'
         ))
+      ON CONFLICT DO NOTHING
       RETURNING 1
     )
     SELECT CASE

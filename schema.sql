@@ -324,6 +324,10 @@ CREATE TABLE IF NOT EXISTS shifohalqa.flag_followups (
 CREATE INDEX IF NOT EXISTS flag_followups_flag_idx
   ON shifohalqa.flag_followups (workspace_id, flag_id, created_at DESC);
 
+CREATE UNIQUE INDEX IF NOT EXISTS flag_followups_completion_idx
+  ON shifohalqa.flag_followups (workspace_id, flag_id, kind)
+  WHERE kind = 'supply_resolved' OR (kind = 'retake_medication' AND payload->>'status' = 'taken');
+
 ALTER TABLE shifohalqa.flag_followups
   ADD COLUMN IF NOT EXISTS acknowledged_at timestamptz,
   ADD COLUMN IF NOT EXISTS acknowledged_note text;

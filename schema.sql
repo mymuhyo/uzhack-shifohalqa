@@ -186,6 +186,27 @@ ALTER TABLE shifohalqa.exercise_attempts
   ADD COLUMN IF NOT EXISTS review_reply text CHECK (char_length(review_reply) BETWEEN 1 AND 500),
   ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
 
+ALTER TABLE shifohalqa.exercise_prescriptions
+  ADD COLUMN IF NOT EXISTS movement text NOT NULL DEFAULT 'chair_stand'
+    CHECK (movement IN ('chair_stand', 'elbow_bend', 'knee_lift', 'shoulder_raise', 'seated_knee_ext'));
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'shifohalqa.exercise_prescriptions'::regclass
+      AND conname = 'exercise_prescriptions_supported_angle_check'
+  ) THEN
+    ALTER TABLE shifohalqa.exercise_prescriptions
+      DROP CONSTRAINT IF EXISTS exercise_prescriptions_target_angle_check,
+      ADD CONSTRAINT exercise_prescriptions_supported_angle_check CHECK (target_angle BETWEEN 60 AND 170);
+  END IF;
+END $$;
+
+ALTER TABLE shifohalqa.exercise_attempts
+  ADD COLUMN IF NOT EXISTS movement text NOT NULL DEFAULT 'chair_stand'
+    CHECK (movement IN ('chair_stand', 'elbow_bend', 'knee_lift', 'shoulder_raise', 'seated_knee_ext')),
+  ADD COLUMN IF NOT EXISTS diagnostics jsonb;
+
 CREATE UNIQUE INDEX IF NOT EXISTS exercise_attempt_client_idx
   ON shifohalqa.exercise_attempts (workspace_id, prescription_id, client_attempt_id)
   WHERE client_attempt_id IS NOT NULL;

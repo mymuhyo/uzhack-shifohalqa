@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { findLatestRealExerciseAttempt } from '@/lib/clinical-triage';
 import type { readExerciseAttempts, readExercisePlan } from '@/lib/exercise-store';
+import { exerciseCatalog } from '@/lib/pose/diagnostics';
 import styles from './patient-clinical.module.css';
 
 const displayTimestamp = new Intl.DateTimeFormat('uz-Latn-UZ', {
@@ -19,6 +20,7 @@ export function PatientExerciseCard({
   plan: ExercisePlan;
   attempts: ExerciseAttempts;
 }) {
+  const movement = exerciseCatalog[plan.movement];
   const latest = findLatestRealExerciseAttempt(attempts);
   const latestReview = latest?.review;
 
@@ -27,9 +29,9 @@ export function PatientExerciseCard({
       <section aria-labelledby="patient-exercise-heading">
         <h2 id="patient-exercise-heading">Reabilitatsiya mashqi</h2>
         <div className={styles.record}>
-          <p className={styles.recordTitle}>O‘tirib-turish mashqi</p>
+          <p className={styles.recordTitle}>{movement.title}</p>
           <p>
-            Shifokor rejasi · {plan.targetReps} takror · tizza burchagi maqsadi {plan.targetAngle}°.
+            Shifokor rejasi · {plan.targetReps} takror · {movement.jointLabel.toLowerCase()} burchagi maqsadi {plan.targetAngle}°.
           </p>
           {latest ? (
             <>
@@ -59,7 +61,7 @@ export function PatientExerciseCard({
           )}
           <div className={styles.controls}>
             <Link className="role-button" href="/patient/exercise">
-              O‘tirib-turish mashqi <span aria-hidden="true">↗</span>
+              {movement.title} <span aria-hidden="true">↗</span>
             </Link>
           </div>
         </div>

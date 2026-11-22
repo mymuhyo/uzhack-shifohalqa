@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -48,17 +50,21 @@ import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
 private val samplePlan = ExercisePlan("sample", 100, 5)
-private const val exerciseTitle = "O‘tirib-turish mashqi"
 
 @Composable
 internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
-    val ui = mobile?.exercise ?: ExerciseUi(planLoaded = true, plan = samplePlan)
+    var practice by rememberSaveable { mutableStateOf(PoseMovement.ChairStand.apiKey) }
+    val selectedMovement = PoseMovement.fromApiKey(practice)
+    val ui = mobile?.exercise ?: ExerciseUi(planLoaded = true, plan = samplePlan.copy(
+        movement = selectedMovement, targetAngle = selectedMovement.defaultTargetAngle,
+    ))
     val plan = ui.plan
+    val movement = plan?.movement ?: PoseMovement.ChairStand
     var running by remember { mutableStateOf(false) }
     var frame by remember { mutableStateOf<ExerciseCameraFrame?>(null) }
-    var finished by remember { mutableStateOf<ChairStandResult?>(null) }
+    var finished by remember { mutableStateOf<ExerciseMeasurement?>(null) }
     var runDate by remember { mutableStateOf(exerciseToday()) }
     var notice by rememberSaveable { mutableStateOf<String?>(null) }
     var manual by rememberSaveable { mutableStateOf(false) }
@@ -83,7 +89,9 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     LaunchedEffect(clip) {
         val selected = clip ?: return@LaunchedEffect
         try {
-            videoResult = analyzeExerciseVideo(context, selected, plan?.targetAngle ?: samplePlan.targetAngle) {
+            val analysisPlan = if (selected.isPublic) samplePlan else plan ?: samplePlan
+            videoResult = analyzeExerciseVideo(context, selected, analysisPlan.targetAngle, analysisPlan.movement,
+                analysisPlan.targetReps, analysisPlan.maxShallow) {
                 videoProgress = it
             }
             if (videoResult?.measurement?.savable != true) {
@@ -122,7 +130,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         if (mobile == null) {
             notice = "Namuna qaydi. Shifokorga yuborish uchun veb-panelga ulang."
             onSaved()
-        } else mobile.queueExercise(evidence, title, date) {
+        } else mobile.queueExercise(evidence.put("movement", movement.apiKey), title, date) {
             notice = null
             onSaved()
         }
@@ -179,7 +187,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (running && plan != null) {
-            ExerciseCamera(Modifier.weight(1f).fillMaxWidth(), plan.targetAngle, onFrame = { frame = it }) {
+            ExerciseCamera(Modifier.weight(1f).fillMaxWidth(), plan, onFrame = { frame = it }) {
                 running = false
                 frame = null
                 manual = true
@@ -192,11 +200,12 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                     when {
                         reading == null -> "Kamera ishga tushmoqda…"
                         reading.ready -> "Kamera tayyor · To‘liq ${reading.result.validReps} · Chala ${reading.result.shallowReps}"
-                        else -> "Yon tomoningiz bilan turing. Son, tizza va to‘piq kadrda ko‘rinsin."
+                        else -> "Yon tomoningiz bilan turing. ${movement.pointsLabelUz} kadrda ko‘rinsin."
                     },
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                reading?.angle?.let { Text("Tizza burchagi ${it.roundToInt()}°") }
+                reading?.angle?.let { Text("${movement.jointLabelUz} burchagi ${it.roundToInt()}°") }
+                reading?.result?.pose?.biomechanics?.currentFormWarning?.let { Text(it.labelUz) }
                 PrimaryAction("To‘xtatish") {
                     running = false
                     finished = reading?.result?.takeIf { it.savable }
@@ -218,7 +227,25 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 PatientPage {
                     TextButton(onClick = onBack) { Text("Bugungi vazifalar") }
-                    PageTitle(exerciseTitle)
+                    PageTitle(movement.titleUz)
+                    if (mobile == null) {
+                        var movementsOpen by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(enabled = clip == null, onClick = { movementsOpen = true }) { Text("Mashq turini tanlash") }
+                            DropdownMenu(expanded = movementsOpen, onDismissRequest = { movementsOpen = false }) {
+                                PoseMovement.entries.forEach { item ->
+                                    DropdownMenuItem(text = { Text(item.shortTitleUz) }, onClick = {
+                                        practice = item.apiKey
+                                        movementsOpen = false
+                                        videoResult = null
+                                        finished = null
+                                        notice = null
+                                        manual = false
+                                    })
+                                }
+                            }
+                        }
+                    }
                     TextButton(onClick = ::emergency) { Text("Tez yordam · 103") }
                     notice?.let { PatientNotice(it) }
                     ui.message?.let { PatientNotice(it) }
@@ -244,7 +271,8 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                         if (result != null) PatientCard {
                             SectionTitle("Kamera o‘lchovi · Full")
                             Text("To‘liq ${result.validReps} · Chala ${result.shallowReps}")
-                            result.minAngle?.let { Text("Eng kichik burchak ${it.roundToInt()}°") }
+                            result.pose?.let { Text(analyzePoseDiagnostics(it).patientCoachingUz) }
+                            result.minAngle?.let { Text("${if (movement.direction == PoseDirection.Extend) "Eng katta" else "Eng kichik"} burchak ${it.roundToInt()}°") }
                             PrimaryAction("Natijani saqlash", enabled = !ui.saving) {
                                 submit(result.asEvidence(), "Kamera o‘lchovi", runDate) { finished = null }
                             }
@@ -270,8 +298,9 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                             PatientCard {
                                 SectionTitle(if (result.isPublic) "Heavy o‘lchovi · CDC namunasi" else "Heavy o‘lchovi · Tanlangan video")
                                 Text("To‘liq ${result.measurement.validReps} · Chala ${result.measurement.shallowReps}")
-                                result.measurement.minAngle?.let { Text("Eng kichik burchak ${it.roundToInt()}°") }
-                                if (plan != null) {
+                                result.measurement.minAngle?.let { Text("${if (result.movement.direction == PoseDirection.Extend) "Eng katta" else "Eng kichik"} burchak ${it.roundToInt()}°") }
+                                result.measurement.pose?.let { Text(analyzePoseDiagnostics(it).patientCoachingUz) }
+                                if (plan != null && result.movement == plan.movement) {
                                     Text("Video shu telefonda qoladi. Saqlashda faqat o‘lchov xulosasi yuboriladi.")
                                     PrimaryAction("Natijani tasdiqlash va saqlash", enabled = !ui.saving) {
                                         submit(result.measurement.asEvidence(result.sha256), "Video o‘lchovi") { videoResult = null }
@@ -331,7 +360,7 @@ private fun ExerciseHistory(ui: ExerciseUi, onDiscard: (String) -> Unit) {
     ui.attempts.forEach { attempt ->
         PatientCard {
             SectionTitle(attempt.title)
-            Text("${attempt.date} · L${attempt.level}")
+            Text("${attempt.movement.shortTitleUz} · ${attempt.date} · L${attempt.level}")
             attempt.reps?.let { reps ->
                 Text(attempt.shallow?.let { "To‘liq $reps · Chala $it" } ?: "$reps takror")
             }

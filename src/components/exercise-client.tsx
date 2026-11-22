@@ -2,10 +2,24 @@
 
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { exerciseCoachResponseSchema, type ExerciseCoachResponse } from '@/lib/ai/exercise-coach';
 import type { ExerciseProvider } from '@/lib/exercise-analysis';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
 import { elbowSample, exerciseSample } from '@/lib/exercise-sample';
-import { createPoseTracker, type MeasuredCycle, type PoseMovement } from '@/lib/pose/engine';
+import { createAudioCoach } from '@/lib/pose/audio-coach';
+import {
+  analyzeExerciseDiagnostics,
+  exerciseCatalog,
+  type ExerciseErrorCode,
+  type FormMetrics,
+} from '@/lib/pose/diagnostics';
+import {
+  createPoseTracker,
+  type BiomechanicsSummary,
+  type FormWarning,
+  type MeasuredCycle,
+  type PoseMovement,
+} from '@/lib/pose/engine';
 import { drawPoseOverlay } from '@/lib/pose/overlay';
 import { sampleRecordedFrames } from '@/lib/pose/recorded-frames';
 import { ExerciseAnalysisPanel } from './exercise-analysis-panel';
@@ -32,8 +46,24 @@ type Capture = {
 type Screen =
   | { phase: 'idle' }
   | { phase: 'starting' | 'retake'; message: string }
-  | { phase: 'running'; source: Source; framing: Framing | null; currentAngle: number | null; validReps: number; shallowReps: number }
-  | { phase: 'result'; source: Source; measurement: Measurement; cycles: MeasuredCycle[]; feedback: ReturnType<Tracker['feedback']>; fileSha256: string | null };
+  | {
+      phase: 'running';
+      source: Source;
+      framing: Framing | null;
+      currentAngle: number | null;
+      validReps: number;
+      shallowReps: number;
+      formWarning: FormWarning | null;
+    }
+  | {
+      phase: 'result';
+      source: Source;
+      measurement: Measurement;
+      cycles: MeasuredCycle[];
+      feedback: ReturnType<Tracker['feedback']>;
+      biomechanics: BiomechanicsSummary;
+      fileSha256: string | null;
+    };
 
 type Report = 'measurement' | 'manual' | 'pain';
 type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message: string };
@@ -41,14 +71,35 @@ type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message
 const maxVideoBytes = 50_000_000;
 const minimumFrameIntervalMs = 80;
 const framingLostDelayMs = 600;
-const longestFrameSide = 640;
+const longestFrameSide = 384;
 const sourceLabel: Record<Source, string> = {
   live_camera: 'Jonli kamera',
   uploaded_video: 'Yuklangan video',
 };
-const movementCopy = {
-  chair_stand: { joint: 'Tizza', points: 'Son, tizza va to‘piq', start: 'tik turing', cycle: 'O‘tirib yana tik turing.' },
-  elbow_bend: { joint: 'Tirsak', points: 'Yelka, tirsak va bilak', start: 'qo‘lingizni yozing', cycle: 'Tirsakni bukib, qo‘lingizni yana yozing.' },
+
+const warningLabels: Record<FormWarning, string> = {
+  trunk_lean: 'Gavdani tik tuting',
+  elbow_drift: 'Tirsakni tanaga yaqin tuting',
+  shoulder_asymmetry: 'Yelkani tekis tuting',
+};
+
+const errorCodeLabels: Record<ExerciseErrorCode, string> = {
+  pain_reported: 'Og‘riq',
+  shallow_range: 'Chala amplituda',
+  too_fast: 'Juda tez',
+  too_slow: 'Sekin sur’at',
+  interrupted_tracking: 'Kadr uzilishi',
+  below_target_reps: 'Kam takror',
+  similar_motion: 'O‘xshash harakat',
+  trunk_lean: 'Gavda og‘ishi',
+  elbow_drift: 'Tirsak siljishi',
+  shoulder_asymmetry: 'Yelka og‘ishi',
+  tempo_irregular: 'Notekis marom',
+};
+
+const coachSourceLabels: Record<ExerciseCoachResponse['source'], string> = {
+  openrouter: 'Baidu AI murabbiy',
+  deterministic_coach: 'Biomexanik murabbiy',
 };
 
 function stopTracks(stream?: MediaStream) {
@@ -99,7 +150,7 @@ function nextVideoFrame(video: HTMLVideoElement, process: (timeSeconds: number) 
 function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
   if (typeof body === 'object' && body !== null && 'status' in body) {
     if (ok && (body.status === 'saved' || body.status === 'already_saved') && 'level' in body && (
-      body.level === 0 || body.level === 2 || body.level === 3
+      body.level === 0 || body.level === 1 || body.level === 2 || body.level === 3 || body.level === 4
     )) {
       const sample = 'sample' in body && body.sample === true;
       const saved = sample ? 'Namuna qaydi saqlandi' : report === 'pain' ? 'Og‘riq xabari saqlandi' : 'Mashq qaydi saqlandi';
@@ -121,39 +172,90 @@ function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
   return { state: 'error', report, message: 'Qayd saqlanganini tekshirib bo‘lmadi. Qayta urinib ko‘ring.' };
 }
 
+function averageCycleDurationSeconds(cycles: readonly MeasuredCycle[]): number | null {
+  if (cycles.length === 0) return null;
+  const totalMs = cycles.reduce((sum, cycle) => sum + Math.max(0, cycle.toMs - cycle.fromMs), 0);
+  return totalMs / cycles.length / 1000;
+}
+
+function toFormMetrics(bio: BiomechanicsSummary): FormMetrics {
+  return {
+    trunkLeanMaxDeg: bio.trunkLeanMaxDeg,
+    elbowDriftMaxDeg: bio.elbowDriftMaxDeg,
+    shoulderTiltMaxDeg: bio.shoulderTiltMaxDeg,
+    compensationCycles: bio.compensationCycles,
+    tempoSpreadSeconds: bio.tempoSpreadSeconds,
+  };
+}
+
 const seconds = new Intl.NumberFormat('uz-Latn-UZ', { maximumFractionDigits: 1 });
 
-export function ExerciseClient({ targetAngle, preview = false, analysisProviders = [], movement = 'chair_stand' }: {
+export function ExerciseClient({
+  targetAngle,
+  targetReps = 5,
+  maxShallow = 1,
+  painColor = 'yellow',
+  preview = false,
+  analysisProviders = [],
+  movement = 'chair_stand',
+}: {
   targetAngle: number;
+  targetReps?: number;
+  maxShallow?: number;
+  painColor?: 'yellow' | 'red';
   preview?: boolean;
   analysisProviders?: readonly ExerciseProvider[];
   movement?: PoseMovement;
 }) {
-  const copy = movementCopy[movement];
-  const example = movement === 'elbow_bend' ? elbowSample : exerciseSample;
+  const copy = exerciseCatalog[movement];
+  const example = movement === 'elbow_bend' ? elbowSample : movement === 'chair_stand' ? exerciseSample : null;
   const framingMessage: Record<Framing, string> = {
-    positioning: `Kameraga yon tomoningizni tuting. ${copy.points} kadrga sig‘sin.`,
-    waitingForStart: `Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun ${copy.start}.`,
-    ready: `Sanoq tayyor. ${copy.cycle}`,
-    lost: `Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, ${copy.start}.`,
+    positioning: `Kameraga yon tomoningizni tuting. ${copy.pointsLabel} kadrga sig‘sin.`,
+    waitingForStart: `Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun ${copy.startCue}.`,
+    ready: `Sanoq tayyor. ${copy.cycleCue}`,
+    lost: `Tayanch nuqtalar yo‘qoldi. Kadrga qaytib, ${copy.startCue}.`,
   };
   const [screen, setScreen] = useState<Screen>({ phase: 'idle' });
   const [confirmed, setConfirmed] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const [reviewingSample, setReviewingSample] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [coachState, setCoachState] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message: string }
+    | { status: 'ready'; advice: ExerciseCoachResponse }
+  >({ status: 'idle' });
+  const audioRef = useRef<ReturnType<typeof createAudioCoach> | null>(null);
+  const audioEnabledRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const activeCapture = useRef<Capture | null>(null);
   const request = useRef<{ controller: AbortController; report: Report } | null>(null);
+  const coachRequest = useRef<AbortController | null>(null);
   const videoAlternative = preview ? 'Namuna yoki video tanlang.' : 'Video tanlang yoki takrorlarni qo‘lda kiriting.';
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+    if (!audioEnabled) audioRef.current?.stop();
+  }, [audioEnabled]);
 
   useEffect(() => () => {
     const capture = activeCapture.current;
     activeCapture.current = null;
     request.current?.controller.abort();
     request.current = null;
+    coachRequest.current?.abort();
+    coachRequest.current = null;
+    audioRef.current?.stop();
     releaseCapture(capture);
   }, []);
+
+  function announce(text: string, tone: 'ready' | 'rep' | 'warn' | 'done') {
+    if (!audioEnabledRef.current) return;
+    audioRef.current ??= createAudioCoach();
+    audioRef.current.speak(text, tone);
+  }
 
   function takeCapture() {
     const capture = activeCapture.current;
@@ -174,6 +276,9 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
     if (activeCapture.current !== capture) return;
     const { tracker, source, fileSha256 } = capture;
     const measurement = tracker.result();
+    const cycles = tracker.cycles();
+    const feedback = tracker.feedback();
+    const biomechanics = tracker.biomechanics();
     takeCapture();
     if (measurement.analyzedFrames < 5 || measurement.minAngle === null || measurement.confidence === null || measurement.confidence < 0.75) {
       setScreen({ phase: 'retake', message: preview
@@ -181,7 +286,8 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
         : 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.' });
       return;
     }
-    setScreen({ phase: 'result', source, measurement, cycles: tracker.cycles(), feedback: tracker.feedback(), fileSha256 });
+    announce(`${measurement.validReps} ta to‘liq harakat yakunlandi.`, 'done');
+    setScreen({ phase: 'result', source, measurement, cycles, feedback, biomechanics, fileSha256 });
   }
 
   function begin(source: Source, message: string): Capture | null {
@@ -189,6 +295,9 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
     const tracker = createPoseTracker({ targetAngle, movement, liveCamera: source === 'live_camera' });
     const capture = { source, video: videoRef.current, tracker, controller: new AbortController(), fileSha256: null };
     activeCapture.current = capture;
+    coachRequest.current?.abort();
+    coachRequest.current = null;
+    setCoachState({ status: 'idle' });
     setConfirmed(false);
     setSaveStatus(null);
     setReviewingSample(false);
@@ -211,6 +320,12 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
 
     let framing: Framing | null = source === 'live_camera' ? 'positioning' : null;
     let lastTrackedTimestamp = -Infinity;
+    let lastValid = 0;
+    let lastShallow = 0;
+    let lastFraming: Framing | null = framing;
+    let lastWarning: FormWarning | null = null;
+    let lastWarningVoiceMs = -Infinity;
+
     const analyze = (timestampMs: number, frameWidth: number, frameHeight: number, draw: (width: number, height: number) => void) => {
       if (!frameWidth || !frameHeight) return;
       const scale = Math.min(1, longestFrameSide / Math.max(frameWidth, frameHeight));
@@ -222,7 +337,13 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
       const { landmarks } = landmarker.detectForVideo(canvas, timestampMs);
       const trackedFrame = tracker.update(landmarks[0] ?? [], { width, height, timestampMs });
       if (source === 'live_camera' && overlayRef.current) {
-        drawPoseOverlay(overlayRef.current, width, height, trackedFrame?.joints ?? []);
+        drawPoseOverlay(overlayRef.current, width, height, trackedFrame?.joints ?? [], {
+          angle: trackedFrame?.angle,
+          targetAngle,
+          direction: copy.direction,
+          warning: trackedFrame?.formWarning,
+          torsoJoints: trackedFrame?.torsoJoints,
+        });
       }
       if (framing !== null) {
         if (tracker.isTracking()) {
@@ -233,16 +354,36 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
         }
       }
       const { validReps, shallowReps } = tracker.result();
+      const formWarning = trackedFrame?.formWarning ?? null;
+      if (source === 'live_camera') {
+        if (framing !== lastFraming) {
+          if (framing === 'ready') announce('Sanoq tayyor', 'ready');
+          else if (framing === 'lost') announce('Kadrga qayting', 'warn');
+          lastFraming = framing;
+        }
+        if (validReps > lastValid) {
+          announce(`${validReps}`, 'rep');
+          lastValid = validReps;
+        } else if (shallowReps > lastShallow) {
+          announce('Chuqurroq bajaring', 'warn');
+          lastShallow = shallowReps;
+        } else if (formWarning && formWarning !== lastWarning && timestampMs - lastWarningVoiceMs >= 4000) {
+          announce(warningLabels[formWarning], 'warn');
+          lastWarningVoiceMs = timestampMs;
+        }
+        lastWarning = formWarning;
+      }
       const currentFraming = framing;
       const currentAngle = source === 'live_camera' && trackedFrame ? Math.round(trackedFrame.angle / 5) * 5 : null;
       setScreen((current) => current.phase === 'running' && (
         currentFraming !== current.framing || currentAngle !== current.currentAngle ||
-        validReps !== current.validReps || shallowReps !== current.shallowReps
-      ) ? { phase: 'running', source, framing: currentFraming, currentAngle, validReps, shallowReps } : current);
+        validReps !== current.validReps || shallowReps !== current.shallowReps ||
+        formWarning !== current.formWarning
+      ) ? { phase: 'running', source, framing: currentFraming, currentAngle, validReps, shallowReps, formWarning } : current);
     };
     const analyzeVideo = (timestampMs: number) => analyze(timestampMs, video.videoWidth, video.videoHeight,
       (width, height) => context.drawImage(video, 0, 0, width, height));
-    setScreen({ phase: 'running', source, framing, currentAngle: null, validReps: 0, shallowReps: 0 });
+    setScreen({ phase: 'running', source, framing, currentAngle: null, validReps: 0, shallowReps: 0, formWarning: null });
 
     if (file) {
       const signal = capture.controller.signal;
@@ -301,7 +442,6 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        // Let the camera keep its native framing. Downscale for inference after capture.
         video: { facingMode: { ideal: 'user' } },
       });
       if (activeCapture.current !== capture) {
@@ -356,6 +496,7 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
   }
 
   async function playSample() {
+    if (!example) return;
     const capture = begin('uploaded_video', 'CDC namuna videosi tayyorlanmoqda…');
     if (!capture) return;
     setReviewingSample(true);
@@ -382,7 +523,9 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
         signal: controller.signal,
       });
       const body: unknown = await response.json();
-      if (request.current?.controller === controller) setSaveStatus(saveMessage(body, response.ok, report));
+      if (request.current?.controller === controller) {
+        setSaveStatus(saveMessage(body, response.ok, report));
+      }
     } catch {
       if (request.current?.controller === controller) setSaveStatus(saveMessage(null, false, report));
     } finally {
@@ -392,8 +535,17 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
 
   function saveMeasurement() {
     if (screen.phase !== 'result') return;
-    const { source, measurement, fileSha256 } = screen;
-    const metrics = { ...measurement, motionSignature: measurement.motionSignature && [...measurement.motionSignature] };
+    const { source, measurement, cycles, feedback, biomechanics, fileSha256 } = screen;
+    const avgCycleSeconds = averageCycleDurationSeconds(cycles);
+    const metrics = {
+      movement,
+      ...measurement,
+      motionSignature: measurement.motionSignature && [...measurement.motionSignature],
+      avgCycleSeconds,
+      interruptedCycles: feedback.interruptedCycles,
+      incompleteCycles: feedback.incompleteCycles,
+      formMetrics: toFormMetrics(biomechanics),
+    };
     if (source === 'live_camera') {
       void submit({ ...metrics, source, fileSha256: null, patientConfirmed: true }, 'measurement');
     } else if (confirmed && fileSha256) {
@@ -401,32 +553,103 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
     }
   }
 
+  async function requestAiCoach() {
+    if (screen.phase !== 'result') return;
+    coachRequest.current?.abort();
+    const controller = new AbortController();
+    coachRequest.current = controller;
+    setCoachState({ status: 'loading' });
+    try {
+      const response = await fetch('/api/demo/exercise-coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sample && (movement === 'chair_stand' || movement === 'elbow_bend') ? { sample: movement } : {
+          movement,
+          targetAngle,
+          targetReps,
+          maxShallow,
+          validReps: screen.measurement.validReps,
+          shallowReps: screen.measurement.shallowReps,
+          minAngle: screen.measurement.minAngle,
+          avgCycleSeconds: averageCycleDurationSeconds(screen.cycles),
+          interruptedCycles: screen.feedback.interruptedCycles,
+          incompleteCycles: screen.feedback.incompleteCycles,
+          formMetrics: toFormMetrics(screen.biomechanics),
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Coach unavailable');
+      const parsed = exerciseCoachResponseSchema.safeParse(await response.json());
+      if (!controller.signal.aborted) {
+        setCoachState(parsed.success
+          ? { status: 'ready', advice: parsed.data }
+          : { status: 'error', message: 'AI murabbiy javobini o‘qib bo‘lmadi.' });
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setCoachState({ status: 'error', message: 'AI murabbiy xizmati hozircha javob bermadi.' });
+      }
+    } finally {
+      if (coachRequest.current === controller) coachRequest.current = null;
+    }
+  }
+
   function reportPain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     takeCapture();
     setScreen({ phase: 'idle' });
-    void submit({ source: 'self_report', reason: 'pain' }, 'pain');
+    void submit({ source: 'self_report', reason: 'pain', movement }, 'pain');
   }
 
   function saveManual(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = new FormData(event.currentTarget).get('reps');
     if (typeof value !== 'string' || !/^\d{1,3}$/.test(value)) return;
-    void submit({ source: 'self_report', reason: 'manual', reps: Number(value) }, 'manual');
+    void submit({ source: 'self_report', reason: 'manual', reps: Number(value), movement }, 'manual');
   }
 
   const capturing = screen.phase === 'starting' || screen.phase === 'running';
   const saving = saveStatus?.state === 'saving';
-  const sample = screen.phase === 'result' && screen.fileSha256 === example.sha256;
+  const sample = screen.phase === 'result' && example !== null && screen.fileSha256 === example.sha256;
   const poseCycles = sample ? screen.cycles : undefined;
   const showVideo = capturing && (screen.phase !== 'running' || screen.source === 'live_camera');
+  const diagnostics = screen.phase === 'result' ? analyzeExerciseDiagnostics({
+    movement,
+    reason: 'measured',
+    targetAngle,
+    targetReps,
+    maxShallow,
+    painColor,
+    validReps: screen.measurement.validReps,
+    shallowReps: screen.measurement.shallowReps,
+    minAngle: screen.measurement.minAngle,
+    avgCycleSeconds: averageCycleDurationSeconds(screen.cycles),
+    interruptedCycles: screen.feedback.interruptedCycles,
+    incompleteCycles: screen.feedback.incompleteCycles,
+    sample,
+    formMetrics: toFormMetrics(screen.biomechanics),
+  }) : null;
+
+  function angleProgressPercent(currentAngle: number) {
+    if (copy.direction === 'extend') {
+      return Math.min(100, Math.max(8, Math.round((currentAngle / Math.max(1, targetAngle)) * 100)));
+    }
+    return Math.min(100, Math.max(8, Math.round(((180 - currentAngle) / Math.max(1, 180 - targetAngle)) * 100)));
+  }
+
   return (
     <div className={styles.exercise}>
-      <p>{copy.points} kadrda bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
-      <div>
-        <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
-        <p>{movement === 'elbow_bend' ? 'CDC videosidan qirqilgan klip.' : 'Oldindan yozilgan klip.'} {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={example.source}>Video manbasi</a></p>
-      </div>
+      <p>{copy.pointsLabel} kadrda bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
+      {example ? (
+        <div>
+          <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
+          <p>{movement === 'elbow_bend' ? 'CDC videosidan qirqilgan klip.' : 'Oldindan yozilgan klip.'} {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={example.source}>Video manbasi</a></p>
+        </div>
+      ) : (
+        <p className={styles.notice}>
+          Bu mashq uchun alohida ochiq CDC klipi biriktirilmagan. Jonli kamera (L3) yoki qurilmangizdagi video (L2) orqali texnika tahlilini sinang.
+        </p>
+      )}
       <div className={styles.actions}>
         {!capturing ? (
           <button className={styles.primary} type="button" disabled={saving} onClick={startCamera}>Kamerani boshlash</button>
@@ -440,6 +663,14 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
             }
           }}>To‘xtatish</button>
         )}
+        <button
+          type="button"
+          className="switch-chip"
+          aria-pressed={audioEnabled}
+          onClick={() => setAudioEnabled((prev) => !prev)}
+        >
+          Ovozli murabbiy
+        </button>
         {!preview && <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
           <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
         </form>}
@@ -447,10 +678,23 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
       {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
       {screen.phase === 'retake' && <p className={styles.notice} role="status">{screen.message}</p>}
       {screen.phase === 'running' && (
-        <div>
+        <div className="angle-gauge">
           {screen.framing && <p role="status">{framingMessage[screen.framing]}</p>}
           <output className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.validReps} · Chala {screen.shallowReps}</output>
-          {screen.currentAngle !== null && <p>{copy.joint} burchagi taxminan {screen.currentAngle}°</p>}
+          <span className={`status-pill ${screen.formWarning ? 'status-warn' : 'status-ok'}`}>
+            {screen.formWarning ? warningLabels[screen.formWarning] : 'Texnika: Me’yor'}
+          </span>
+          {screen.currentAngle !== null && (
+            <>
+              <p>{copy.jointLabel} burchagi taxminan {screen.currentAngle}° · maqsad {targetAngle}°</p>
+              <div className="progress-track" aria-hidden="true">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${angleProgressPercent(screen.currentAngle)}%` }}
+                />
+              </div>
+            </>
+          )}
         </div>
       )}
       <div className={styles.preview} hidden={!showVideo}>
@@ -466,17 +710,75 @@ export function ExerciseClient({ targetAngle, preview = false, analysisProviders
           <h2>MediaPipe o‘lchovi</h2>
           {sample && <p>CDC namuna videosi</p>}
           <p className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.measurement.validReps} · Chala {screen.measurement.shallowReps}</p>
-          <p>Eng kichik burchak {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr</p>
+          <p>
+            {copy.direction === 'extend' ? 'Eng katta burchak' : 'Eng kichik burchak'} {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr
+          </p>
+          {diagnostics && (
+            <div className={styles.notice} role="region" aria-label="Texnika va biomexanik tahlil">
+              <div className="brief-header">
+                <strong>Texnika bahosi: {diagnostics.formScore}/100</strong>
+                <span
+                  className={`status-pill ${
+                    diagnostics.severity === 'red'
+                      ? 'status-urgent'
+                      : diagnostics.severity === 'yellow'
+                        ? 'status-warn'
+                        : 'status-ok'
+                  }`}
+                >
+                  {diagnostics.severity === 'red'
+                    ? 'Shifokor ko‘rigi'
+                    : diagnostics.severity === 'yellow'
+                      ? 'E’tibor'
+                      : 'Yaxshi'}
+                </span>
+              </div>
+              {diagnostics.errorCodes.length > 0 && (
+                <p>
+                  {diagnostics.errorCodes.map((code) => errorCodeLabels[code]).join(' · ')}
+                </p>
+              )}
+              <p>{diagnostics.patientCoachingUz}</p>
+              {!sample && diagnostics.needsDoctorReview && (
+                <p>Yuborilgach, ushbu harakat tafsiloti shifokor navbatiga chiqadi.</p>
+              )}
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className="switch-chip"
+                  disabled={coachState.status === 'loading'}
+                  onClick={() => void requestAiCoach()}
+                >
+                  {coachState.status === 'loading' ? 'AI murabbiy tahlil qilmoqda…' : sample ? 'AI murabbiydan batafsil maslahat olish' : 'Texnika izohini ko‘rish'}
+                </button>
+              </div>
+              {coachState.status === 'error' && <p role="status">{coachState.message}</p>}
+              {coachState.status === 'ready' && (
+                <div className={styles.analysisResult} role="region" aria-label="AI murabbiy maslahati">
+                  <p><strong>{coachSourceLabels[coachState.advice.source]}</strong> · <code>{coachState.advice.model}</code></p>
+                  <p>{coachState.advice.patientAdviceUz}</p>
+                  <p><strong>Keyingi e’tibor:</strong> {coachState.advice.focusCueUz}</p>
+                  <p className={styles.modelName}>Shifokor uchun xulosa: {coachState.advice.doctorInsightUz}</p>
+                </div>
+              )}
+            </div>
+          )}
           {screen.source === 'live_camera' && screen.feedback.interruptedCycles > 0 && (
             <p>Kuzatuv {screen.feedback.interruptedCycles} ta harakat paytida uzildi. Tayanch nuqtalar kadrga sig‘ishini tekshiring.</p>
           )}
           {screen.source === 'live_camera' && screen.feedback.incompleteCycles > 0 && (
-            <p>{screen.feedback.incompleteCycles} ta harakatda bukilish yoki boshlang‘ich holatga qaytish to‘liq qayd etilmadi.</p>
+            <p>{screen.feedback.incompleteCycles} ta harakatda {copy.direction === 'extend' ? 'yozilish' : 'bukilish'} yoki boshlang‘ich holatga qaytish to‘liq qayd etilmadi.</p>
           )}
           {screen.cycles.length > 0 && (
             <table className={styles.cycles}>
-              <caption>Sikllar · {copy.joint.toLowerCase()} burchagi maqsadi {targetAngle}°</caption>
-              <thead><tr><th scope="col">Vaqt</th><th scope="col">Min. burchak</th><th scope="col">Natija</th></tr></thead>
+              <caption>Sikllar · {copy.jointLabel.toLowerCase()} burchagi maqsadi {targetAngle}°</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Vaqt</th>
+                  <th scope="col">{copy.direction === 'extend' ? 'Maks. burchak' : 'Min. burchak'}</th>
+                  <th scope="col">Natija</th>
+                </tr>
+              </thead>
               <tbody>
                 {screen.cycles.map(cycle => (
                   <tr key={cycle.fromMs}>

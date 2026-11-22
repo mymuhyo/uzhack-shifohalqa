@@ -1,12 +1,13 @@
 package uz.shifohalqa.android
 
-internal data class ChairStandResult(
+internal data class ExerciseMeasurement(
     val validReps: Int,
     val shallowReps: Int,
     val minAngle: Double?,
     val confidence: Double?,
     val analyzedFrames: Int,
     val motionSignature: List<Double>?,
+    val pose: PoseTrackerResult? = null,
 ) {
     val savable get() = validReps + shallowReps > 0 && analyzedFrames in 5..20_000 &&
         minAngle != null && confidence != null && confidence >= .75
@@ -130,9 +131,9 @@ internal class ChairStandTracker(private val targetAngle: Int, private val live:
         }
     }
 
-    fun result(): ChairStandResult {
+    fun result(): ExerciseMeasurement {
         val frames = if (live && valid + shallow > 0) attempted - trailingMisses else attempted
-        return ChairStandResult(valid, shallow, minimum, if (minimum != null && frames > 0) visibilitySum / frames else null,
+        return ExerciseMeasurement(valid, shallow, minimum, if (minimum != null && frames > 0) visibilitySum / frames else null,
             analyzed, signature)
     }
 }

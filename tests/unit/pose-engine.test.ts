@@ -65,6 +65,46 @@ describe('sit-to-stand pose tracker', () => {
     expect(tracker.cycles()[0].minAngle).toBeCloseTo(70);
   });
 
+  it('counts knee_lift repetitions using shoulder-hip-knee landmarks', () => {
+    const tracker = createPoseTracker({ movement: 'knee_lift', targetAngle: 110 });
+    cycle(95).forEach((angle, index) => {
+      const points = landmarks(angle, landscape);
+      // Map shoulder (11), hip (23), knee (25) using the synthetic angle triad.
+      points[11] = points[23];
+      points[23] = points[25];
+      points[25] = points[27];
+      points[27] = { x: 0, y: 0, visibility: 0 };
+      tracker.update(points, { ...landscape, timestampMs: index * 50 });
+    });
+    expect(tracker.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(tracker.cycles()[0].minAngle).toBeCloseTo(95);
+  });
+
+  it('counts shoulder_raise and seated_knee_ext extension movements', () => {
+    const shoulder = createPoseTracker({ movement: 'shoulder_raise', targetAngle: 90 });
+    const raiseSeq = [
+      25, 25, 25, 25, 25, 25, 50, 75, 105, 105, 105, 105, 105, 75, 50, 25, 25, 25, 25, 25,
+    ];
+    raiseSeq.forEach((angle, index) => {
+      const points = landmarks(angle, landscape);
+      // Map hip (23), shoulder (11), elbow (13) using synthetic triad (vertex at 25 -> 11).
+      points[23] = points[23];
+      points[11] = points[25];
+      points[13] = points[27];
+      shoulder.update(points, { ...landscape, timestampMs: index * 60 });
+    });
+    expect(shoulder.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(shoulder.cycles()[0].minAngle).toBeCloseTo(105);
+
+    const kneeExt = createPoseTracker({ movement: 'seated_knee_ext', targetAngle: 155 });
+    const extSeq = [
+      100, 100, 100, 100, 100, 100, 130, 145, 165, 165, 165, 165, 165, 145, 130, 100, 100, 100, 100, 100,
+    ];
+    feed(kneeExt, extSeq);
+    expect(kneeExt.result()).toMatchObject({ validReps: 1, shallowReps: 0 });
+    expect(kneeExt.cycles()[0].minAngle).toBeCloseTo(165);
+  });
+
   it('requires five usable consecutive frames and does not count repeated timestamps', () => {
     const tracker = createPoseTracker({ targetAngle });
     const timestampMs = feed(tracker, [172, 172, 172, 172]);

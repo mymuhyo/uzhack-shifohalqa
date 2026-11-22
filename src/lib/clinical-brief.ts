@@ -6,6 +6,7 @@ import {
   findLatestRealExerciseAttempt,
   type BpTrendPoint,
 } from './clinical-triage';
+import { exerciseCatalog } from './pose/diagnostics';
 import type { ClinicalView } from './clinical-types';
 import type { readExerciseAttempts, readExercisePlan } from './exercise-store';
 
@@ -139,9 +140,9 @@ export function buildClinicalBrief({
     const latestAttempt = findLatestRealExerciseAttempt(exerciseAttempts);
     if (latestAttempt) {
       const reps = latestAttempt.validReps === null ? '' : ` · ${latestAttempt.validReps} to‘liq takror`;
-      lines.push(`O‘tirib-turish mashqi: oxirgi qayd L${latestAttempt.level}${reps}.`);
+      lines.push(`${exerciseCatalog[latestAttempt.movement].title}: oxirgi qayd L${latestAttempt.level}${reps}.`);
     } else {
-      lines.push(`Mashq rejasi: o‘tirib-turish (${exercisePlan.targetReps} takror), hali qayd yo‘q.`);
+      lines.push(`Mashq rejasi: ${exerciseCatalog[exercisePlan.movement].shortTitle.toLowerCase()} (${exercisePlan.targetReps} takror), hali qayd yo‘q.`);
     }
   }
 

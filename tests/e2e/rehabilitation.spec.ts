@@ -128,3 +128,43 @@ test('Android saves a confirmed local video summary and restricts cloud analysis
   const entry = page.getByRole('article', { name: 'Yuklangan video · L2' });
   await expect(entry).toContainText('Android ilovasi');
 });
+
+test('assigns a new movement and stores diagnostics without changing the paired exercise contract', async ({ page }) => {
+  await enter(page, 'doctor');
+  await page.getByLabel('Mashq turi').selectOption('shoulder_raise');
+  await expect(page.getByLabel('Maqsad burchagi')).toHaveValue('90');
+  await page.getByRole('button', { name: 'Mashqni biriktirish' }).click();
+  await expect(page.getByText(/Reja: 5 takror/)).toBeVisible();
+  const origin = new URL(page.url()).origin;
+  const paired = await page.request.post('/api/demo/android/pairing', { headers: { Origin: origin } });
+  const access = await page.request.post('/api/mobile/v1/pair', { data: { code: (await paired.json()).code } });
+  const headers = { Authorization: `Bearer ${(await access.json()).token}` };
+  const { plan, date } = await (await page.request.get(mobile, { headers })).json();
+  expect(plan).toMatchObject({ movement: 'shoulder_raise', targetAngle: 90 });
+  const record = { clientAttemptId: randomUUID(), prescriptionId: plan.id, scheduledDate: date };
+  const send = (evidence: object) => page.request.post(mobile, { headers, data: { ...record, evidence } });
+  expect((await send({ source: 'self_report', reason: 'pain' })).status()).toBe(404);
+  const evidence = {
+    movement: 'shoulder_raise', source: 'live_camera', fileSha256: null, patientConfirmed: true,
+    analyzedFrames: 60, validReps: 2, shallowReps: 0, minAngle: 95, confidence: 0.95, motionSignature: null,
+    formMetrics: { shoulderTiltMaxDeg: 28, compensationCycles: 2 },
+  };
+  const results = await Promise.all([send(evidence), send(evidence)]);
+  const saved = await results[0].json();
+  expect(saved).toMatchObject({ status: 'saved', level: 3 });
+  expect(await results[1].json()).toEqual(saved);
+  expect((await (await page.request.get(mobile, { headers })).json()).attempts).toEqual([
+    expect.objectContaining({ id: saved.id, movement: 'shoulder_raise', diagnostics: expect.objectContaining({ needsDoctorReview: true }) }),
+  ]);
+
+  const coach = '/api/mobile/v1/exercise-coach';
+  expect((await page.request.post(coach, { data: { sample: 'chair_stand' } })).status()).toBe(401);
+  expect((await page.request.post(coach, { headers, data: { sample: 'chair_stand', video: 'content://private/clip' } })).status()).toBe(400);
+  const publicAdvice = await page.request.post(coach, { headers, data: { sample: 'chair_stand' } });
+  expect(await publicAdvice.json()).toMatchObject({ source: 'deterministic_coach' });
+  const { movement, validReps, shallowReps, minAngle, formMetrics } = evidence;
+  const localAdvice = await page.request.post('/api/demo/exercise-coach', {
+    headers: { Origin: origin }, data: { movement, targetAngle: 90, targetReps: 5, validReps, shallowReps, minAngle, formMetrics },
+  });
+  expect(await localAdvice.json()).toMatchObject({ source: 'deterministic_coach', needsDoctorReview: true });
+});

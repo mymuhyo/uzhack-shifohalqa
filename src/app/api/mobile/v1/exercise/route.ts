@@ -10,9 +10,9 @@ export async function GET(request: Request) {
     const [plan, attempts] = await Promise.all([readExercisePlan(actor), readExerciseAttempts(actor)]);
     return mobileJson({
       date: exerciseDate(),
-      plan: plan && { id: plan.id, targetAngle: plan.targetAngle, targetReps: plan.targetReps },
-      attempts: attempts.map(({ id, scheduledDate, reason, validReps, shallowReps, level, sample, review }) =>
-        ({ id, scheduledDate, reason, validReps, shallowReps, level, sample, review })),
+      plan: plan && { id: plan.id, targetAngle: plan.targetAngle, targetReps: plan.targetReps, maxShallow: plan.maxShallow, movement: plan.movement },
+      attempts: attempts.map(({ id, scheduledDate, reason, validReps, shallowReps, level, sample, review, movement, diagnostics }) =>
+        ({ id, scheduledDate, reason, validReps, shallowReps, level, sample, review, movement, diagnostics })),
     });
   } catch {
     return mobileJson({ error: 'unavailable' }, 503);

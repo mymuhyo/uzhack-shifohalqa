@@ -87,6 +87,13 @@ internal class MobileWorkspaceModel(application: Application) : AndroidViewModel
         return report
     }
 
+    suspend fun publicExerciseCoach(): PublicExerciseAdvice {
+        val current = session ?: throw MobileFailure(MobileFailureKind.Expired)
+        val advice = current.api.publicExerciseCoach(current.token)
+        if (session !== current) throw MobileFailure(MobileFailureKind.Expired)
+        return advice
+    }
+
     fun refreshExercise() {
         val current = session ?: return
         if (exercise.loading) return

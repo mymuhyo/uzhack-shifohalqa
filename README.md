@@ -26,6 +26,8 @@ GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `mai
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
 - **AI:** Hybrid — on-device MediaPipe Pose (L3) + Cloudflare Clef + Clairic Flash (synthetic-label quality and extraction) + Gemini Decisions / OpenRouter fallback. OpenRouter also handles public sample observations and Uzbek explanations
 
+Tanlanadigan mashqlar — o‘tirib-turish, tirsak bukish, tizza ko‘tarish, yelkadan qo‘l ko‘tarish va o‘tirgan holda oyoqni tekislash. Web va Android kamera yoki mahalliy videodan texnika izohini ko‘rsatadi. `EXERCISE_COACH_OPENROUTER_DEMO=true` bo‘lsa, AI murabbiy serverdagi ikki ommaviy mashq namunasini izohlaydi.
+
 ## O'qish tartibi
 | Fayl | Maqsad |
 |---|---|

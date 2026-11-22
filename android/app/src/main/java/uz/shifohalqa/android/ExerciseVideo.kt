@@ -32,10 +32,11 @@ internal class ExerciseClip private constructor(val uri: Uri, val isPublic: Bool
 }
 
 internal data class ExerciseVideoResult(
-    val measurement: ChairStandResult,
+    val measurement: ExerciseMeasurement,
     val cycles: List<ExerciseCycle>,
     val sha256: String?,
     val isPublic: Boolean,
+    val movement: PoseMovement = PoseMovement.ChairStand,
 )
 
 internal class ExerciseVideoTooLong : Exception()
@@ -46,14 +47,17 @@ internal suspend fun analyzeExerciseVideo(
     context: Context,
     clip: ExerciseClip,
     targetAngle: Int,
+    movement: PoseMovement = PoseMovement.ChairStand,
+    targetReps: Int = 5,
+    maxShallow: Int = 1,
     onProgress: (Int) -> Unit = {},
 ): ExerciseVideoResult = Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { decoder ->
-    withContext(decoder) { analyzeClip(context, clip, targetAngle, onProgress) }
+    withContext(decoder) { analyzeClip(context, clip, ExercisePlan("video", targetAngle, targetReps, movement, maxShallow), onProgress) }
 }
 
 @OptIn(UnstableApi::class)
 private suspend fun analyzeClip(
-    context: Context, clip: ExerciseClip, targetAngle: Int, onProgress: (Int) -> Unit,
+    context: Context, clip: ExerciseClip, plan: ExercisePlan, onProgress: (Int) -> Unit,
 ): ExerciseVideoResult {
     val coroutine = currentCoroutineContext()
     val app = context.applicationContext
@@ -63,7 +67,7 @@ private suspend fun analyzeClip(
     require(duration > 0)
     if (duration > maxClipMs) throw ExerciseVideoTooLong()
 
-    val tracker = ChairStandTracker(targetAngle, live = false)
+    val tracker = ExerciseMotionTracker(plan, live = false)
     val options = PoseLandmarker.PoseLandmarkerOptions.builder()
         .setBaseOptions(BaseOptions.builder().setModelAssetPath("pose_landmarker_heavy.task").build())
         .setRunningMode(RunningMode.VIDEO)
@@ -74,7 +78,6 @@ private suspend fun analyzeClip(
         .build().use { extractor ->
             PoseLandmarker.createFromOptions(app, options).use { landmarker ->
                 var lastFrameTime = -1L
-                var previousSide: Int? = null
                 var lastProgress = 0
                 for (offset in 0L until duration step frameIntervalMs) {
                     coroutine.ensureActive()
@@ -85,9 +88,7 @@ private suspend fun analyzeClip(
                         val points = BitmapImageBuilder(bitmap).build().use { image ->
                             landmarker.detectForVideo(image, lastFrameTime).landmarks().firstOrNull()
                         }
-                        val knee = points?.let { pickKnee(it, bitmap.width, bitmap.height, previousSide, live = false) }
-                        tracker.update(lastFrameTime, knee?.angle, knee?.visibility ?: 0.0, knee?.side)
-                        previousSide = knee?.side
+                        tracker.update(points, bitmap.width, bitmap.height, lastFrameTime)
                     }
                     val progress = (offset * 100 / duration).toInt()
                     if (progress - lastProgress >= 10) {
@@ -105,7 +106,7 @@ private suspend fun analyzeClip(
             else requireNotNull(app.contentResolver.openInputStream(clip.uri))
         stream.use { fingerprint(it) { coroutine.ensureActive() } }
     } else null
-    return ExerciseVideoResult(result, tracker.completedCycles(), fingerprint, clip.isPublic)
+    return ExerciseVideoResult(result, tracker.completedCycles(), fingerprint, clip.isPublic, plan.movement)
 }
 
 private fun clipDuration(context: Context, uri: Uri): Long {

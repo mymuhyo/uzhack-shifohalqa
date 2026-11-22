@@ -103,6 +103,11 @@ internal class MobileApi private constructor(private val origin: URI) {
         getString("id")
     }
 
+    suspend fun publicExerciseCoach(token: String): PublicExerciseAdvice =
+        request("exercise-coach", token, JSONObject().put("sample", PoseMovement.ChairStand.apiKey)) {
+            PublicExerciseAdvice(getString("source"), getString("patientAdviceUz"), getString("focusCueUz"))
+        }
+
     suspend fun sampleAi(token: String, provider: SampleAiProvider, comparison: String): SampleAiReport {
         val payload = JSONObject().put("provider", provider.value)
         if (provider == SampleAiProvider.Baidu) payload.put("comparison", comparison)

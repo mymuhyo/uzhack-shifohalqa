@@ -33,6 +33,7 @@ export default defineConfig({
       ...(useLiveOcr ? {} : { GEMINI_API_KEY: '', CLOUDFLARE_ACCOUNT_ID: '', CLOUDFLARE_API_TOKEN: '' }),
       ...(useLiveOcr || useExerciseOpenRouter ? {} : { OPENROUTER_API_KEY: '' }),
       EXERCISE_OPENROUTER_DEMO: String(useExerciseOpenRouter),
+      EXERCISE_COACH_OPENROUTER_DEMO: 'false',
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       NEXT_TELEMETRY_DISABLED: '1',
       SESSION_SECRET: randomBytes(32).toString('hex'),

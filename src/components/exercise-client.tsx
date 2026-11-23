@@ -686,10 +686,14 @@ export function ExerciseClient({
         >
           Ovozli murabbiy · {audioEnabled ? 'Yoqilgan' : 'O‘chirilgan'}
         </button>
+        <button type="button" className="switch-chip" disabled={!audioEnabled} onClick={() => announce('Sanoq tayyor', 'ready')}>
+          Ovozni sinash
+        </button>
         {!preview && <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
           <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
         </form>}
       </div>
+      <p>Ovoz yoqilganda jonli kamerada takrorlar aytiladi. Namuna video tez tahlil qilinadi va faqat yakunda ovozli xabar beriladi.</p>
       {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
       {screen.phase === 'retake' && <p className={styles.notice} role="status">{screen.message}</p>}
       {screen.phase === 'running' && (

@@ -33,6 +33,7 @@ function resolveClipName(textUz: string): string | null {
 export function createAudioCoach() {
   let context: AudioContext | null = null;
   let activeAudio: HTMLAudioElement | null = null;
+  let utteranceId = 0;
   const cache = new Map<string, HTMLAudioElement>();
 
   function playTone(tone: CoachTone) {
@@ -76,7 +77,7 @@ export function createAudioCoach() {
     }
   }
 
-  function playClip(clipName: string, fallbackTextUz: string): boolean {
+  function playClip(clipName: string, fallbackTextUz: string, currentId: number): boolean {
     if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
     try {
       if (activeAudio) {
@@ -95,7 +96,7 @@ export function createAudioCoach() {
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(() => {
-          speakViaSystemTts(fallbackTextUz);
+          if (currentId === utteranceId) speakViaSystemTts(fallbackTextUz);
         });
       }
       return true;
@@ -105,13 +106,15 @@ export function createAudioCoach() {
   }
 
   function speak(textUz: string, tone?: CoachTone) {
+    const currentId = ++utteranceId;
     if (tone) playTone(tone);
     const clip = resolveClipName(textUz);
-    if (clip && playClip(clip, textUz)) return;
+    if (clip && playClip(clip, textUz, currentId)) return;
     speakViaSystemTts(textUz);
   }
 
   function stop() {
+    utteranceId += 1;
     if (activeAudio) {
       try {
         activeAudio.pause();

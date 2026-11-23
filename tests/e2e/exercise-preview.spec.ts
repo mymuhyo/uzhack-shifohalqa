@@ -2,6 +2,19 @@ import { expect, test } from 'playwright/test';
 
 test.describe.configure({ timeout: 135_000 });
 
+test('lets a visitor test the voice coach from a direct click', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { playedClips: string[] }).playedClips = [];
+    HTMLMediaElement.prototype.play = function () {
+      (window as unknown as { playedClips: string[] }).playedClips.push(this.getAttribute('src') ?? '');
+      return Promise.resolve();
+    };
+  });
+  await page.goto('/demo/mashq');
+  await page.getByRole('button', { name: 'Ovozni sinash' }).click({ timeout: 5_000 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { playedClips: string[] }).playedClips)).toContain('/audio/uz/cue_ready.mp3');
+});
+
 test('opens the camera demo without a plan and measures the public clip in the browser', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/');

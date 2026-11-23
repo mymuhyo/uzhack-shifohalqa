@@ -656,7 +656,11 @@ export function ExerciseClient({
     <div className={styles.exercise}>
       <p>{copy.pointsLabel} kadrda bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
       {example ? (
-        <div>
+        <div className={styles.sample}>
+          <div>
+            <strong>Avval tayyor video bilan sinang</strong>
+            <p>Namuna uchun kamera va kirish talab qilinmaydi.</p>
+          </div>
           <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
           <p>{movement === 'elbow_bend' ? 'CDC videosidan qirqilgan klip.' : 'Oldindan yozilgan klip.'} {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={example.source}>Video manbasi</a></p>
         </div>

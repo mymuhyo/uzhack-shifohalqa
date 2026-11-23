@@ -35,6 +35,8 @@ test('protects role pages and opens the doctor role by keyboard on a narrow scre
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Mashq demosini ochish' })).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Telegram Mini App ko‘rinishi' })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Shifokor sifatida kirish' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/doctor');

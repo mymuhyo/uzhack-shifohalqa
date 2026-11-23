@@ -1,6 +1,6 @@
 # ShifoHalqa · Dvigatel va ilova o‘rtasidagi kontrakt
 
-**19-noyabr 2026.** Dalil darajasi, bosim va dori jadvali qoidalari tayyor. Jadvaldagi boshqa nomlar kelgusi integratsiya uchun kontrakt takliflari. Ish tartibi [PLAN](../PLAN.md) da, mahsulot kontrakti [SPEC](SPEC.md) da.
+**19-noyabr 2026.** Dalil darajasi, bosim va dori jadvali qoidalari tayyor. Jadvaldagi boshqa nomlar kelgusi integratsiya uchun kontrakt takliflari. Mahsulot kontrakti [SPEC](SPEC.md) da.
 
 ## Bir qaydning hayot sikli
 

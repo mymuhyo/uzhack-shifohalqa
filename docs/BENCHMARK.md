@@ -114,7 +114,7 @@ Chromiumga ommaviy CDC WebM klipidan tayyorlangan 360×568 Y4M fayli aylanib tur
 
 21-noyabr 2026 · Chromium, 360×800 · repodagi 8,792 soniyalik ommaviy CDC klipi. MediaPipe ikkita to‘liq siklni qaytardi. 1,2–4,2 s oralig‘idagi siklning minimumi 94°, 5,3–8,5 s oralig‘idagisi 88°. Tugmadan jadvalgacha 59 405 ms kuzatildi. Oldingi mahalliy sinovlar va hozirgi yuklama ostidagi o‘lchov bir xil tezlikni va’da qilishga yetarli emas.
 
-Gemini `gemini-3.5-flash-lite` shu klipni MediaPipe raqamlarisiz tahlil qildi va taxminan 2 s va 6 s da o‘tirish kuzatilganini qaytardi. Interfeys ikki modelning ikkita tugallangan sikl sanaganini ko‘rsatdi. Gemini tugmasidan tekshirilgan javobgacha 11 740 ms. Bu bir klipdagi moslik, boshqa odamlar va kamera sharoitlarida aniqlik o‘lchanmagan. [Mashq rejasi](V2_PLAN.md) · [Sinov](../tests/e2e/exercise-preview.spec.ts)
+Gemini `gemini-3.5-flash-lite` shu klipni MediaPipe raqamlarisiz tahlil qildi va taxminan 2 s va 6 s da o‘tirish kuzatilganini qaytardi. Interfeys ikki modelning ikkita tugallangan sikl sanaganini ko‘rsatdi. Gemini tugmasidan tekshirilgan javobgacha 11 740 ms. Bu bir klipdagi moslik, boshqa odamlar va kamera sharoitlarida aniqlik o‘lchanmagan. [Sinov](../tests/e2e/exercise-preview.spec.ts)
 
 Yakuniy CSS tuzatishidan keyin ayni 360×800 Chromium oqimi boshidan oxirigacha o‘tdi. Ikki CV sikli va Gemini vaqtlari aynan takrorlandi. Bu urinishda CV 58 578 ms, Gemini 18 752 ms oldi. Sahifa 360 px eniga sig‘di. Mashq tahlili endpointi foydalanuvchi videosi maydonini HTTP 400 bilan rad etdi.
 

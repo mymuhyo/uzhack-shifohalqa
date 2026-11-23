@@ -1,8 +1,8 @@
 # ShifoHalqa engineering guide
 
-Work in `~/Projects/uzhack` on local `main` for submission fixes. The public demo uses synthetic data. A push to remote `main` triggers Vercel and Railway. Get the owner's OK before releasing or merging an `exp/<idea>` experiment. Keep private environment files, user records, share links and service credentials out of Git and logs.
+Work in `~/Projects/uzhack` on `final` (or feature branches off `final`) for Grand Final development. `main` (tagged `v1-task2-demo`) is the **frozen live Task 2 judge demo** connected to Vercel production (`shifohalqa.vercel.app`), Railway (`@shifohalqa_bot`), and Neon `shifohalqa/main`. **Never commit, merge, or push to `main`** without the owner's explicit approval. Keep private environment files, user records, share links and service credentials out of Git and logs.
 
-Read [V2_PLAN](docs/V2_PLAN.md) for current work, [SPEC](docs/SPEC.md) for the product contract and [INTERFACES](docs/INTERFACES.md) before changing an engine. [SUBMISSION](tasks/task-2/SUBMISSION.md) is the judge's browser walkthrough.
+Read [SPEC](docs/SPEC.md) for the product contract, [INTERFACES](docs/INTERFACES.md) before changing an engine, and [BENCHMARK](docs/BENCHMARK.md) for measurement baselines.
 
 ## Session commits and handoff
 
@@ -15,8 +15,7 @@ Read [V2_PLAN](docs/V2_PLAN.md) for current work, [SPEC](docs/SPEC.md) for the p
 - Use a verified non-production Neon branch. Check its identity before using `psql` with the direct URL and [schema.sql](schema.sql). Use the pooled URL for the web app. A checkout name does not identify its database.
 - Run `npm run verify` for types, lint, units and a production build. Run `npm run e2e` for session smoke. Supply the isolated branch as `SHIFO_E2E_DATABASE_URL` for the DB-backed browser suite. The optional live synthetic-box test uses `SHIFO_E2E_LIVE_DORIMOS=1` and credentials for the configured DoriMos provider. Record the actual selection and results.
 - For Telegram, run `uv sync --project services/telegram_bot --locked` and `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests`. Full web E2E uses this service with a mock Telegram transport. After Android changes run `./gradlew :app:assembleDebug :app:lintDebug :app:connectedDebugAndroidTest` in `android/` with a device.
-- For the sandboxed agent worktrees, see [DUAL_AGENTS](docs/DUAL_AGENTS.md).
-- Before release, complete the [judge checklist](tasks/task-2/README.md) in a fresh browser on the intended URL. Preserve the existing public link through the end of the Grand Final.
+- Preserve the existing public `main` link through the end of the Grand Final. Before any future release to `main`, verify in a fresh browser on an isolated preview/staging URL first.
 
 ## Code map and extension points
 

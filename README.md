@@ -7,22 +7,13 @@
 
 Mashq rejasini biriktirgach, bemor sahifasidan «O‘tirib-turish mashqi»ni oching. CDC namunasi kamerasiz ishlaydi. Brauzer modelni shu ilovadan yuklaydi va video kadrlarini qurilmada tahlil qiladi. Real telefon kamerasi uchun brauzer HTTPS va kamera ruxsatini talab qiladi. «Reja ijrosi» dori va qon bosimi bo‘yicha hisobni, qadamlar esa alohida qo‘lda kiritilgan qiymatni ko‘rsatadi.
 
-«DoriMos»da tayyor sintetik qutini tanlang va rasmda o‘qilgan yozuvni tasdiqlang. Rejadagi nom yoki kuchdan farq bo‘lsa, shifokor navbatida alohida qayd chiqadi. «Yaqinim»da bemor bugungi qisqa holat uchun 24 soatlik havolani yaratishi va bekor qilishi mumkin. [Hakam uchun demo yo‘li](tasks/task-2/PLATFORM_NOTES.md)
+«DoriMos»da tayyor sintetik qutini tanlang va rasmda o‘qilgan yozuvni tasdiqlang. Rejadagi nom yoki kuchdan farq bo‘lsa, shifokor navbatida alohida qayd chiqadi. «Yaqinim»da bemor bugungi qisqa holat uchun 24 soatlik havolani yaratishi va bekor qilishi mumkin.
 
-## Deadline (tashkilotchi kanallarida tekshiring: uzhack.uz / Platform)
-| Vazifa | MYT | UZT | Nima topshiriladi |
-|---|---|---|---|
-| **Task 1** — Video + Project info | **18-noyabr 2026, 23:59** | 20:59 | 3–5 daqiqa video (YouTube Unlisted) + platformadagi `Project` maydonlari |
-| **Task 2** — Working MVP | **22-noyabr 2026, 23:59**, jamoa tasdiqlagan | 20:59 | Brauzer havolasi + demo loginlar + "what works / what's simulated" + AI-use note |
+## Branch va muhit tartibi
 
-Ball = 0.30·Task1 + 0.70·Task2; ikkalasi ham majburiy; havola Grand Finalgacha jonli turishi shart.
-
-## Ish muhiti
-
-GitHub’dagi `main` ShifoHalqaning doimiy reliz branchi. Vercel va Railway `main`dan avtomatik build oladi.
-
-- **Production:** https://shifohalqa.vercel.app (Vercel `shifohalqa`, faqat `main` dan)
-- **DB:** Neon `shifohalqa/main` · UzHack sintetik demosi
+- **`main` (`v1-task2-demo`) — muzlatilgan jonli Task 2 hakamlar demosi.** Vercel (`shifohalqa.vercel.app`) va Railway (`@shifohalqa_bot`) `main` dan deploy oladi va Neon `shifohalqa/main` bazasiga ulangan. Egasi ruxsatisiz `main` ga tegilmaydi.
+- **`final` — faol rivojlantirish branchi.** Grand Final uchun barcha yangi ishlar va arxitektura yangilanishlari shu branchda olib boriladi.
+- **Production (Task 2 demo):** https://shifohalqa.vercel.app (Vercel `shifohalqa`, `main`)
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
 - **AI:** Hybrid — on-device MediaPipe Pose (L3) + Cloudflare Clef + Clairic Flash (synthetic-label quality and extraction) + Gemini Decisions / OpenRouter fallback. OpenRouter also handles public sample observations and Uzbek explanations
 
@@ -31,18 +22,10 @@ Tanlanadigan mashqlar — o‘tirib-turish, tirsak bukish, tizza ko‘tarish, ye
 ## O'qish tartibi
 | Fayl | Maqsad |
 |---|---|
-| [`docs/V2_PLAN.md`](docs/V2_PLAN.md) | Joriy ish, qabul mezonlari va reliz qarori |
-| [`PLAN.md`](PLAN.md) | A–I bosqichlari va avvalgi qabul yozuvlari |
-| [`AGENTS.md`](AGENTS.md) | Codex ish chegaralari, Gemini qoidalari va pushdan oldingi tekshiruvlar |
+| [`AGENTS.md`](AGENTS.md) | Ish chegaralari, branch qoidalari va pushdan oldingi tekshiruvlar |
 | [`docs/SPEC.md`](docs/SPEC.md) | Mahsulot + texnik kontrakt: rollar, sxema, AI pipeline, qoidalar |
 | [`docs/INTERFACES.md`](docs/INTERFACES.md) | Engine eksportlari va server integratsiyasi |
-| [`competition/RUBRIC.md`](competition/RUBRIC.md) | Rasmiy Task 2 baholash × ichki sifat darvozasi |
-| [`tasks/task-1/`](tasks/task-1/) | Video ssenariysi, runbook, platforma matnlari (deadline 18-nov!) |
-| [`tasks/task-2/README.md`](tasks/task-2/README.md) | MVP topshirish checklist |
-| [`brief/uzhack-online-stage-tasks-en.pdf`](brief/uzhack-online-stage-tasks-en.pdf) | Rasmiy Brief v1.0 (tarixiy sanalar bilan) |
-| [`archive/`](archive/) | Eski reja fayllar — joriy emas |
-
-Eski 4 lane kodi arxivi: `~/Projects/uzhack-reference-20261117.tar.zst` (tarixiy manba).
+| [`docs/BENCHMARK.md`](docs/BENCHMARK.md) | MediaPipe va AI o‘lchov natijalari |
 
 ## Lokal demo
 
@@ -135,8 +118,6 @@ Debug APK `android/app/build/outputs/apk/debug/app-debug.apk` faylida hosil bo�
 
 ### Androidni veb-panelga ulash
 
-Ajratilgan worktree’da `npm run lane -- dev` va `npm run lane -- android-test` ishlating. Launcher emulyatorning lokal 3000 portini tegishli worktree portiga ulaydi.
-
 Lokal server `DEMO_MODE=true`, `DEMO_ANDROID_ENABLED=true`, `SESSION_SECRET` va ajratilgan test bazasi bilan ishlashi kerak. Debug APK uchun ADB orqali serverni telefonga yo‘naltiring. Bir nechta qurilma ulangan bo‘lsa, `adb -s SERIAL` bilan sinov telefonini tanlang.
 
 ```bash
@@ -157,5 +138,3 @@ Sessiya 8 soat amal qiladi. Android uni Keystore orqali shifrlab saqlaydi. Yangi
 
 ## Halollik qoidasi (muzokaraga yopiq)
 **AI o'lchaydi → kod qoidalari bayroq ko'taradi → shifokor qaror qiladi.** Hech qachon "AI isbotladi/tashxis qo'ydi" yozilmaydi; simulyatsiya qismlar ochiq belgilanadi; har submission bilan "what works / what's simulated" + AI-use note keladi.
-
-Joriy ishlar va qabul mezonlari [V2 rejasida](docs/V2_PLAN.md).

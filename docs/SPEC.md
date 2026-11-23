@@ -1,6 +1,6 @@
 # docs/SPEC.md — ShifoHalqa mahsulot va texnik kontrakt (yagona joriy spetsifikatsiya)
 
-> Eski reja fayllar `archive/` ga ko'chirildi; bu fayl — yagona joriy manba. Audit (17-nov-2026) va rasmiy brief asosida.
+> Bu fayl — yagona joriy spetsifikatsiya manbai (audit va rasmiy talablar asosida).
 
 ## 1. Muammo ("Ko'rinmas davr")
 Farg'ona poliklinikalarida konsultatsiya ~10–15 daqiqa; undan keyin haftalar davomida uy davolanishi **nazoratsiz**: gipertenziya bemori dori dozasini adashtiradi (5 mg vs 10 mg quti), reabilitatsiya bemori mashqni qo'rquv/og'riq sabab tashlaydi, qon bosimi ko'tarilgani kech bilinadi. Shifokorda har kuni o'nlab bemorga qo'ng'iroq qilishga vaqt yo'q.

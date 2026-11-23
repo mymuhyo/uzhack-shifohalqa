@@ -134,7 +134,7 @@ internal fun ExerciseCamera(
                 val sideways = rotation == 90 || rotation == 270
                 val width = if (sideways) proxy.height else proxy.width
                 val height = if (sideways) proxy.width else proxy.height
-                tracker.update(points, width, height, time)
+                tracker.update(points?.let { rotateCameraLandmarks(it, rotation) }, width, height, time)
                 val frame = tracker.cameraFrame(mirrored = mirroredFront.get())
                 main.execute {
                     if (active.get()) {

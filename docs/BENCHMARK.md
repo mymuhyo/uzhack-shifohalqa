@@ -140,6 +140,8 @@ Desktop Chromium mobil emulyatsiyasida ommaviy CDC klipini taxminan 8 kadr/soniy
 
 Jismoniy Android telefonida loyiha egasi lokal `1c7ddd7` tuzatishini sinab, ekranda **8 to‘liq, 2 chala** takror hamda tizza va to‘piq ustidagi yashil chiziq ko‘ringanini bildirdi. Bajarilgan takrorlarning qo‘lda belgilangan soni va burchaklari qayd etilmagan, shuning uchun aniqlik hisoblanmadi.
 
+23-noyabr 2026: Android ilovada MediaPipe nuqtalari kamera kadrining asl yo‘nalishidan ekran yo‘nalishiga o‘tkazildi. 0°, 90°, 180° va 270° uchun sintetik koordinatalar unit-testda tekshirildi. Bu test jismoniy kamera aniqligi yoki skeletning odam ustiga tushishini o‘lchamaydi; yangilangan ilovada real odam bilan tekshiruv hali talab qilinadi. Yuqoridagi `1c7ddd7` sinovi Android telefondagi web versiyaga tegishli.
+
 ### Tirsak demo klipi
 
 21-noyabr 2026 (MYT). 360×800 Chromium sinovida real MediaPipe CDC klipining bir to‘liq tirsak bukish va yozish siklini topdi. Natija 1 to‘liq, 0 chala. Namuna CDC videosining 46.2 soniyasidan olingan, 8.7 soniyaga kesilgan, bitta ijrochi atrofi qirqilgan va audio olib tashlangan. Bu bitta yozilgan klip natijasi. Tirsak uchun jismoniy kamera aniqligi hali o‘lchanmagan. [CDC klipi va litsenziya](https://commons.wikimedia.org/wiki/File:Muscle_Strengthening_at_Home_-_Bicep_Curls.webm)

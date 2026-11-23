@@ -2,6 +2,20 @@ package uz.shifohalqa.android
 
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
+// MediaPipe returns coordinates in the original image, even when inference uses rotation.
+internal fun rotateCameraLandmarks(points: List<NormalizedLandmark>, rotation: Int): List<NormalizedLandmark> {
+    require(rotation in setOf(0, 90, 180, 270))
+    return points.map { point ->
+        val (x, y) = when (rotation) {
+            90 -> 1f - point.y() to point.x()
+            180 -> 1f - point.x() to 1f - point.y()
+            270 -> point.y() to 1f - point.x()
+            else -> point.x() to point.y()
+        }
+        NormalizedLandmark.create(x, y, point.z(), point.visibility(), point.presence())
+    }
+}
+
 internal class ExerciseMotionTracker(plan: ExercisePlan, private val live: Boolean) {
     private val chair = if (plan.movement == PoseMovement.ChairStand) ChairStandTracker(plan.targetAngle, live) else null
     private val pose = PoseTracker(plan.movement, plan.targetAngle, plan.targetReps, plan.maxShallow, liveCamera = live)

@@ -1,255 +1,106 @@
-# ShifoHalqa Grand Final — Architecture Decision Records
+# ShifoHalqa Grand Final architecture decisions
 
-This document records the core architectural decisions (`ADR-001` through `ADR-006`) for the ShifoHalqa Grand Final on branch `final`. Every decision preserves the frozen Task 2 judge demo on `main` (`bc27a09`, `v1-task2-demo`) and enforces the product Golden Rule in [SPEC](SPEC.md): **AI measures, deterministic rules flag, the doctor decides.**
+**Scope accepted 2026-11-25 MYT.** This record defines the agreed Grand Final scope on `final`. [PLAN](PLAN.md) owns implementation status and acceptance checks. [DESIGN](DESIGN.md) owns the cross-platform interaction contract. [SPEC](SPEC.md), [INTERFACES](INTERFACES.md), and [BENCHMARK](BENCHMARK.md) include Task 2 contracts and historical evidence. Update the applicable contract when implementing each changed flow.
 
----
+ADR-001 through ADR-006 were first accepted on 2026-11-24. The revisions below incorporate the M1 audit and owner decisions. Acceptance of an ADR means the design is agreed. M1 remains open until its audit gate passes.
 
-# ADR-001: Web Stack, UI/UX Architecture, Animations & Optimistic Mutations (R1)
+## ADR-001 — Platform roles and shared Web implementation
 
-## Status
-Accepted
+**Status** — Accepted, revised.
 
-## Date
-2026-11-24
+Android is the primary patient app. A patient can complete the medication loop with Android alone or Telegram alone. The primary Grand Final story is daily medication reporting, a supply or help request, a doctor response, and a seven-day report. Exercise demonstration and doctor video review form the second story.
 
-## Context
-The Task 2 Web application runs on Next.js `16.4.6`, React `19.3.1`, TypeScript `5.9.3`, Zod `4.6.7`, and Tailwind CSS `4.3.5`, styled with hand-written CSS Modules (`*.module.css` + 711-line `src/app/globals.css`) and HTML `<form method="post">` endpoints (`src/lib/clinical-post.ts`) returning HTTP `303` redirects. Full-page `303` reloads reset scroll position, interrupt visual continuity, feel sluggish on clinic mobile networks, and lack accessible composable primitives (dialogs, drawers, tabs, toasts, trend displays). At the same time, `@mediapipe/tasks-vision` (`1.2.3`) and `mediabunny` (`1.63.0`) are heavy client bundles that must remain lazy-loaded so initial page loads stay fast on low-end mobile devices.
+| Surface | Grand Final scope |
+|---|---|
+| Android | Native patient plan, reminders, medication, manual BP, sensor and manual steps, report and doctor replies, and all five exercise flows |
+| Telegram Mini App | Patient plan, medication, manual BP and steps, report and doctor replies, and all five exercises with prepared-video analysis |
+| Telegram bot | Standalone chat entry, summaries, reminders, callbacks, settings, and links to the corresponding Mini App record |
+| Patient Web | Patient plan, medication, manual BP and steps, report and doctor replies, and three exercises |
+| Doctor Web | Assigned-patient queue, reports, review and reply, and evidence from all five movements |
+| Caregiver Web | Patient-issued, revocable, 24-hour summary and help acknowledgment link |
 
-## Decision
-1. **Core Framework Retained**: Keep **Next.js 16.4.6 (App Router) + React 19.3.1 + TypeScript 5.9.3 + Zod 4.6.7 + Tailwind CSS v4** (`4.3.5`).
-2. **Design System & Component Primitives**: Adopt **shadcn/ui** (`components.json`, accessible Radix-backed primitives in `src/components/ui/`) styled with the **Clinical Ledger** design tokens (`--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn`, `--ok`, self-hosted `@fontsource/golos-text` + `@fontsource/literata`, light/dark mode, large patient tap targets, and persistent `103` & `Og‘riq bor` controls).
-3. **Motion & Iconography**: Adopt **Motion** (`motion/react`) wrapped in `<MotionConfig reducedMotion="user">` for calm, tactile state transitions (queue triage, task completion, drawers/sheets, progress indicators) using GPU-composited properties (`transform`, `opacity`) without layout thrashing, paired with **Lucide** (`lucide-react`) icons.
-4. **Optimistic JSON Mutations**: Replace `303` form-POST reloads on primary clinical mutations with **optimistic client/API JSON mutations** (`fetch` + `useOptimistic` / `useTransition` + `router.refresh()` reconciliation) backed by Zod-validated Route Handlers (`/api/clinical/*`, `/api/demo/*`, `/api/auth/*`).
-5. **Lazy Heavy CV Bundles**: Keep `@mediapipe/tasks-vision` and `mediabunny` strictly lazy-loaded (`next/dynamic` / on-demand `import()`) only when the user opens exercise capture or chooses a recorded video.
+Patient Web exposes chair stand, elbow bend, and seated knee extension. Android and the Mini App add knee lift and shoulder raise. The Web and Mini App share the exercise components and data contracts. Surface-specific catalogs control which movements appear. Prepared videos are the default demo entry. Live camera is optional on supported devices.
 
-## Alternatives Considered
-- **Alternative A: Keep CSS Modules + HTTP 303 form POSTs**
-  - *Pros*: Zero new npm dependencies.
-  - *Cons*: Full-page reloads discard scroll and animation state, degrade perceived responsiveness, and force bespoke accessible dialog/drawer boilerplate.
-  - *Rejected*: Does not meet R1 UI/UX, animation, and optimization bar.
-- **Alternative B: Rewrite Web as a Vite SPA / TanStack Start / Remix app**
-  - *Pros*: Pure client-side routing.
-  - *Cons*: Loses verified App Router Route Handlers, SSR `/caregiver/[token]` security headers and `src/proxy.ts` `405` guard, `outputFileTracingIncludes` for demo fixtures, and zero-config Vercel parity with high migration risk.
-  - *Rejected*: Unnecessary churn with lower security/SSR cohesion.
-- **Alternative C: Heavy enterprise UI suites (MUI, Ant Design, GSAP)**
-  - *Pros*: Pre-built widgets.
-  - *Cons*: Large bundle weight on low-end mobile devices and friction against Tailwind v4 Clinical Ledger tokens.
-  - *Rejected*: Hurts Core Web Vitals and visual cohesion.
+Keep Next.js App Router, React, Zod, Tailwind v4 and the Clinical Ledger visual language. Use shadcn/ui, Motion with user reduced-motion support, and Lucide where they serve the agreed interactions. Use optimistic feedback for ordinary inputs and show a confirmed state when the server acknowledges them. Load CV and video decoders on demand. Reserve the urgent actions for clear, consistent positions on patient screens.
 
-## Consequences
-- Install `lucide-react`, `motion`, and shadcn/ui utilities (`clsx`, `tailwind-merge`, `class-variance-authority`, Radix primitives via `shadcn` MCP) and initialize `components.json` in M3.
-- Preserve SSR security headers (`Cache-Control: private, no-store`, `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`) on `/caregiver/:path*`.
-- Cover optimistic mutations, keyboard navigation, and `prefers-reduced-motion` in Playwright E2E tests.
+## ADR-002 — Clinical API authority, database and environment isolation
 
-## References
-- [SPEC](SPEC.md), [INTERFACES](INTERFACES.md), `package.json`, `next.config.ts`, `src/proxy.ts`
+**Status** — Accepted, revised.
 
----
+- Next.js owns clinical reads, writes, validation, authorization and transaction boundaries for all clients. Use Supabase Auth and Postgres behind that API. The `postgres.js` adapter continues to own atomic multi-statement operations. The Telegram worker can consume its delivery queue with a narrowly scoped credential. Clinical bot actions go through the same API as other clients.
+- Keep the ordered Supabase migrations as the schema source for `final`. Review and close the direct authenticated clinical-table grants exposed by M1. Enforce note privacy and derived-field write restrictions through privileges and server authorization. Use RLS as defense in depth. Preserve an unexposed `private` schema for narrowly scoped helpers and triggers. Serve UI refresh through authorized DTOs. Any later Realtime event exposed to clients carries a minimal invalidation signal and is covered by the same access tests.
+- Derive actor, workspace, patient, and authorized doctor from verified identity and assignment. Store access, signed media URLs and review actions enforce that scope. Apply least privilege to Web and bot credentials. Check environment identity before judges or test workers can write. Use isolated `final` DB, Storage, preview deploy, bot and webhook settings. Keep `main` at the frozen Task 2 release boundary. Any future promotion to `main` requires explicit owner approval.
+- Before applying release migrations, prove grants, constraints, cleanup and worker permissions against an isolated Supabase database using their actual roles. M1's app-level verification and advisor results remain historical evidence.
 
-# ADR-002: Database Migration from Neon to Supabase Platform (R3)
+## ADR-003 — Test identities, patient enrollment and caregiver access
 
-## Status
-Accepted
+**Status** — Accepted, revised.
 
-## Date
-2026-11-24
+- Grand Final activity uses synthetic clinical records and public or cleared sample media. A real person may operate a test account or run local camera practice. Prepare sample material for transmitted demo evidence. Demonstrate both 1-click Judge Demo and Supabase Auth using synthetic users. A real-patient pilot follows a separate privacy and clinical readiness review.
+- Keep the signed judge session and Supabase identity as separate `SessionContext` variants. The server confirms the workspace class and uses an explicit authorized patient context. Reserve doctor access for an assigned user with verified identity. Signup input and email claims alone grant no clinic role. Check one active patient identity per enrollment, alongside expiration, replay prevention, revocation, and safe recovery for invitations and sessions.
+- The assigned doctor enrolls a patient using a short-lived, one-time invitation. An Android-only patient accepts in the app using a link or typed code. A Telegram-only patient accepts in Telegram after server verification of `initData`. Show the clinic before confirmation. A patient with an active session may add the second channel using a single-use code tied to the same identity. The patient can see and unlink connected channels. The clinic handles recovery when the patient has lost all sessions.
+- Among clinical staff, only the assigned doctor may access the patient's clinical record, review queue, reports and video during Grand Final. A patient may issue and revoke a 24-hour caregiver link. It exposes the daily aggregate and limited help acknowledgment, with access auditing and `no-store`, `noindex` and `no-referrer`.
+- Later versions may add explicit clinic-team permissions and authenticated caregiver accounts. Preserve the consent and minimum-data model when implementing those roles.
 
-## Context
-`schema.sql` defines 26 clinical/Telegram tables and 5 PL/pgSQL triggers inside schema `shifohalqa`. Twelve TypeScript/Playwright files currently depend on `@neondatabase/serverless` (`src/lib/db.ts`), executing atomic multi-CTE SQL statements and `sql.transaction((tx) => [...], { isolationLevel: 'ReadCommitted' })` with `FOR NO KEY UPDATE` / `FOR SHARE` row locks (`clinical-store.ts`, `exercise-store.ts`, `caregiver-store.ts`, `telegram-store.ts`, `activity-store.ts`, `dorimos-store.ts`, `seed.ts`, `mobile-demo.ts`). Meanwhile, `services/telegram_bot` uses `psycopg_pool` with `FOR UPDATE ... SKIP LOCKED`. R3 requires migrating from Neon to Supabase Postgres, Auth, Storage, and Realtime on isolated non-production project `shifohalqa-final` (`byswnhfcqxjvnallggxj`, `ap-southeast-1`, Postgres 17.12).
+## ADR-004 — Android-first patient experience
 
-Additionally, `supabase_mcp` `generate_typescript_types` accepts strictly `{"project_id": string}` (with no `included_schemas` parameter, defaulting to `public`), and exposing custom schemas in PostgREST via `ALTER ROLE authenticator` disables Supabase Dashboard schema management.
+**Status** — Accepted, revised.
 
-## Decision
-1. **Canonical `public` + Unexposed `private` Schema Layout**:
-   - Place all **33 application tables** (26 migrated core tables with `workspaces` replacing `demo_workspaces` and nullable `doctor_id` on `patients`/`plans`/`exercise_prescriptions` for `individual` PAR-Q+ users, plus 7 R4/R5 tables: `profiles`, `clinic_memberships`, `parq_screenings`, `teach_back_attempts`, `vitals_ocr_scans`, `exercise_segments`, `ai_clinical_briefs`) in **`public`**.
-   - Place all `SECURITY DEFINER SET search_path = ''` RLS helper functions, `handle_new_user()`, and the 5 Telegram enqueue trigger functions in an unexposed **`private`** schema (`REVOKE ALL ON SCHEMA private FROM PUBLIC, anon;`, granting `USAGE` and targeted helper `EXECUTE` to `authenticated` only for RLS policy evaluation, while keeping trigger functions revoked from `authenticated`).
-   - Update `shifohalqa.` -> `public.` and `demo_workspaces` -> `workspaces` across the 12 TS/E2E files in M1b and `services/telegram_bot/shifo_telegram/store.py` in M1b/M5.
-2. **Ordered SQL Migrations (`supabase/migrations/`)**:
-   1. `20261124000100_core_clinical_schema.sql`
-   2. `20261124000200_telegram_triggers_and_grants.sql`
-   3. `20261124000300_r4_auth_and_r5_extensions.sql`
-   4. `20261124000400_rls_helpers_and_policies.sql`
-   5. `20261124000500_storage_buckets_and_policies.sql`
-   6. `20261124000600_realtime_publications.sql`
-   7. `20261124000700_covering_fk_indexes.sql`
-3. **Strict Row-Level Security & Column Visibility Discipline**:
-   - Enable RLS on all 33 `public.*` tables; revoke all table privileges from `anon`; enforce `(select auth.uid())` / initPlan-friendly expressions and 1 cohesive permissive policy per `(table, command, authenticated)`; apply explicit deny policies (`USING (false) WITH CHECK (false)`) on server-only `dorimos_scan_limits` and `android_demo_access`.
-   - **Critical Column Privacy Rule**: Because PostgreSQL RLS operates at row granularity across the shared `authenticated` Postgres role rather than per app-role column (`doctor` vs `patient`), Next.js stores, API routes, and any client `supabase-js` `select(...)` lists MUST explicitly omit `flags.doctor_note`, `urgent_symptoms.doctor_note`, and `flag_followups.acknowledged_note` from patient and caregiver responses.
-4. **Private Storage & Realtime**:
-   - Create private Storage buckets `ocr-scans` (6 MiB, PNG/JPEG/WebP) and `exercise-segments` (20 MiB, PNG/JPEG/WebP/MP4/WebM) with `SELECT`/`INSERT`/`UPDATE`/`DELETE` policies on `storage.objects` scoped to `<workspace_id>/<patient_id>/...`.
-   - Add `flags`, `exercise_attempts`, `urgent_symptoms`, `task_instances`, `flag_followups`, `teach_back_attempts`, and `daily_step_counts` to the `supabase_realtime` publication.
-5. **Dual-Driver Next.js Data Layer (for M1b)**:
-   - Use `@supabase/supabase-js` + `@supabase/ssr` (`src/lib/supabase/{client,server,admin,middleware}.ts`) for Auth, Storage, Realtime, and typed RLS-scoped queries (`src/lib/supabase/database.types.ts`).
-   - Replace `@neondatabase/serverless` in `src/lib/db.ts` with `postgres` (`postgres.js`) behind the existing Neon-compatible tagged-template + `sql.transaction()` adapter (`DATABASE_URL`) so multi-CTE ACID transactions and `FOR NO KEY UPDATE` locks retain exact semantics.
-   - Compose `@supabase/ssr` session refresh with the `/caregiver/:path*` `405` guard inside Next.js 16 `src/proxy.ts`, and update `next.config.ts` CSP `connect-src` for `https://*.supabase.co` and `wss://*.supabase.co`.
+- Make the existing Kotlin pose engine, CameraX, MediaPipe, step sensor, Room/WorkManager and Keystore-backed session storage the starting point. Organize the changed paths around data, domain, UI, CV and sync as implementation proceeds. Prefer incremental extraction with regression checks on existing capture and recovery behavior.
+- Connect all five movements to the assigned plan, prepared sample, per-cycle measurements, AI observations and doctor review. Keep CV local for live capture and clearly show when a device lacks a camera permission, sensor or adequate measurement. Choose camera and model settings from real-device measurements.
+- Allow Android-only enrollment, reminders, medication and BP, steps, report and replies. Cache the minimum context for offline work. Queue medication, manual BP, steps and exercise measurements under the verified account, patient and environment. Show the saved-on-phone state and reconcile on reconnect. Video sending requires a connection and the patient's explicit confirmation of the full attempt. Explain that cloud AI and media sending need internet.
+- Use the instrumented device and slow-network checks in [PLAN](PLAN.md), alongside the existing Gradle checks. Validate that signing out, changing the patient or linking another environment keeps pending records scoped to their original identity.
 
-## Alternatives Considered
-- **Alternative A: Keep `shifohalqa` schema in Supabase**
-  - *Pros*: Zero table-prefix edits in stores.
-  - *Cons*: `supabase_mcp` `generate_typescript_types` cannot specify `included_schemas` and only generates `public` types; exposing `shifohalqa` via `ALTER ROLE authenticator` disables Supabase Studio schema management; PostgreSQL forbids `INSERT ... ON CONFLICT` on views.
-  - *Rejected*: Breaks native Supabase typegen, Realtime, and Studio integration.
-- **Alternative B: Rewrite all 8 store modules to PostgREST (`supabase.from(...)`)**
-  - *Pros*: Single JS client dependency.
-  - *Cons*: PostgREST cannot express atomic multi-CTE `WITH ... FOR NO KEY UPDATE ... INSERT ... UPDATE` statements without rewriting every clinical workflow into dozens of custom SQL RPCs.
-  - *Rejected*: High regression risk against existing ACID guarantees and tests.
-- **Alternative C: Keep Neon Postgres alongside Supabase Auth/Storage**
-  - *Pros*: Minimal DB driver diff.
-  - *Cons*: Violates R3, duplicates database operations, and breaks RLS/Realtime integration with `auth.users`.
-  - *Rejected*.
+## ADR-005 — Telegram as a patient channel
 
-## Consequences
-- `@neondatabase/serverless` is completely removed in M1b.
-- `supabase_mcp` `get_advisors` (`security` and `performance`) must pass cleanly after every schema/RLS migration.
-- `services/telegram_bot` points its `TELEGRAM_DATABASE_URL` at Supabase Postgres (`public.*` tables).
+**Status** — Accepted, revised.
 
-## References
-- `schema.sql`, `supabase/migrations/*.sql`, `src/lib/db.ts`, [Supabase RLS Guide](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- Verify `initData` HMAC, freshness, replay policy and the current patient binding on the server. Exchange the result for a scoped session. Resolve link context server-side. Keep the Judge Demo and authenticating test-account paths separate.
+- The Mini App uses the common Web components for plan, record details, reports, and the five prepared-video exercise flows. Add Telegram theme and safe-area behavior, Main/Back controls and contextual haptics. Test on an actual Telegram client. Provide file or prepared sample and a clear alternative when live capture is unavailable.
+- Make chat useful on its own. Maintain `/start`, `/bugun`, `/holat`, `/ilova`, `/mashq`, `/help` and `/stop` workflows. Provide on-demand seven-day summaries, reminder settings and inline medication actions scoped to the exact scheduled dose. Use styled `primary`, `success` and `danger` buttons according to their meaning. Update action messages after the server acknowledges them. Use scoped links to open the exact record.
+- With express opt-in, patient chat can show medication name and time, today's status, a short seven-day summary and the doctor's approved reply. Explain what may appear in lock-screen previews and chat history. Use the generic reminder/reply copy for the default presentation. Keep internal notes and private attachments available through their authorized clinical views.
+- Preserve the aiogram webhook, delivery worker and retry behavior. Track delivery outcomes and make indeterminate sends visible for triage. Use rich messages and private chat widgets where supported when they improve the same flows, with readable text and keyboard fallbacks. Verify SDK and client behavior before enabling new Bot API settings or renderers. [Telegram Bot API](https://core.telegram.org/bots/api#recent-changes) · [Mini Apps](https://core.telegram.org/bots/webapps) · [Widgets](https://core.telegram.org/bots/widgets)
 
----
+## ADR-006 — Embedded, evidence-grounded AI and exercise video
 
-# ADR-003: Dual Authentication & Judge Demo Workspace Isolation (R4)
+**Status** — Accepted, revised.
 
-## Status
-Accepted
+AI is triggered by a clinical workflow, with a versioned system prompt and structured output for each purpose. Build the input from the permitted, current patient profile, plan version, recent events and doctor responses. Send the smallest slice relevant to that action. Tie observations and suggestions to actual events and time windows. Validate fields and source references, flag missing or inconsistent input, and provide a deterministic fallback. Store provenance and approval state. Code evaluates clinical flags and permissions. The doctor approves clinical recommendations before publication.
 
-## Date
-2026-11-24
+### Grand Final AI baseline
 
-## Context
-R4 requires full real-user authentication for `doctor`, `patient`, `caregiver`, and `individual` roles while preserving the frictionless 1-click Grand Final Judge Demo (`doctor`, `patient`, `individual`, Android pairing, Telegram Mini App) with strict isolation so judge sessions and real clinics never cross-contaminate. Furthermore, `src/lib/caregiver-store.ts` (`lines 91, 194`) currently gates `readCaregiverSummary` and `acknowledgeCaregiverHelp` behind `isDemoEnabled()`, which would block real clinic caregiver links when `DEMO_MODE=false`.
+| Workflow trigger | AI output and control |
+|---|---|
+| New or changed plan | A plain Uzbek explanation, worked example, 1–2 Teach-Back questions and questions about the specific plan item. Cite the approved plan instruction and route new clinical questions to the doctor. |
+| New package | DoriMos OCR reads the label. The patient confirms the observed fields. Rules compare them to the prescribed label and route discrepancies for review. Use a manual option when needed. |
+| Manual BP entry | Code checks the assigned limits, symptom rules and approved immediate guidance. The AI uses relevant profile and measurements to summarize a trend, identify missing facts and draft a patient-specific response for the doctor. |
+| Seven-day review or a material correction | Code computes counts, dates, sources and open issues. AI explains them in Uzbek, supplies an evidence-based draft response, and points to source records. The reviewer can inspect, edit, approve or revise it. |
+| Exercise completed | Device CV measures cycles. AI examines 3–5 keyframes and CV measurements for each flagged cycle of a prepared sample. Return time range, measured facts, visible observation and uncertainty so the user can open the relevant moment. |
 
-## Decision
-1. **Discriminated `SessionContext` (`src/lib/auth-types.ts`, `src/lib/auth.ts`)**:
-   - `kind: 'supabase'` -> `{ userId, workspaceId, role: 'doctor' | 'patient' | 'caregiver' | 'individual', actorId, isDemo: false }` resolved from `@supabase/ssr` cookie session (Web) or Supabase Bearer JWT (Android) + `public.clinic_memberships` (`status = 'active'`).
-   - `kind: 'demo'` -> `{ workspaceId, role: 'doctor' | 'patient' | 'individual', actorId, isDemo: true }` resolved from signed `shifohalqa_demo` HMAC-SHA256 cookie (Web, gated by `DEMO_MODE=true` and `SESSION_SECRET >= 32` chars), `android_demo_access` Bearer token (Android), or verified Telegram Mini App demo link.
-2. **Hard Database & RLS Partitioning**:
-   - `public.workspaces` enforces `is_demo boolean` + `UNIQUE (id, is_demo)`.
-   - `public.clinic_memberships` enforces `is_demo boolean NOT NULL DEFAULT false CHECK (is_demo = false)` with composite `FOREIGN KEY (workspace_id, is_demo) REFERENCES public.workspaces(id, is_demo)`, making it structurally impossible for real `auth.users` accounts to bind to `is_demo = true` judge workspaces.
-   - Real auth routes reject `is_demo = true` workspaces; Demo routes reject `is_demo = false` workspaces; RLS helper functions (`private.*`) explicitly verify `w.is_demo = false` and `cm.is_demo = false`.
-3. **Internal Note Protection Across Dual Auth**:
-   - Consistent with ADR-002, because RLS uses the shared `authenticated` role, Next.js stores/routes and client `select(...)` queries MUST omit `flags.doctor_note`, `urgent_symptoms.doctor_note`, and `flag_followups.acknowledged_note` from patient and caregiver views/DTOs.
-4. **Decoupled Caregiver Share Links**:
-   - Remove the `isDemoEnabled()` hard-block in `src/lib/caregiver-store.ts` so valid unrevoked, unexpired SHA-256 caregiver tokens work for real clinic patients even when `DEMO_MODE=false`, while preserving `noindex`, `no-store`, `no-referrer`, `405` on non-GET/HEAD via `src/proxy.ts`, and `caregiver_audit_events`.
+The Grand Final shows these actions inside the plan, task, report and review screens. Recompute affected views from current records when the patient corrects a reply or the doctor changes the plan. After Grand Final, extend to multi-week context, retrieval of prior grounded question-and-answer threads, and wider longitudinal assistance. Add short-clip AI analysis before Grand Final only if the mandatory work and acceptance tests are complete. Otherwise deliver it later.
 
-## Alternatives Considered
-- **Alternative A: Separate deployments for real users vs judge demo**
-  - *Rejected*: Violates R4 unified product requirement and doubles operational overhead.
-- **Alternative B: Single shared demo workspace**
-  - *Rejected*: Concurrent judges overwrite each other's clinical plans, flags, and reset state.
-- **Alternative C: Custom password table bypassing Supabase Auth**
-  - *Rejected*: Reinvents password hashing/sessions and breaks native Supabase `auth.uid()` RLS and `@supabase/ssr` integration.
+### Complete-attempt video review
 
-## Consequences
-- Dedicated `/login` and `/signup` routes (`/api/auth/*`) coexist cleanly with non-intrusive 1-click Judge Demo entry points on `/` and `/tg`.
-- Both Android (`/api/mobile/v1/*`) and Telegram (`/tg`) support real Supabase Auth tokens alongside isolated 1-click Judge Demo flows.
+- When a cycle needs review, show the patient the complete attempt and what will be shared. On connected confirmation, upload that full attempt to private Storage for the assigned doctor. Preserve every repetition when compressing the video. Authorize a bounded upload on the server and bind the resulting object to the specific attempt. Prepared public or cleared media is used in the judge flow. Keep any local live-camera practice media on the device until an allowed sharing action.
+- AI uses the approved sample keyframes and CV metrics for the baseline. The doctor can play the entire submitted attempt and jump to CV/AI timestamps. They send one final response covering the relevant repetitions. Store it as the completed review against the exact attempt and preserve the original evidence source and level. Any L4 approval elsewhere continues to require an explicit doctor action on the selected evidence record.
+- Expire the submitted video 7 days after the doctor's response or 30 days after upload, whichever comes first. Preserve approved measurements, timestamps and response history under the clinical record policy. Authorize playback per request, use short-lived access and clean up incomplete uploads. Record the scope of consent and apply revocation to further access.
 
-## References
-- `supabase/migrations/20261124000300_r4_auth_and_r5_extensions.sql`, `supabase/migrations/20261124000400_rls_helpers_and_policies.sql`, `src/lib/demo-session.ts`, `src/lib/caregiver-store.ts`
+## ADR-007 — Medication, manual BP, steps and reports
 
----
+**Status** — Accepted.
 
-# ADR-004: Android Application Clean-Architecture Rewrite (R2)
+- A plan supports one or more distinct medications, each with its own start date, optional end date and one or more fixed daily times in `Asia/Tashkent`. Use stable identifiers for the plan version, medication and scheduled dose. Use the new plan version for future doses and preserve prior context. Selected weekdays and as-needed schedules are later work.
+- For each due dose, preserve `taken`, `missed` with reason, and `unanswered` as distinct states. Android, Telegram and Web act on the same scheduled dose. A patient can add a missing response or correct their response inside the latest seven Toshkent calendar days. Record scheduled time, entry time, server receipt, actor and channel. Preserve corrections in history. Reopen review when a previously reviewed entry changes. Deduplicate equivalent submits. For conflicting Android and Telegram answers, show both and ask the patient to choose. Keep the current server answer in the report until resolved.
+- Per-channel reminder preferences allow Android, Telegram, both, or silence. Resolve status by scheduled dose and stop repeat reminders when the dose has a recorded response. Route supply and explicit help events promptly to the assigned doctor's queue. Summarize ordinary unanswered doses in the weekly report. Show submitter, patient, channel and timing on the exact record.
+- Offer DoriMos package verification for a new package or a changed drug or package strength, with a clear deferred state. Keep package checks, dispensing and patient-reported intake as distinct facts. Treat a different brand or a strength discrepancy as an item for clinician review. For Grand Final use synthetic OCR fixtures and the existing comparison flow. Consider DMED e-prescription and Asl Belgisi Data Matrix integration in a separately scoped pilot.
+- Record BP as manual L0 intake with approved thresholds and symptom guidance. Support positive identification of missing or erroneous values and a linked repeat reading. Include high and low handling from the patient's approved plan. Send urgent deterministic guidance independently of AI availability. Tonometer OCR is outside Grand Final scope.
+- Keep source-specific Android sensor and manual step records. Accept manual steps from Android or Telegram and make both visible to the doctor. In the seven-day total, use one value per day, preferring an available sensor observation and using manual on other days. Show source and missing-day coverage. Use a daily goal plus a seven-day trend.
+- Build a rolling seven-day report with medication counts for each drug and scheduled dose separately from BP, steps and exercise. Include late entries, correction or clarification events, AI drafts in the doctor's view, approved answers, amendments, pending issues and notice status. An amended answer triggers a new notice that opens the updated response.
 
-## Status
-Accepted
+## ADR-008 — Grand Final acceptance and later work
 
-## Date
-2026-11-24
+**Status** — Accepted.
 
-## Context
-`android/` currently contains 12 flat Kotlin files in `uz.shifohalqa.android` coupled to `PatientDemo` `SharedPreferences`, legacy demo-only endpoints, minimal animations, and no support for Supabase Auth, Tonometr OCR, Teach-Back persistence, PAR-Q+ individual mode, interactive movement exemplars, or per-cycle suspicious segment capture.
+The judge package is ready when all mandatory work in [PLAN](PLAN.md) passes on the isolated preview. Verify the entire medication loop independently with Android alone and Telegram alone. Verify Web doctor review, the three Web exercises and all five Android and Mini App exercises, including patient-approved full-attempt review and reply. Include an actual Android device and real Telegram client. Use synthetic histories and disclose fixture inputs, fallback paths and what was measured.
 
-## Decision
-1. **5-Layer Clean Architecture Rewrite (`android/app/src/main/java/uz/shifohalqa/android/`)**:
-   - `data/` — Supabase Auth client + `/api/mobile/v1/*` API client, Room `2.8.5` local database + outbox queue, secure token storage.
-   - `domain/` — Immutable domain models, deterministic pose angle/cycle parity matching `src/lib/pose/engine.ts` (`tests/fixtures/chair-stand/live.tsv`), and deterministic idempotency keys (`clientAttemptId` + `clientRequestHash`).
-   - `ui/` — Jetpack Compose Material 3 (Compose BOM `2026.09.00`), Clinical Ledger light/dark theme, smooth spring/shared-element animations (`androidx.compose.animation`), Uzbek localization, accessible large buttons, persistent `103` & `Og‘riq bor` emergency actions, interactive movement exemplars, DoriMos + Tonometr OCR, Teach-Back quiz, PAR-Q+ individual flow, and Uzbek audio coach (`res/raw/rep_1..20.mp3`).
-   - `cv/` — CameraX `1.6.2` + MediaPipe `tasks-vision:1.2.3` (`pose_landmarker_full.task` for live camera, `pose_landmarker_heavy.task` for recorded video) + Media3 `1.11.1` frame inspector + per-cycle suspicious segment/keyframe extraction.
-   - `sync/` — WorkManager `2.12.0` outbox synchronization strictly scoped to `(baseUrl, workspaceId)`.
-2. **Verification Baseline**: Verify Android changes via `./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest` + Compose `@Preview` inspection (no physical device `connectedDebugAndroidTest` required for automated gate).
-
-## Alternatives Considered
-- **Alternative A: Incremental patches to existing flat `MainActivity.kt`**
-  - *Rejected*: Violates R2 clean rewrite requirement and leaves UI, networking, and CV tightly coupled.
-- **Alternative B: Cross-platform rewrite in Flutter or React Native**
-  - *Rejected*: Discards verified MediaPipe Full/Heavy native pipeline, Media3 frame inspector, and existing Kotlin pose-fixture parity.
-
-## Consequences
-- Preserves raw camera/video frames on-device by default, uploading only user-confirmed suspicious keyframes/short segments.
-- Supports both real Supabase Bearer JWT and 1-click Judge Demo pairing.
-
-## References
-- `android/app/build.gradle.kts`, `tests/fixtures/chair-stand/live.tsv`, [BENCHMARK](BENCHMARK.md)
-
----
-
-# ADR-005: Interactive Telegram Mini App (`/tg`) & Bot Architecture (R2)
-
-## Status
-Accepted
-
-## Date
-2026-11-24
-
-## Context
-`src/components/telegram-mini-app.tsx` currently renders only a demo login form and link without verifying Telegram `initData` or providing in-Mini-App clinical workflows. Meanwhile, `services/telegram_bot` (`aiogram 3.31.0`, `aiohttp`, `psycopg_pool`) already runs webhook handling (`/start`, `/bugun`, `/holat`, `/ilova`, `/mashq`, `/help`, `/stop`, inline callbacks) and durable delivery workers (`FOR UPDATE ... SKIP LOCKED` + `RetryAfter`) backed by 5 PostgreSQL triggers and 22 passing `pytest` tests.
-
-## Decision
-1. **Verified Role-Aware Mini App (`/tg`)**:
-   - Client integrates `window.Telegram.WebApp` (`initData`, `themeParams`, `MainButton`, `BackButton`, `HapticFeedback`, `viewportStableHeight`) and authenticates via `POST /api/telegram/auth`.
-   - Server verifies Telegram `initData` HMAC-SHA256 using `TELEGRAM_BOT_TOKEN` (`WebAppData` key derivation) and `auth_date` freshness, resolving either the linked Supabase clinic user (`telegram_doctor_links` / `telegram_patient_links`) or an isolated Judge Demo session.
-   - Inside `/tg`, Patients complete medication, DoriMos/Tonometr OCR, BP/symptoms, steps, Teach-Back, and exercise launch; Doctors triage the exception queue, inspect suspicious exercise segments, review AI 7-day briefs, and issue L4 approvals; Individual users complete PAR-Q+ and self-guided plans.
-2. **Synchronized Python `aiogram` Service (`services/telegram_bot`)**:
-   - Point `TELEGRAM_DATABASE_URL` at Supabase Postgres (`public.*` tables + `private.queue_telegram_*` triggers).
-   - Extend bot commands, inline actions, and notification templates for Tonometr red flags, suspicious exercise segments, and Mini App deep links while never leaking `doctor_note` or `acknowledged_note`.
-
-## Alternatives Considered
-- **Alternative A: Trust `initDataUnsafe` on client**
-  - *Rejected*: Severe authentication spoofing vulnerability.
-- **Alternative B: Replace Python `aiogram` worker with Next.js serverless webhook**
-  - *Rejected*: Loses durable `FOR UPDATE ... SKIP LOCKED` + `RetryAfter` queue processing and 22 existing `pytest` tests.
-
-## Consequences
-- Live `initData` auth requires `TELEGRAM_BOT_TOKEN`; unit and Playwright E2E suites use deterministic HMAC-signed test `initData` fixtures.
-- Camera fallback UX (`getUserMedia` unavailable in restricted Telegram WebViews) routes smoothly to file upload or manual entry.
-
-## References
-- `src/components/telegram-mini-app.tsx`, `services/telegram_bot/shifo_telegram/`, `supabase/migrations/20261124000200_telegram_triggers_and_grants.sql`
-
----
-
-# ADR-006: AI, OCR & Deep CV Video Analysis Pipeline (R5)
-
-## Status
-Accepted
-
-## Date
-2026-11-24
-
-## Context
-Task 2 delivered DoriMos OCR (Cloudflare Clef + Clairic Flash -> Gemini Decisions -> OpenRouter/OpenCode/Vercel fallback, `>= 0.80` confidence gate), 5-movement MediaPipe Pose tracking (`createPoseTracker` + `analyzeExerciseDiagnostics`), anti-cheat (`compareAttempt`), and CDC sample clip observation. R5 requires adding Tonometr OCR, persisted Teach-Back, AI 7-Day Clinical Brief, PAR-Q+ individual mode, interactive correct-execution exemplars, and generalized patient-video AI/CV analysis with automatic suspicious/incorrect segment extraction routed to the Doctor Exception Queue.
-
-## Decision
-Enforce the Golden Rule (*"AI measures, deterministic rules flag, the doctor decides"*) across every R5 capability:
-1. **Tonometr OCR (`src/lib/ai/tonometr.ts`, `vitals_ocr_scans`)**: Validates PNG/JPEG/WebP (`<= 6 MiB`), runs quality/legibility gate + multi-provider structured extraction (`systolic`, `diastolic`, `pulse`, `confidence >= 0.80`) -> patient confirmation -> `L2` `vitals` evidence + deterministic `evaluateRules` BP/chest-pain rules; `< 0.80` or illegible triggers `retake`; provider outage falls back to `L0` manual entry.
-2. **Persisted Teach-Back (`src/lib/teach-back-store.ts`, `teach_back_attempts`)**: Persists patient comprehension attempts, answers, and score in Postgres (visible to both patient and doctor) without altering medication/vitals adherence denominators.
-3. **AI 7-Day Clinical Brief (`src/lib/ai/clinical-brief-ai.ts`, `ai_clinical_briefs`)**: Deterministic `buildClinicalBrief` (`src/lib/clinical-brief.ts`) computes all counts, BP trends, and adherence %; the AI provider chain (`vercel` -> `opencode_go` -> `gemini` / `openrouter`) synthesizes a concise Uzbek summary strictly grounded in those numbers, falling back instantaneously to deterministic `plainText`.
-4. **PAR-Q+ Individual Role (`src/lib/parq.ts`, `parq_screenings`)**: 7-question screening -> deterministic risk stratification (`cleared`, `caution`, `medical_clearance_required`) -> self-guided exercise/step plan or clear medical-clearance warning.
-5. **Deep AI/CV Video Analysis, Interactive Exemplars & Suspicious Segment Extraction**:
-   - Extend `createPoseTracker` / `analyzeExerciseDiagnostics` (`src/lib/pose/`) to emit per-cycle `SuspiciousSegment` descriptors (`cycleIndex`, `fromMs`, `toMs`, `severity`, `errorCodes`, `peakAngleDeg`, `summaryUz`, keyframe/clip references) across all 5 movements (`chair_stand`, `elbow_bend`, `knee_lift`, `shoulder_raise`, `seated_knee_ext`).
-   - Ship interactive **correct-execution reference exemplars** (animated joint/angle guides, target cues, Uzbek audio coaching) per movement across Web, Android, and `/tg`.
-   - Generalized patient-video AI analyzer (`src/lib/ai/exercise-video-review.ts`) analyzes extracted suspicious segment keyframes (and optional user-confirmed short clip) to produce Uzbek form observations without altering deterministic `L0`–`L3` levels or `evaluateRules`.
-   - Persist suspicious segments in `public.exercise_segments` + private Storage bucket `exercise-segments` (`20 MiB`) and surface them in the Doctor Exception Queue for `L4` approval or `retake`.
-
-## Alternatives Considered
-- **Alternative A: Upload every full raw exercise video to external LLMs**
-  - *Rejected*: Violates on-device privacy-by-default, triggers payload/402 cost limits, and degrades mobile clinic bandwidth.
-- **Alternative B: Allow LLM output to grant L4 approval or modify prescribed targets**
-  - *Rejected*: Violates the [SPEC](SPEC.md) Golden Rule and clinical safety boundaries.
-
-## Consequences
-- Update [INTERFACES](INTERFACES.md) with Zod schemas for all new R5 engines and API routes in M2.
-- Record real measured Tonometr OCR, AI Brief, and Segment Extraction timings in [BENCHMARK](BENCHMARK.md) in M6.
-
-## References
-- [SPEC](SPEC.md), [INTERFACES](INTERFACES.md), [BENCHMARK](BENCHMARK.md), `src/lib/pose/diagnostics.ts`, `src/lib/clinical-brief.ts`
+Keep clinician team access, authenticated caregivers, independent exercise and the full PAR-Q+ pathway, selected weekdays and as-needed medication schedules, external pharmacy integration, and wider longitudinal AI in later scope. Optional short-clip AI follows the rule in ADR-006. Keep the public Task 2 entry point on `main` protected throughout.

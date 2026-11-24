@@ -32,21 +32,21 @@ export async function getActivityDashboard(actor: ClinicalActor) {
   const [row] = await sql`
     WITH clock AS (SELECT CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent' AS local_now),
     scoped AS (
-      SELECT workspace_id, id, doctor_id FROM shifohalqa.patients
+      SELECT workspace_id, id, doctor_id FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), due AS (
       SELECT item.id AS "planItemId", item.title, left(item.due_time::text, 5) AS "dueTime",
              to_char(days.calendar_date, 'YYYY-MM-DD') AS "scheduledDate", task.status
       FROM scoped
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = scoped.workspace_id AND plan.patient_id = scoped.id
-        AND plan.doctor_id = scoped.doctor_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      JOIN public.plans AS plan ON plan.workspace_id = scoped.workspace_id AND plan.patient_id = scoped.id
+        AND plan.doctor_id IS NOT DISTINCT FROM scoped.doctor_id
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
       CROSS JOIN clock
       CROSS JOIN LATERAL (
         SELECT clock.local_now::date - day_number AS calendar_date
         FROM generate_series(0, 6) AS day_number
       ) AS days
-      LEFT JOIN shifohalqa.task_instances AS task ON task.workspace_id = item.workspace_id
+      LEFT JOIN public.task_instances AS task ON task.workspace_id = item.workspace_id
         AND task.plan_item_id = item.id AND task.scheduled_date = days.calendar_date
       WHERE item.type IN ('medication', 'vitals') AND days.calendar_date >= plan.start_date
         AND days.calendar_date + item.due_time <= clock.local_now
@@ -60,9 +60,9 @@ export async function getActivityDashboard(actor: ClinicalActor) {
              to_char(activity.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            ) END AS steps
     FROM scoped CROSS JOIN clock
-    LEFT JOIN shifohalqa.plans AS plan ON plan.workspace_id = scoped.workspace_id AND plan.patient_id = scoped.id
-      AND plan.doctor_id = scoped.doctor_id
-    LEFT JOIN shifohalqa.daily_step_counts AS activity ON activity.workspace_id = scoped.workspace_id
+    LEFT JOIN public.plans AS plan ON plan.workspace_id = scoped.workspace_id AND plan.patient_id = scoped.id
+      AND plan.doctor_id IS NOT DISTINCT FROM scoped.doctor_id
+    LEFT JOIN public.daily_step_counts AS activity ON activity.workspace_id = scoped.workspace_id
       AND activity.patient_id = scoped.id AND activity.activity_date = clock.local_now::date
   `;
 
@@ -89,10 +89,10 @@ export async function saveStepCount(
 
   const [row] = await sql`
     WITH scoped AS (
-      SELECT workspace_id, id FROM shifohalqa.patients
+      SELECT workspace_id, id FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), saved AS (
-      INSERT INTO shifohalqa.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count, source)
+      INSERT INTO public.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count, source)
       SELECT workspace_id, id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${count}, ${source}
       FROM scoped
       ON CONFLICT (workspace_id, patient_id, activity_date) DO UPDATE

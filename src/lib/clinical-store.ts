@@ -110,16 +110,16 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id, doctor_id
-      FROM shifohalqa.patients
+      FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), added AS (
-      INSERT INTO shifohalqa.plans (workspace_id, patient_id, doctor_id, vitals_target, supply_follow_up, daily_step_goal)
-      SELECT workspace_id, id, doctor_id, ${JSON.stringify(input.targets)}::jsonb, ${input.supplyFollowUp}, ${input.dailyStepGoal ?? 3000}
+      INSERT INTO public.plans (workspace_id, patient_id, doctor_id, vitals_target, supply_follow_up, daily_step_goal)
+      SELECT workspace_id, id, doctor_id, ${sql.json(input.targets)}::jsonb, ${input.supplyFollowUp}, ${input.dailyStepGoal ?? 3000}
       FROM scoped
       ON CONFLICT (workspace_id, patient_id) DO NOTHING
       RETURNING workspace_id, id
     ), items AS (
-      INSERT INTO shifohalqa.plan_items (workspace_id, plan_id, type, title, due_time, box_strength_mg)
+      INSERT INTO public.plan_items (workspace_id, plan_id, type, title, due_time, box_strength_mg)
       SELECT added.workspace_id, added.id, item.type, item.title, item.due_time, item.box_strength_mg
       FROM added CROSS JOIN (VALUES
         ('medication', ${input.medicationName}::text, ${input.medicationTime}::time, ${input.medicationStrengthMg}::numeric),
@@ -143,19 +143,19 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
              left(medicine.due_time::text, 5) AS "medicationTime",
              left(vitals.due_time::text, 5) AS "vitalsTime", plan.vitals_target AS targets,
              plan.supply_follow_up AS "supplyFollowUp", plan.daily_step_goal AS "dailyStepGoal"
-      FROM shifohalqa.plans AS plan
-      JOIN shifohalqa.plan_items AS medicine
+      FROM public.plans AS plan
+      JOIN public.plan_items AS medicine
         ON medicine.workspace_id = plan.workspace_id AND medicine.plan_id = plan.id AND medicine.type = 'medication'
-      JOIN shifohalqa.plan_items AS vitals
+      JOIN public.plan_items AS vitals
         ON vitals.workspace_id = plan.workspace_id AND vitals.plan_id = plan.id AND vitals.type = 'vitals'
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
         AND plan.doctor_id = ${actor.doctorId}
     `,
     tx`
-      INSERT INTO shifohalqa.task_instances (workspace_id, plan_item_id, scheduled_date)
+      INSERT INTO public.task_instances (workspace_id, plan_item_id, scheduled_date)
       SELECT item.workspace_id, item.id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
-      FROM shifohalqa.plans AS plan
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      FROM public.plans AS plan
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
         AND plan.doctor_id = ${actor.doctorId}
         AND plan.start_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
@@ -171,11 +171,11 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
              flag.id AS "flagId", flag.color, flag.rule_key AS "ruleKey", flag.detail, flag.decision,
              flag.patient_reply AS reply,
              to_char(flag.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "reviewedAt"
-      FROM shifohalqa.plans AS plan
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
-      LEFT JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
-      LEFT JOIN shifohalqa.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
+      FROM public.plans AS plan
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      JOIN public.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
+      LEFT JOIN public.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
+      LEFT JOIN public.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
       CROSS JOIN local_date
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
         AND plan.doctor_id = ${actor.doctorId}
@@ -185,13 +185,13 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
               OR (flag.reviewed_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
               OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND flag.decision IS NULL)
               OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND EXISTS (
-                SELECT 1 FROM shifohalqa.flag_followups AS open_fu
+                SELECT 1 FROM public.flag_followups AS open_fu
                 WHERE open_fu.workspace_id = flag.workspace_id
                   AND open_fu.flag_id = flag.id
                   AND open_fu.acknowledged_at IS NULL
                   AND (
                     (open_fu.kind = 'still_need_help' AND NOT EXISTS (
-                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      SELECT 1 FROM public.flag_followups AS newer_fu
                       WHERE newer_fu.workspace_id = open_fu.workspace_id
                         AND newer_fu.flag_id = open_fu.flag_id
                         AND newer_fu.kind IN ('still_need_help', 'supply_resolved')
@@ -199,7 +199,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
                           OR (newer_fu.created_at = open_fu.created_at AND newer_fu.id > open_fu.id))
                     ))
                     OR (open_fu.kind = 'retake_medication' AND open_fu.payload->>'status' = 'missed' AND NOT EXISTS (
-                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      SELECT 1 FROM public.flag_followups AS newer_fu
                       WHERE newer_fu.workspace_id = open_fu.workspace_id
                         AND newer_fu.flag_id = open_fu.flag_id
                         AND newer_fu.kind = 'retake_medication'
@@ -213,7 +213,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
                         OR (CASE WHEN (open_fu.payload->>'diastolic') ~ '^[0-9]{1,3}$'
                             THEN (open_fu.payload->>'diastolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnDiastolic')::int
                       ) AND NOT EXISTS (
-                      SELECT 1 FROM shifohalqa.flag_followups AS newer_fu
+                      SELECT 1 FROM public.flag_followups AS newer_fu
                       WHERE newer_fu.workspace_id = open_fu.workspace_id
                         AND newer_fu.flag_id = open_fu.flag_id
                         AND newer_fu.kind = 'retake_vitals'
@@ -223,7 +223,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
                   )
               ))
               OR (${actor.role === 'doctor'} AND flag.id IS NOT NULL AND EXISTS (
-                SELECT 1 FROM shifohalqa.flag_followups AS recent_ack
+                SELECT 1 FROM public.flag_followups AS recent_ack
                 WHERE recent_ack.workspace_id = flag.workspace_id
                   AND recent_ack.flag_id = flag.id
                   AND (recent_ack.acknowledged_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
@@ -234,12 +234,12 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       SELECT followup.id, followup.flag_id AS "flagId", followup.kind, followup.payload,
              to_char(followup.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
              to_char(followup.acknowledged_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "acknowledgedAt"
-      FROM shifohalqa.flag_followups AS followup
-      JOIN shifohalqa.flags AS flag ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
-      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      FROM public.flag_followups AS followup
+      JOIN public.flags AS flag ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
+      JOIN public.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN public.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE followup.workspace_id = ${actor.workspaceId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
       ORDER BY followup.created_at ASC, followup.id ASC
@@ -249,8 +249,8 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
              to_char(symptom.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
              symptom.review_decision AS decision, symptom.patient_reply AS reply,
              to_char(symptom.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "reviewedAt"
-      FROM shifohalqa.urgent_symptoms AS symptom
-      JOIN shifohalqa.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
+      FROM public.urgent_symptoms AS symptom
+      JOIN public.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
       WHERE symptom.workspace_id = ${actor.workspaceId}
         AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
         AND ((symptom.created_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)
@@ -261,8 +261,8 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
     tx`
       SELECT ack.kind,
              to_char(ack.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"
-      FROM shifohalqa.caregiver_acks AS ack
-      JOIN shifohalqa.patients AS patient ON patient.workspace_id = ack.workspace_id AND patient.id = ack.patient_id
+      FROM public.caregiver_acks AS ack
+      JOIN public.patients AS patient ON patient.workspace_id = ack.workspace_id AND patient.id = ack.patient_id
       WHERE ack.workspace_id = ${actor.workspaceId}
         AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
         AND ack.activity_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
@@ -341,17 +341,17 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
            CASE WHEN item.type = 'medication' AND plan.start_date < task.scheduled_date
                 THEN to_char(task.scheduled_date - 1, 'YYYY-MM-DD') END AS "previousDate",
            CASE WHEN previous_evidence.id IS NULL THEN 'unanswered' ELSE prior.status END AS "previousStatus"
-    FROM shifohalqa.task_instances AS task
-    JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-    JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
-    JOIN shifohalqa.plan_items AS medicine
+    FROM public.task_instances AS task
+    JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+    JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+    JOIN public.plan_items AS medicine
       ON medicine.workspace_id = plan.workspace_id AND medicine.plan_id = plan.id AND medicine.type = 'medication'
-    JOIN shifohalqa.plan_items AS vitals
+    JOIN public.plan_items AS vitals
       ON vitals.workspace_id = plan.workspace_id AND vitals.plan_id = plan.id AND vitals.type = 'vitals'
-    LEFT JOIN shifohalqa.task_instances AS prior
+    LEFT JOIN public.task_instances AS prior
       ON item.type = 'medication' AND prior.workspace_id = task.workspace_id AND prior.plan_item_id = item.id
         AND prior.scheduled_date = task.scheduled_date - 1
-    LEFT JOIN shifohalqa.evidence_logs AS previous_evidence
+    LEFT JOIN public.evidence_logs AS previous_evidence
       ON previous_evidence.workspace_id = prior.workspace_id AND previous_evidence.task_instance_id = prior.id
         AND previous_evidence.entry_kind = 'task'
     WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${taskId}
@@ -376,29 +376,29 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
   const [row] = await sql`
     WITH scoped AS (
       SELECT task.id, task.workspace_id, task.scheduled_date, task.status
-      FROM shifohalqa.task_instances AS task
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      FROM public.task_instances AS task
+      JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${input.taskId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
         AND item.type = ${input.payload.kind}
     ), added AS (
-      INSERT INTO shifohalqa.evidence_logs (workspace_id, task_instance_id, level, source, ai_mode, payload)
-      SELECT workspace_id, id, 0, 'self_report', ${input.aiMode}, ${JSON.stringify(input.payload)}::jsonb
+      INSERT INTO public.evidence_logs (workspace_id, task_instance_id, level, source, ai_mode, payload)
+      SELECT workspace_id, id, 0, 'self_report', ${input.aiMode}, ${sql.json(input.payload)}::jsonb
       FROM scoped
       WHERE scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
       ON CONFLICT (workspace_id, task_instance_id, entry_kind) DO NOTHING
       RETURNING workspace_id, id, task_instance_id
     ), updated AS (
-      UPDATE shifohalqa.task_instances AS task SET status = ${status}
+      UPDATE public.task_instances AS task SET status = ${status}
       FROM added
       WHERE task.workspace_id = added.workspace_id AND task.id = added.task_instance_id
     ), flagged AS (
-      INSERT INTO shifohalqa.flags (workspace_id, evidence_log_id, color, rule_key, detail)
-      SELECT workspace_id, id, ${color}::text, ${ruleKey}::text, ${JSON.stringify(detail)}::jsonb
+      INSERT INTO public.flags (workspace_id, evidence_log_id, color, rule_key, detail)
+      SELECT workspace_id, id, ${color}::text, ${ruleKey}::text, ${sql.json(detail)}::jsonb
       FROM added WHERE ${color}::text IS NOT NULL
     ), audited AS (
-      INSERT INTO shifohalqa.audit_events (workspace_id, evidence_log_id, actor_id, action)
+      INSERT INTO public.audit_events (workspace_id, evidence_log_id, actor_id, action)
       SELECT workspace_id, id, ${actor.patientId}::uuid, 'record_evidence'
       FROM added
     )
@@ -418,27 +418,27 @@ export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Prom
   const [row] = await sql`
     WITH scoped AS (
       SELECT flag.workspace_id, flag.id
-      FROM shifohalqa.flags AS flag
-      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      FROM public.flags AS flag
+      JOIN public.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN public.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE flag.workspace_id = ${actor.workspaceId} AND flag.id = ${input.flagId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
     ), reviewed AS (
-      UPDATE shifohalqa.flags AS flag
+      UPDATE public.flags AS flag
       SET decision = ${input.decision}, patient_reply = ${input.reply},
           doctor_note = ${input.note}, reviewed_at = CURRENT_TIMESTAMP
       FROM scoped
       WHERE flag.workspace_id = scoped.workspace_id AND flag.id = scoped.id AND flag.decision IS NULL
       RETURNING flag.workspace_id, flag.evidence_log_id, flag.decision
     ), promoted AS (
-      UPDATE shifohalqa.evidence_logs AS evidence SET level = 4
+      UPDATE public.evidence_logs AS evidence SET level = 4
       FROM reviewed
       WHERE evidence.workspace_id = reviewed.workspace_id AND evidence.id = reviewed.evidence_log_id
         AND reviewed.decision = 'approved'
     ), audited AS (
-      INSERT INTO shifohalqa.audit_events (workspace_id, evidence_log_id, actor_id, action, metadata)
+      INSERT INTO public.audit_events (workspace_id, evidence_log_id, actor_id, action, metadata)
       SELECT workspace_id, evidence_log_id, ${actor.doctorId}::uuid, 'review_flag', jsonb_build_object('decision', decision)
       FROM reviewed
     )
@@ -457,11 +457,11 @@ export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInpu
   const [row] = await sql`
     WITH scoped AS (
       SELECT flag.workspace_id, flag.id, flag.decision
-      FROM shifohalqa.flags AS flag
-      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      FROM public.flags AS flag
+      JOIN public.evidence_logs AS evidence ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
+      JOIN public.task_instances AS task ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
+      JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE flag.workspace_id = ${actor.workspaceId} AND flag.id = ${input.flagId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
         AND flag.decision IS NOT NULL
@@ -482,16 +482,16 @@ export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInpu
             AND item.type = 'medication')
         )
     ), inserted AS (
-      INSERT INTO shifohalqa.flag_followups (workspace_id, flag_id, kind, payload)
-      SELECT workspace_id, id, ${input.kind}::text, ${JSON.stringify(input.payload)}::jsonb
+      INSERT INTO public.flag_followups (workspace_id, flag_id, kind, payload)
+      SELECT workspace_id, id, ${input.kind}::text, ${sql.json(input.payload)}::jsonb
       FROM scoped
       WHERE NOT (${input.kind}::text IN ('supply_resolved', 'still_need_help') AND EXISTS (
-        SELECT 1 FROM shifohalqa.flag_followups AS existing
+        SELECT 1 FROM public.flag_followups AS existing
         WHERE existing.workspace_id = scoped.workspace_id AND existing.flag_id = scoped.id
           AND existing.kind = 'supply_resolved'
       ))
         AND NOT (${input.kind}::text = 'retake_medication' AND EXISTS (
-          SELECT 1 FROM shifohalqa.flag_followups AS existing
+          SELECT 1 FROM public.flag_followups AS existing
           WHERE existing.workspace_id = scoped.workspace_id AND existing.flag_id = scoped.id
             AND existing.kind = 'retake_medication'
             AND existing.payload->>'status' = 'taken'
@@ -517,16 +517,16 @@ export async function acknowledgeFlagFollowup(
   const [row] = await sql`
     WITH scoped AS (
       SELECT followup.workspace_id, followup.id, followup.flag_id, followup.kind, followup.created_at
-      FROM shifohalqa.flag_followups AS followup
-      JOIN shifohalqa.flags AS flag
+      FROM public.flag_followups AS followup
+      JOIN public.flags AS flag
         ON flag.workspace_id = followup.workspace_id AND flag.id = followup.flag_id
-      JOIN shifohalqa.evidence_logs AS evidence
+      JOIN public.evidence_logs AS evidence
         ON evidence.workspace_id = flag.workspace_id AND evidence.id = flag.evidence_log_id
-      JOIN shifohalqa.task_instances AS task
+      JOIN public.task_instances AS task
         ON task.workspace_id = evidence.workspace_id AND task.id = evidence.task_instance_id
-      JOIN shifohalqa.plan_items AS item
+      JOIN public.plan_items AS item
         ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan
+      JOIN public.plans AS plan
         ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE followup.workspace_id = ${actor.workspaceId} AND followup.id = ${input.followupId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
@@ -542,7 +542,7 @@ export async function acknowledgeFlagFollowup(
           ))
         )
     ), updated AS (
-      UPDATE shifohalqa.flag_followups AS followup
+      UPDATE public.flag_followups AS followup
       SET acknowledged_at = CURRENT_TIMESTAMP,
           acknowledged_note = ${input.note}
       FROM scoped
@@ -570,14 +570,14 @@ export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSympt
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id
-      FROM shifohalqa.patients
+      FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), inserted AS (
-      INSERT INTO shifohalqa.urgent_symptoms (workspace_id, patient_id, symptom, note)
+      INSERT INTO public.urgent_symptoms (workspace_id, patient_id, symptom, note)
       SELECT workspace_id, id, ${input.symptom}, ${input.note}
       FROM scoped
       WHERE NOT EXISTS (
-        SELECT 1 FROM shifohalqa.urgent_symptoms AS existing
+        SELECT 1 FROM public.urgent_symptoms AS existing
         WHERE existing.workspace_id = scoped.workspace_id
           AND existing.patient_id = scoped.id
           AND existing.symptom = ${input.symptom}
@@ -601,12 +601,12 @@ export async function reviewUrgentSymptom(actor: ClinicalActor, input: SymptomRe
   const [row] = await sql`
     WITH scoped AS (
       SELECT symptom.workspace_id, symptom.id
-      FROM shifohalqa.urgent_symptoms AS symptom
-      JOIN shifohalqa.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
+      FROM public.urgent_symptoms AS symptom
+      JOIN public.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
       WHERE symptom.workspace_id = ${actor.workspaceId} AND symptom.id = ${input.symptomId}
         AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
     ), reviewed AS (
-      UPDATE shifohalqa.urgent_symptoms AS symptom
+      UPDATE public.urgent_symptoms AS symptom
       SET review_decision = ${input.decision},
           patient_reply = ${input.reply},
           doctor_note = ${input.note},

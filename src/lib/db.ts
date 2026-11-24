@@ -12,6 +12,7 @@ export type TransactionIsolationLevel = 'ReadCommitted' | 'RepeatableRead' | 'Se
 
 export interface TransactionSqlAdapter {
   (strings: TemplateStringsArray, ...values: readonly SqlParam[]): SqlQuery;
+  json(value: postgres.JSONValue): SqlParam;
 }
 
 export interface SqlAdapter extends TransactionSqlAdapter {
@@ -50,13 +51,20 @@ export function createDatabase(databaseUrl: string): SqlAdapter {
   const query = ((strings: TemplateStringsArray, ...values: readonly SqlParam[]): SqlQuery =>
     client<SqlRow[]>(strings, ...(values as readonly postgres.ParameterOrFragment<never>[]))) as SqlAdapter;
 
+  query.json = (value: postgres.JSONValue): SqlParam => client.json(value);
+
   query.transaction = async (
     fn: (tx: TransactionSqlAdapter) => readonly SqlQuery[],
     options?: { isolationLevel?: TransactionIsolationLevel },
   ): Promise<SqlResult[]> => {
     const run = async (tx: TransactionSql): Promise<SqlResult[]> => {
-      const txAdapter: TransactionSqlAdapter = (strings, ...values) =>
-        tx<SqlRow[]>(strings, ...(values as readonly postgres.ParameterOrFragment<never>[]));
+      const txAdapter = Object.assign(
+        (strings: TemplateStringsArray, ...values: readonly SqlParam[]): SqlQuery =>
+          tx<SqlRow[]>(strings, ...(values as readonly postgres.ParameterOrFragment<never>[])),
+        {
+          json: (value: postgres.JSONValue): SqlParam => tx.json(value),
+        },
+      ) as TransactionSqlAdapter;
       const queries = fn(txAdapter);
       const results: SqlResult[] = [];
       for (const pending of queries) {

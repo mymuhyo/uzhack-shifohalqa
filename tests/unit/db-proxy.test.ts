@@ -15,11 +15,16 @@ const mocks = vi.hoisted(() => {
     },
   });
 
-  const txFn = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
-    queryCalls.push({ strings, values });
-    const label = strings.join('?').trim();
-    return createPendingQuery(label, [{ ok: true, label }]);
-  });
+  const jsonFn = vi.fn((value: unknown) => ({ type: 3802, value, raw: value }));
+
+  const txFn = Object.assign(
+    vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
+      queryCalls.push({ strings, values });
+      const label = strings.join('?').trim();
+      return createPendingQuery(label, [{ ok: true, label }]);
+    }),
+    { json: jsonFn },
+  );
 
   const beginFn = vi.fn(async (modeOrCb: unknown, maybeCb?: unknown) => {
     const mode = typeof modeOrCb === 'string' ? modeOrCb : undefined;
@@ -40,6 +45,7 @@ const mocks = vi.hoisted(() => {
     {
       begin: beginFn,
       end: endFn,
+      json: jsonFn,
     },
   );
 
@@ -81,6 +87,7 @@ const mocks = vi.hoisted(() => {
     beginCalls,
     endCalls,
     executionOrder,
+    jsonFn,
     txFn,
     beginFn,
     endFn,
@@ -212,6 +219,41 @@ describe('src/lib/db.ts postgres.js adapter', () => {
 
     await db.end({ timeout: 3 });
     expect(mocks.endFn).toHaveBeenCalledWith({ timeout: 3 });
+  });
+
+  it('exposes json() on db and tx inside ReadCommitted transactions without pre-stringifying', async () => {
+    const db = createDatabase('postgres://localhost:5432/db_json');
+    const payload = { maxSystolic: 140, warnSystolic: 130 };
+
+    const param = db.json(payload);
+    expect(mocks.jsonFn).toHaveBeenCalledWith(payload);
+    expect(param).toEqual({ type: 3802, value: payload, raw: payload });
+
+    await db.transaction(
+      (tx) => [tx`INSERT INTO t (v) VALUES (${tx.json(payload)}::jsonb)`],
+      { isolationLevel: 'ReadCommitted' },
+    );
+
+    expect(mocks.beginCalls).toEqual([{ mode: 'isolation level read committed' }]);
+    expect(mocks.queryCalls[0]?.values[0]).toEqual({ type: 3802, value: payload, raw: payload });
+  });
+
+  it('verifies real postgres client.json(obj) produces OID 3802 with raw value and PostgresError exposes .code', async () => {
+    const actual = await vi.importActual<typeof import('postgres')>('postgres');
+    const realClient = actual.default('postgres://user:pass@localhost:5432/test_db', { prepare: false });
+    try {
+      const obj = { kind: 'vitals', systolic: 135, diastolic: 85, chestPain: false };
+      const param = realClient.json(obj);
+      expect(param.type).toBe(3802);
+      expect(param.value).toEqual(obj);
+      expect(typeof param.value).toBe('object');
+
+      const err = new actual.default.PostgresError('duplicate key value violates unique constraint');
+      err.code = '23505';
+      expect(err.code).toBe('23505');
+    } finally {
+      await realClient.end({ timeout: 0 });
+    }
   });
 });
 

@@ -1,6 +1,6 @@
-import { neon } from '@neondatabase/serverless';
 import { expect, test } from 'playwright/test';
 import { digestCaregiverToken } from '../../src/lib/caregiver';
+import { createDatabase } from '../../src/lib/db';
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -88,12 +88,17 @@ test('a patient shares only the current daily aggregate and can rotate, revoke a
     await page.getByRole('button', { name: 'Ulashishni yoqish' }).click();
     await expect(shareLink).toBeVisible();
     const expiringLink = await shareLink.inputValue();
-    const sql = neon(process.env.SHIFO_E2E_DATABASE_URL!);
-    const [expired] = await sql`
-      UPDATE shifohalqa.caregiver_links SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
-      WHERE token_hash = ${hashLink(expiringLink)}
-      RETURNING 1 AS matched
-    `;
+    const sql = createDatabase(process.env.SHIFO_E2E_DATABASE_URL!);
+    let expired: Record<string, unknown> | undefined;
+    try {
+      [expired] = await sql`
+        UPDATE public.caregiver_links SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+        WHERE token_hash = ${hashLink(expiringLink)}
+        RETURNING 1 AS matched
+      `;
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
     expect(expired?.matched).toBe(1);
     await caregiver.goto(expiringLink);
     await expect(caregiver.getByText(/Havola faol emas/)).toBeVisible();
@@ -118,13 +123,17 @@ function hashLink(link: string) {
 }
 
 async function readAudit(link: string) {
-  const sql = neon(process.env.SHIFO_E2E_DATABASE_URL!);
-  const rows = await sql`
-    SELECT audit.action
-    FROM shifohalqa.caregiver_links AS link
-    JOIN shifohalqa.caregiver_audit_events AS audit
-      ON audit.workspace_id = link.workspace_id AND audit.patient_id = link.patient_id
-    WHERE link.token_hash = ${hashLink(link)}
-  `;
-  return rows.map(row => row.action);
+  const sql = createDatabase(process.env.SHIFO_E2E_DATABASE_URL!);
+  try {
+    const rows = await sql`
+      SELECT audit.action
+      FROM public.caregiver_links AS link
+      JOIN public.caregiver_audit_events AS audit
+        ON audit.workspace_id = link.workspace_id AND audit.patient_id = link.patient_id
+      WHERE link.token_hash = ${hashLink(link)}
+    `;
+    return rows.map(row => row.action);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
 }

@@ -1,4 +1,12 @@
+import type { NextRequest } from 'next/server';
+
 type ReadFailure = { ok: false; status: 400 | 413 };
+
+export function isSameOriginPost(request: NextRequest): boolean {
+  // The App Router can use its internal listen address in nextUrl on self-hosted Node.
+  const host = request.headers.get('host') ?? request.nextUrl.host;
+  return request.headers.get('origin') === `${request.nextUrl.protocol}//${host.toLowerCase()}`;
+}
 
 export async function readRequestText(
   request: Request, mediaType: string, maxBytes: number,

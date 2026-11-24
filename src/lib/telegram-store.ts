@@ -16,7 +16,7 @@ export async function getDoctorTelegramStatus(actor: ClinicalActor): Promise<boo
   if (actor.role !== 'doctor') return false;
   const sql = database();
   const rows = await sql`
-    SELECT 1 FROM shifohalqa.telegram_doctor_links
+    SELECT 1 FROM public.telegram_doctor_links
     WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}
   `;
   return rows.length > 0;
@@ -26,7 +26,7 @@ export async function getPatientTelegramStatus(actor: ClinicalActor): Promise<bo
   if (actor.role !== 'patient') return false;
   const sql = database();
   const rows = await sql`
-    SELECT 1 FROM shifohalqa.telegram_patient_links
+    SELECT 1 FROM public.telegram_patient_links
     WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}
   `;
   return rows.length > 0;
@@ -37,12 +37,12 @@ export async function createTelegramPairing(actor: ClinicalActor): Promise<strin
   const code = randomBytes(32).toString('base64url');
   if (actor.role === 'doctor') {
     const rows = await sql`
-      INSERT INTO shifohalqa.telegram_pairings AS pairing (workspace_id, doctor_id, code_hash, expires_at)
+      INSERT INTO public.telegram_pairings AS pairing (workspace_id, doctor_id, code_hash, expires_at)
       SELECT doctor.workspace_id, doctor.id, ${digest(code)}, CURRENT_TIMESTAMP + interval '10 minutes'
-      FROM shifohalqa.doctors AS doctor
+      FROM public.doctors AS doctor
       WHERE doctor.workspace_id = ${actor.workspaceId} AND doctor.id = ${actor.doctorId}
         AND NOT EXISTS (
-          SELECT 1 FROM shifohalqa.telegram_doctor_links AS link
+          SELECT 1 FROM public.telegram_doctor_links AS link
           WHERE link.workspace_id = doctor.workspace_id AND link.doctor_id = doctor.id
         )
       ON CONFLICT (workspace_id, doctor_id) DO UPDATE
@@ -53,12 +53,12 @@ export async function createTelegramPairing(actor: ClinicalActor): Promise<strin
   }
 
   const rows = await sql`
-    INSERT INTO shifohalqa.telegram_patient_pairings AS pairing (workspace_id, patient_id, code_hash, expires_at)
+    INSERT INTO public.telegram_patient_pairings AS pairing (workspace_id, patient_id, code_hash, expires_at)
     SELECT patient.workspace_id, patient.id, ${digest(code)}, CURRENT_TIMESTAMP + interval '10 minutes'
-    FROM shifohalqa.patients AS patient
+    FROM public.patients AS patient
     WHERE patient.workspace_id = ${actor.workspaceId} AND patient.id = ${actor.patientId}
       AND NOT EXISTS (
-        SELECT 1 FROM shifohalqa.telegram_patient_links AS link
+        SELECT 1 FROM public.telegram_patient_links AS link
         WHERE link.workspace_id = patient.workspace_id AND link.patient_id = patient.id
       )
     ON CONFLICT (workspace_id, patient_id) DO UPDATE
@@ -72,8 +72,8 @@ export async function disconnectDoctorTelegram(actor: ClinicalActor): Promise<vo
   if (actor.role !== 'doctor') return;
   const sql = database();
   await sql.transaction((tx) => [
-    tx`DELETE FROM shifohalqa.telegram_pairings WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}`,
-    tx`DELETE FROM shifohalqa.telegram_doctor_links WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}`,
+    tx`DELETE FROM public.telegram_pairings WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}`,
+    tx`DELETE FROM public.telegram_doctor_links WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}`,
   ]);
 }
 
@@ -81,7 +81,7 @@ export async function disconnectPatientTelegram(actor: ClinicalActor): Promise<v
   if (actor.role !== 'patient') return;
   const sql = database();
   await sql.transaction((tx) => [
-    tx`DELETE FROM shifohalqa.telegram_patient_pairings WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,
-    tx`DELETE FROM shifohalqa.telegram_patient_links WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,
+    tx`DELETE FROM public.telegram_patient_pairings WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,
+    tx`DELETE FROM public.telegram_patient_links WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,
   ]);
 }

@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isSameOriginPost } from './request-body';
 
 const cookieName = 'shifohalqa_demo';
 const sessionLifetimeSeconds = 8 * 60 * 60;
@@ -62,9 +63,7 @@ export async function getDemoSession(): Promise<DemoSession | null> {
 }
 
 export function isSameOriginDemoPost(request: NextRequest): boolean {
-  // The App Router can use its internal listen address in nextUrl on self-hosted Node.
-  const host = request.headers.get('host') ?? request.nextUrl.host;
-  return request.headers.get('origin') === `${request.nextUrl.protocol}//${host.toLowerCase()}`;
+  return isSameOriginPost(request);
 }
 
 function setCookie(response: NextResponse, request: NextRequest, value: string, maxAge: number) {

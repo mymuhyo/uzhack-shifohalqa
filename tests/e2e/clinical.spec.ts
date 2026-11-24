@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
 import { expect, test, type Page } from 'playwright/test';
+import { createDatabase } from '../../src/lib/db';
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -125,44 +125,48 @@ test('shows a new review on an old task without bringing back its unrelated evid
   expect(await box.json()).toMatchObject({ status: 'saved' });
 
   // Move this synthetic task and both of its evidence rows outside the normal history.
-  const sql = neon(process.env.SHIFO_E2E_DATABASE_URL!);
-  const [[task]] = await sql.transaction(tx => [
-    tx`UPDATE shifohalqa.task_instances
-       SET scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 10
-       WHERE id = ${taskId} RETURNING scheduled_date::text AS date`,
-    tx`UPDATE shifohalqa.evidence_logs SET created_at = CURRENT_TIMESTAMP - INTERVAL '10 days'
-       WHERE task_instance_id = ${taskId}`,
-  ]);
-  await page.reload();
-  await expect(page.getByText('Icha olmadim · Dori tugadi')).toHaveCount(0);
-  const week = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Oxirgi 7 kun' }) });
-  const originalCounts = await week.innerText();
+  const sql = createDatabase(process.env.SHIFO_E2E_DATABASE_URL!);
+  try {
+    const [[task]] = await sql.transaction(tx => [
+      tx`UPDATE public.task_instances
+         SET scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 10
+         WHERE id = ${taskId} RETURNING scheduled_date::text AS date`,
+      tx`UPDATE public.evidence_logs SET created_at = CURRENT_TIMESTAMP - INTERVAL '10 days'
+         WHERE task_instance_id = ${taskId}`,
+    ]);
+    await page.reload();
+    await expect(page.getByText('Icha olmadim · Dori tugadi')).toHaveCount(0);
+    const week = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Oxirgi 7 kun' }) });
+    const originalCounts = await week.innerText();
 
-  await enterRole(page, 'doctor');
-  const entry = page.getByRole('article', { name: 'Dori tugadi' });
-  await entry.getByText('Ko‘rib chiqish', { exact: true }).click();
-  const flagId = await entry.locator('[name="flagId"]').inputValue();
-  const reply = 'Avvalgi xabaringizni ko‘rdim. Siz bilan bog‘lanaman.';
-  await entry.getByLabel('Bemorga javob').fill(reply);
-  await entry.getByRole('button', { name: 'Qaydni tasdiqlash' }).click();
-  await expect(page.getByRole('region', { name: 'Ko‘rib chiqilgan qaydlar' })).toContainText('Dori tugadi');
-  await enterRole(page, 'patient');
-  const late = page.getByRole('region', { name: 'Eski qaydlarga yangi javoblar' });
-  await expect(late).toContainText(reply);
-  await expect(late).toContainText('L4');
-  await expect(late.locator('time').first()).toHaveAttribute('datetime', `${task.date}T08:00`);
-  await expect(late).not.toContainText('DoriMos qaydi');
-  expect(await week.innerText()).toBe(originalCounts);
+    await enterRole(page, 'doctor');
+    const entry = page.getByRole('article', { name: 'Dori tugadi' });
+    await entry.getByText('Ko‘rib chiqish', { exact: true }).click();
+    const flagId = await entry.locator('[name="flagId"]').inputValue();
+    const reply = 'Avvalgi xabaringizni ko‘rdim. Siz bilan bog‘lanaman.';
+    await entry.getByLabel('Bemorga javob').fill(reply);
+    await entry.getByRole('button', { name: 'Qaydni tasdiqlash' }).click();
+    await expect(page.getByRole('region', { name: 'Ko‘rib chiqilgan qaydlar' })).toContainText('Dori tugadi');
+    await enterRole(page, 'patient');
+    const late = page.getByRole('region', { name: 'Eski qaydlarga yangi javoblar' });
+    await expect(late).toContainText(reply);
+    await expect(late).toContainText('L4');
+    await expect(late.locator('time').first()).toHaveAttribute('datetime', `${task.date}T08:00`);
+    await expect(late).not.toContainText('DoriMos qaydi');
+    expect(await week.innerText()).toBe(originalCounts);
 
-  // Midnight at the start of the sixth prior Tashkent day is still inside the review window.
-  await sql`UPDATE shifohalqa.flags SET reviewed_at =
-    (((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)::timestamp AT TIME ZONE 'Asia/Tashkent')
-    WHERE id = ${flagId}`;
-  await page.reload();
-  await expect(late).toContainText(reply);
-  await sql`UPDATE shifohalqa.flags SET reviewed_at = reviewed_at - INTERVAL '1 second' WHERE id = ${flagId}`;
-  await page.reload();
-  await expect(late).toHaveCount(0);
+    // Midnight at the start of the sixth prior Tashkent day is still inside the review window.
+    await sql`UPDATE public.flags SET reviewed_at =
+      (((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)::timestamp AT TIME ZONE 'Asia/Tashkent')
+      WHERE id = ${flagId}`;
+    await page.reload();
+    await expect(late).toContainText(reply);
+    await sql`UPDATE public.flags SET reviewed_at = reviewed_at - INTERVAL '1 second' WHERE id = ${flagId}`;
+    await page.reload();
+    await expect(late).toHaveCount(0);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
 });
 
 test('closes the loop with 1-click doctor template, supply confirmation, retake BP, and urgent symptom review', async ({ page }) => {
@@ -475,46 +479,50 @@ test('allows doctor to acknowledge follow-up escalations safely and re-escalates
   await page.getByLabel('Qayta diastolik').fill('78');
   await page.getByRole('button', { name: 'Qayta o‘lchovni yuborish' }).click();
 
-  const sql = neon(process.env.SHIFO_E2E_DATABASE_URL!);
-  const [resolvedRow] = await sql`
-    SELECT id FROM shifohalqa.flag_followups WHERE flag_id = ${supplyFlagId} AND kind = 'supply_resolved' LIMIT 1
-  `;
-  const [normalRetakeRow] = await sql`
-    SELECT id FROM shifohalqa.flag_followups
-    WHERE flag_id = ${bpFlagId} AND kind = 'retake_vitals' AND (payload->>'systolic')::int = 122
-    LIMIT 1
-  `;
+  const sql = createDatabase(process.env.SHIFO_E2E_DATABASE_URL!);
+  try {
+    const [resolvedRow] = await sql`
+      SELECT id FROM public.flag_followups WHERE flag_id = ${supplyFlagId} AND kind = 'supply_resolved' LIMIT 1
+    `;
+    const [normalRetakeRow] = await sql`
+      SELECT id FROM public.flag_followups
+      WHERE flag_id = ${bpFlagId} AND kind = 'retake_vitals' AND (payload->>'systolic')::int = 122
+      LIMIT 1
+    `;
 
-  await page.getByRole('button', { name: /Shifokor sifatida ko‘rish/ }).click();
-  const ackResolved = await page.request.post('/api/demo/followup-ack', {
-    headers: { Origin: origin },
-    maxRedirects: 0,
-    form: { followupId: String(resolvedRow.id) },
-  });
-  expect(ackResolved.headers()['location']).toBe('/doctor?result=not_found');
+    await page.getByRole('button', { name: /Shifokor sifatida ko‘rish/ }).click();
+    const ackResolved = await page.request.post('/api/demo/followup-ack', {
+      headers: { Origin: origin },
+      maxRedirects: 0,
+      form: { followupId: String(resolvedRow.id) },
+    });
+    expect(ackResolved.headers()['location']).toBe('/doctor?result=not_found');
 
-  const ackNormalRetake = await page.request.post('/api/demo/followup-ack', {
-    headers: { Origin: origin },
-    maxRedirects: 0,
-    form: { followupId: String(normalRetakeRow.id) },
-  });
-  expect(ackNormalRetake.headers()['location']).toBe('/doctor?result=not_found');
+    const ackNormalRetake = await page.request.post('/api/demo/followup-ack', {
+      headers: { Origin: origin },
+      maxRedirects: 0,
+      form: { followupId: String(normalRetakeRow.id) },
+    });
+    expect(ackNormalRetake.headers()['location']).toBe('/doctor?result=not_found');
 
-  // Aging an old reviewed BP flag with a normal latest retake >7 days must let it age out of the 7-day doctor view.
-  await sql.transaction((tx) => [
-    tx`UPDATE shifohalqa.task_instances AS task
-       SET scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 10
-       FROM shifohalqa.evidence_logs AS ev
-       JOIN shifohalqa.flags AS f ON f.evidence_log_id = ev.id
-       WHERE f.id = ${bpFlagId} AND task.id = ev.task_instance_id`,
-    tx`UPDATE shifohalqa.flags SET reviewed_at = CURRENT_TIMESTAMP - INTERVAL '10 days' WHERE id = ${bpFlagId}`,
-    tx`UPDATE shifohalqa.flag_followups
-       SET created_at = CURRENT_TIMESTAMP - INTERVAL '9 days',
-           acknowledged_at = CASE WHEN acknowledged_at IS NOT NULL THEN CURRENT_TIMESTAMP - INTERVAL '9 days' ELSE NULL END
-       WHERE flag_id = ${bpFlagId}`,
-  ]);
-  await page.reload();
-  await expect(page.getByRole('region', { name: 'Ko‘rib chiqilgan qaydlar' }).getByRole('article', { name: 'Bosim reja chegarasiga yetdi' })).toHaveCount(0);
+    // Aging an old reviewed BP flag with a normal latest retake >7 days must let it age out of the 7-day doctor view.
+    await sql.transaction((tx) => [
+      tx`UPDATE public.task_instances AS task
+         SET scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 10
+         FROM public.evidence_logs AS ev
+         JOIN public.flags AS f ON f.evidence_log_id = ev.id
+         WHERE f.id = ${bpFlagId} AND task.id = ev.task_instance_id`,
+      tx`UPDATE public.flags SET reviewed_at = CURRENT_TIMESTAMP - INTERVAL '10 days' WHERE id = ${bpFlagId}`,
+      tx`UPDATE public.flag_followups
+         SET created_at = CURRENT_TIMESTAMP - INTERVAL '9 days',
+             acknowledged_at = CASE WHEN acknowledged_at IS NOT NULL THEN CURRENT_TIMESTAMP - INTERVAL '9 days' ELSE NULL END
+         WHERE flag_id = ${bpFlagId}`,
+    ]);
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Ko‘rib chiqilgan qaydlar' }).getByRole('article', { name: 'Bosim reja chegarasiga yetdi' })).toHaveCount(0);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
 });
 
 test('renders doctor 7-day brief and BP trend cleanly under @media print without interactive chrome or overflow', async ({ page }) => {

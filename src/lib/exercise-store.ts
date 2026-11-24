@@ -46,10 +46,10 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
-      SELECT workspace_id, id, doctor_id FROM shifohalqa.patients
+      SELECT workspace_id, id, doctor_id FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
     ), assigned AS (
-      INSERT INTO shifohalqa.exercise_prescriptions (
+      INSERT INTO public.exercise_prescriptions (
         workspace_id, patient_id, doctor_id, movement, target_angle, target_reps, max_shallow, pain_color
       )
       SELECT workspace_id, id, doctor_id, ${input.movement}, ${input.targetAngle}, ${input.targetReps}, ${input.maxShallow}, ${input.painColor}
@@ -65,7 +65,7 @@ export async function readExercisePlan(actor: ClinicalActor) {
   const sql = requireDatabase();
   const [row] = await sql`
     SELECT id, movement, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
-    FROM shifohalqa.exercise_prescriptions
+    FROM public.exercise_prescriptions
     WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
   `;
   return row ? exercisePlanRow.parse(row) : null;
@@ -83,13 +83,13 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
         'decision', attempt.review_decision, 'body', attempt.review_reply,
         'reviewedAt', to_char(attempt.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
       ) END AS review
-    FROM shifohalqa.exercise_attempts AS attempt
-    JOIN shifohalqa.exercise_prescriptions AS plan ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
+    FROM public.exercise_attempts AS attempt
+    JOIN public.exercise_prescriptions AS plan ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
     WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
       AND (
         (${actor.role} = 'doctor' AND attempt.flag_color IS NOT NULL AND attempt.review_decision IS NULL)
         OR attempt.id IN (
-          SELECT recent.id FROM shifohalqa.exercise_attempts AS recent
+          SELECT recent.id FROM public.exercise_attempts AS recent
           WHERE recent.workspace_id = plan.workspace_id AND recent.prescription_id = plan.id
           ORDER BY greatest(recent.created_at, recent.reviewed_at) DESC, recent.id LIMIT 30
         )
@@ -108,7 +108,7 @@ async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, ha
   const [row] = await requireDatabase()`
     SELECT id, level, is_primary AS "primary", similar_motion AS "similarMotion",
       COALESCE(file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}), false) AS sample, client_request_hash AS hash
-    FROM shifohalqa.exercise_attempts
+    FROM public.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${mobile.prescriptionId}
       AND client_attempt_id = ${mobile.clientAttemptId}
   `;
@@ -156,7 +156,7 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
   const motionSignature = measured?.motionSignature ?? null;
   const previous = measured ? z.array(fingerprint).parse(await sql`
     SELECT file_sha256 AS "fileSha256", motion_signature AS "motionSignature"
-    FROM shifohalqa.exercise_attempts
+    FROM public.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${plan.id}
       AND (file_sha256 = ${fileSha256} OR (motion_signature IS NOT NULL AND file_sha256 IS DISTINCT FROM ${exerciseSample.sha256} AND file_sha256 IS DISTINCT FROM ${elbowSample.sha256}))
     ORDER BY (file_sha256 = ${fileSha256}) DESC NULLS LAST, created_at DESC LIMIT 100
@@ -180,15 +180,15 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
     confidence: measured?.confidence ?? null, frames: measured?.analyzedFrames ?? null,
   };
   const [primaryRows, retryRows] = await sql.transaction((tx) => [true, false].map((primary) => tx`
-    INSERT INTO shifohalqa.exercise_attempts (
+    INSERT INTO public.exercise_attempts (
       id, workspace_id, prescription_id, is_primary, source, ai_mode, level, reason,
       valid_reps, shallow_reps, min_angle, confidence, analyzed_frames, file_sha256, motion_signature, similar_motion, flag_color,
       scheduled_date, client_attempt_id, client_request_hash, movement, diagnostics
     )
     SELECT ${id}, ${actor.workspaceId}, ${plan.id}, ${primary}, ${input.source}, ${aiMode}, ${assessment.level}, ${reason},
       ${measurements.valid}, ${measurements.shallow}, ${measurements.minimum}, ${measurements.confidence}, ${measurements.frames},
-      ${fileSha256}, ${motionSignature ? JSON.stringify(motionSignature) : null}::jsonb, ${similarMotion}, ${flag},
-      ${mobile?.scheduledDate ?? today}::date, ${mobile?.clientAttemptId ?? null}::uuid, ${hash}, ${movement}, ${JSON.stringify(diagnostics)}::jsonb
+      ${fileSha256}, ${motionSignature ? tx.json(motionSignature) : null}::jsonb, ${similarMotion}, ${flag},
+      ${mobile?.scheduledDate ?? today}::date, ${mobile?.clientAttemptId ?? null}::uuid, ${hash}, ${movement}, ${tx.json(diagnostics)}::jsonb
     WHERE NOT (${primary} AND (${reason} = 'pain' OR ${sample}))
     ON CONFLICT DO NOTHING RETURNING is_primary
   `));
@@ -206,13 +206,13 @@ export async function reviewExerciseAttempt(actor: ClinicalActor, input: Exercis
   if (actor.role !== 'doctor') return 'not_found';
   const [result] = await requireDatabase()`
     WITH scoped AS (
-      SELECT attempt.id FROM shifohalqa.exercise_attempts AS attempt
-      JOIN shifohalqa.exercise_prescriptions AS plan
+      SELECT attempt.id FROM public.exercise_attempts AS attempt
+      JOIN public.exercise_prescriptions AS plan
         ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
         AND plan.doctor_id = ${actor.doctorId} AND attempt.id = ${input.attemptId}
     ), reviewed AS (
-      UPDATE shifohalqa.exercise_attempts AS attempt
+      UPDATE public.exercise_attempts AS attempt
       SET review_decision = ${input.decision}, review_reply = ${input.reply}, reviewed_at = CURRENT_TIMESTAMP
       FROM scoped WHERE attempt.id = scoped.id AND attempt.review_decision IS NULL RETURNING attempt.id
     )

@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
 import { expect, test, type Page } from 'playwright/test';
+import { createDatabase } from '../../src/lib/db';
 
 const management = '/api/demo/telegram';
 const webhook = `http://127.0.0.1:${process.env.SHIFO_E2E_TELEGRAM_PORT ?? '3420'}/api/telegram/webhook`;
@@ -55,122 +55,136 @@ test('Telegram isolates workspaces, retries a throttled red notice and ignores s
   const manage = (actor: Page, action: 'pair' | 'disconnect', origin = baseURL!) => actor.request.post(management, {
     headers: { Origin: origin }, data: { action },
   });
-  const sql = neon(process.env.SHIFO_E2E_DATABASE_URL!);
-  const readNotices = () => sql`
-    SELECT notice.delivery_status AS status, flag.color
-    FROM shifohalqa.telegram_flag_notices AS notice
-    JOIN shifohalqa.flags AS flag ON flag.workspace_id = notice.workspace_id AND flag.id = notice.flag_id
-    JOIN shifohalqa.telegram_doctor_links AS link ON link.workspace_id = notice.workspace_id
-      AND link.doctor_id = notice.doctor_id AND link.link_id = notice.link_id
-    WHERE link.chat_id = ${chatId}
-    ORDER BY notice.created_at
-  `;
-
-  await enterRole(page, 'doctor');
-  await expect(page.getByRole('region', { name: 'Telegram bildirishnomalari' })).toBeVisible();
-  await page.getByLabel('Sistolik yuqori chegara').fill('144');
-  await page.getByRole('checkbox', { name: /Dori tugadi/ }).check();
-  await page.getByRole('button', { name: 'Rejani biriktirish' }).click();
-  await expect(page.getByRole('heading', { name: 'Biriktirilgan reja' })).toBeVisible();
-  expect((await manage(page, 'pair', 'https://example.invalid')).status()).toBe(403);
-
-  const pairCode = await issuePairing(page);
-  expect((await update(`/start ${pairCode}`, { secret: 'wrong-secret' })).status()).toBe(403);
-  const ignored = await update(`/start ${pairCode}`, { group: true });
-  expect(ignored.status()).toBe(200);
-  expect(await ignored.text()).toBe('');
-
-  const paired = await update(`/start ${pairCode}`);
-  await expect(paired).toBeOK();
-  expect(await paired.json()).toMatchObject({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
-  expect(await (await update(`/start ${pairCode}`, { id: otherChatId })).json()).toMatchObject({ chat_id: otherChatId, text: expect.stringContaining('yaroqsiz') });
-  expect(await (await update(`/start ${pairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
-  await page.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
-  await expect(telegramStatus(page)).toContainText('Telegram ulangan.');
-  expect((await manage(page, 'pair')).status()).toBe(409);
-
-  const otherContext = await browser.newContext({ baseURL });
+  const sql = createDatabase(process.env.SHIFO_E2E_DATABASE_URL!);
   try {
-    const otherDoctor = await otherContext.newPage();
-    await enterRole(otherDoctor, 'doctor');
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
-    const otherPairCode = await issuePairing(otherDoctor);
-    expect(await (await update(`/start ${otherPairCode}`)).json()).toMatchObject({ chat_id: chatId, text: expect.stringContaining('yaroqsiz') });
-    await otherDoctor.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
-
-    await enterRole(page, 'patient');
-    await expect(page.getByRole('region', { name: 'Telegram bildirishnomalari' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Telegram botini ochish' })).toHaveAttribute('href', `https://t.me/${botUsername}`);
-    expect((await manage(page, 'pair')).status()).toBe(403);
-    expect((await manage(page, 'disconnect')).status()).toBe(403);
-
-    const today = await update('/bugun');
-    await expect(today).toBeOK();
-    expect(await today.json()).toEqual({
-      method: 'sendMessage', chat_id: chatId, text: 'Bugungi vazifalarni ShifoHalqada oching.',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'ShifoHalqa Mini App', web_app: { url: `${appUrl}tg?focus=patient` } }],
-          [
-            { text: 'Mashq tahlili', web_app: { url: `${appUrl}demo/mashq` } },
-            { text: 'Brauzerda ochish', url: appUrl },
-          ],
-        ],
-      },
-    });
-
-    await page.getByText('Icha olmadim', { exact: true }).click();
-    await page.getByLabel('Nega icha olmadingiz?').selectOption('out_of_supply');
-    await page.getByRole('button', { name: 'Sababni yuborish' }).click();
-    await expect(page.getByText('Icha olmadim · Dori tugadi')).toBeVisible();
-    const yellow = await sql`
-      SELECT flag.color FROM shifohalqa.flags AS flag
-      JOIN shifohalqa.telegram_doctor_links AS link ON link.workspace_id = flag.workspace_id
+    const readNotices = async () => Array.from(await sql`
+      SELECT notice.delivery_status AS status, flag.color
+      FROM public.telegram_flag_notices AS notice
+      JOIN public.flags AS flag ON flag.workspace_id = notice.workspace_id AND flag.id = notice.flag_id
+      JOIN public.telegram_doctor_links AS link ON link.workspace_id = notice.workspace_id
+        AND link.doctor_id = notice.doctor_id AND link.link_id = notice.link_id
       WHERE link.chat_id = ${chatId}
-    `;
-    expect(yellow).toEqual([{ color: 'yellow' }]);
-    expect(await readNotices()).toEqual([]);
-
-    const pressureForm = page.getByRole('form', { name: 'Qon bosimi (mm sim. ust.)' });
-    const taskId = await pressureForm.locator('[name="taskId"]').getAttribute('value');
-    expect(taskId).toBeTruthy();
-    const saveRed = () => page.request.post('/api/demo/evidence', {
-      headers: { Origin: baseURL! }, maxRedirects: 0,
-      form: { taskId: taskId!, systolic: '144', diastolic: '80' },
-    });
-    const results = await Promise.all([saveRed(), saveRed()]);
-    expect(results.map((result) => result.status())).toEqual([303, 303]);
-    expect(results.map((result) => result.headers().location).sort()).toEqual(['/patient', '/patient?result=already_saved']);
-    await expect.poll(readNotices, { timeout: 20_000 }).toEqual([{ status: 'sent', color: 'red' }]);
+      ORDER BY notice.created_at
+    `);
 
     await enterRole(page, 'doctor');
-    await page.getByRole('button', { name: 'Telegramni uzish' }).click();
-    await expect(telegramStatus(page)).toContainText('Telegram ulanmagan.');
-    expect(await (await update(`/start ${pairCode}`)).json()).toMatchObject({ text: expect.stringContaining('yaroqsiz') });
-    expect(await readNotices()).toEqual([]);
+    await expect(page.getByRole('region', { name: 'Telegram bildirishnomalari' })).toBeVisible();
+    await page.getByLabel('Sistolik yuqori chegara').fill('144');
+    await page.getByRole('checkbox', { name: /Dori tugadi/ }).check();
+    await page.getByRole('button', { name: 'Rejani biriktirish' }).click();
+    await expect(page.getByRole('heading', { name: 'Biriktirilgan reja' })).toBeVisible();
+    expect((await manage(page, 'pair', 'https://example.invalid')).status()).toBe(403);
 
-    expect(await (await update(`/start ${otherPairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
-    await otherDoctor.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
-    const stopId = updateId++;
-    expect(await (await update('/stop', { eventId: stopId })).json()).toEqual({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
-    await otherDoctor.reload();
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+    const pairCode = await issuePairing(page);
+    expect((await update(`/start ${pairCode}`, { secret: 'wrong-secret' })).status()).toBe(403);
+    const ignored = await update(`/start ${pairCode}`, { group: true });
+    expect(ignored.status()).toBe(200);
+    expect(await ignored.text()).toBe('');
 
-    const newerCode = await issuePairing(otherDoctor);
-    expect(await (await update(`/start ${newerCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
-    const staleStop = await update('/stop', { eventId: stopId });
-    await expect(staleStop).toBeOK();
-    expect(await staleStop.text()).toBe('');
-    await otherDoctor.reload();
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
+    const paired = await update(`/start ${pairCode}`);
+    await expect(paired).toBeOK();
+    expect(await paired.json()).toMatchObject({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
+    expect(await (await update(`/start ${pairCode}`, { id: otherChatId })).json()).toMatchObject({ chat_id: otherChatId, text: expect.stringContaining('yaroqsiz') });
+    expect(await (await update(`/start ${pairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
+    await page.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
+    await expect(telegramStatus(page)).toContainText('Telegram ulangan.');
+    expect((await manage(page, 'pair')).status()).toBe(409);
 
-    const freshStop = await update('/stop', { eventId: 1, date: commandDate + 7 * 86_400 + 1 });
-    expect(await freshStop.json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
-    await otherDoctor.reload();
-    await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+    const otherContext = await browser.newContext({ baseURL });
+    try {
+      const otherDoctor = await otherContext.newPage();
+      await enterRole(otherDoctor, 'doctor');
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+      const otherPairCode = await issuePairing(otherDoctor);
+      expect(await (await update(`/start ${otherPairCode}`)).json()).toMatchObject({ chat_id: chatId, text: expect.stringContaining('yaroqsiz') });
+      await otherDoctor.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+
+      await enterRole(page, 'patient');
+      await expect(page.getByRole('region', { name: 'Telegram bildirishnomalari' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Telegram botini ochish' })).toHaveAttribute('href', `https://t.me/${botUsername}`);
+      expect((await request.post(management, {
+        headers: { Origin: baseURL! }, data: { action: 'pair' },
+      })).status()).toBe(403);
+      const patientPair = await manage(page, 'pair');
+      expect(patientPair.status()).toBe(200);
+      const patientPairBody = await patientPair.json() as { href?: string };
+      expect(patientPairBody.href).toBeTruthy();
+      const patientPairUrl = new URL(patientPairBody.href!);
+      expect(patientPairUrl.origin).toBe('https://t.me');
+      expect(patientPairUrl.pathname).toBe(`/${botUsername}`);
+      expect(patientPairUrl.searchParams.get('start')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect((await manage(page, 'disconnect')).status()).toBe(204);
+
+      const today = await update('/bugun');
+      await expect(today).toBeOK();
+      expect(await today.json()).toEqual({
+        method: 'sendMessage', chat_id: chatId, text: 'Bugungi vazifalarni ShifoHalqada oching.',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'ShifoHalqa Mini App', web_app: { url: `${appUrl}tg?focus=patient` } }],
+            [
+              { text: 'Mashq tahlili', web_app: { url: `${appUrl}demo/mashq` } },
+              { text: 'Brauzerda ochish', url: appUrl },
+            ],
+          ],
+        },
+      });
+
+      await page.getByText('Icha olmadim', { exact: true }).click();
+      await page.getByLabel('Nega icha olmadingiz?').selectOption('out_of_supply');
+      await page.getByRole('button', { name: 'Sababni yuborish' }).click();
+      await expect(page.getByText('Icha olmadim · Dori tugadi')).toBeVisible();
+      const yellow = Array.from(await sql`
+        SELECT flag.color FROM public.flags AS flag
+        JOIN public.telegram_doctor_links AS link ON link.workspace_id = flag.workspace_id
+        WHERE link.chat_id = ${chatId}
+      `);
+      expect(yellow).toEqual([{ color: 'yellow' }]);
+      expect(await readNotices()).toEqual([]);
+
+      const pressureForm = page.getByRole('form', { name: 'Qon bosimi (mm sim. ust.)' });
+      const taskId = await pressureForm.locator('[name="taskId"]').getAttribute('value');
+      expect(taskId).toBeTruthy();
+      const saveRed = () => page.request.post('/api/demo/evidence', {
+        headers: { Origin: baseURL! }, maxRedirects: 0,
+        form: { taskId: taskId!, systolic: '144', diastolic: '80' },
+      });
+      const results = await Promise.all([saveRed(), saveRed()]);
+      expect(results.map((result) => result.status())).toEqual([303, 303]);
+      expect(results.map((result) => result.headers().location).sort()).toEqual(['/patient', '/patient?result=already_saved']);
+      await expect.poll(readNotices, { timeout: 20_000 }).toEqual([{ status: 'sent', color: 'red' }]);
+
+      await enterRole(page, 'doctor');
+      await page.getByRole('button', { name: 'Telegramni uzish' }).click();
+      await expect(telegramStatus(page)).toContainText('Telegram ulanmagan.');
+      expect(await (await update(`/start ${pairCode}`)).json()).toMatchObject({ text: expect.stringContaining('yaroqsiz') });
+      expect(await readNotices()).toEqual([]);
+
+      expect(await (await update(`/start ${otherPairCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
+      await otherDoctor.getByRole('button', { name: 'Ulanishni tekshirish' }).click();
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
+      const stopId = updateId++;
+      expect(await (await update('/stop', { eventId: stopId })).json()).toEqual({ method: 'sendMessage', chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
+      await otherDoctor.reload();
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+
+      const newerCode = await issuePairing(otherDoctor);
+      expect(await (await update(`/start ${newerCode}`)).json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari ulandi.' });
+      const staleStop = await update('/stop', { eventId: stopId });
+      await expect(staleStop).toBeOK();
+      expect(await staleStop.text()).toBe('');
+      await otherDoctor.reload();
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulangan.');
+
+      const freshStop = await update('/stop', { eventId: 1, date: commandDate + 7 * 86_400 + 1 });
+      expect(await freshStop.json()).toMatchObject({ chat_id: chatId, text: 'Telegram xabarlari o‘chirildi.' });
+      await otherDoctor.reload();
+      await expect(telegramStatus(otherDoctor)).toContainText('Telegram ulanmagan.');
+    } finally {
+      await otherContext.close();
+    }
   } finally {
-    await otherContext.close();
+    await sql.end({ timeout: 5 });
   }
 });

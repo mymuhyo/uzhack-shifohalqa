@@ -32,7 +32,9 @@ test('counts missed tasks as answers and keeps manual steps outside adherence', 
   await page.getByLabel('Qadamlar soni').fill('815');
   await page.getByRole('button', { name: 'Qadamlarni saqlash' }).click();
   await page.reload();
-  await expect(page.getByText('815 qadam')).toBeVisible();
+  const stepRecord = page.getByText(/815 \/ 3[\s\u00a0]000 qadam/);
+  await expect(stepRecord).toBeVisible();
+  await expect(stepRecord).toContainText('Jarayonda');
   await expect(page.getByText('Qo‘lda kiritildi · L0 · AI rejimi manual')).toBeVisible();
   await expect(week).toHaveAttribute('aria-valuetext', '1/2 vazifa bajarildi');
 

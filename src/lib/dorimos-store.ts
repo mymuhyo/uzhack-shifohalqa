@@ -11,7 +11,7 @@ export async function reserveDorimosScan(workspaceId: string): Promise<boolean> 
   if (!sql) return false;
   for (const [scope, limit] of [[z.uuid().parse(workspaceId), 10], ['global', 30]] as const) {
     const rows = await sql`
-      INSERT INTO shifohalqa.dorimos_scan_limits AS quota (scope, window_ends_at, scans)
+      INSERT INTO public.dorimos_scan_limits AS quota (scope, window_ends_at, scans)
       VALUES (${scope}, CURRENT_TIMESTAMP + interval '1 minute', 1)
       ON CONFLICT (scope) DO UPDATE SET
         window_ends_at = CASE WHEN quota.window_ends_at <= CURRENT_TIMESTAMP THEN EXCLUDED.window_ends_at ELSE quota.window_ends_at END,
@@ -41,25 +41,25 @@ export async function saveDorimosEvidence(actor: ClinicalActor, taskId: string, 
   const [row] = await sql`
     WITH scoped AS (
       SELECT task.workspace_id, task.id
-      FROM shifohalqa.task_instances AS task
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
+      FROM public.task_instances AS task
+      JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
+      JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${taskId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
         AND item.type = 'medication' AND task.scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
         AND (${payload.result === 'manual'} OR (item.title = ${'expected' in payload ? payload.expected.drugName : null}
           AND item.box_strength_mg = ${'expected' in payload ? payload.expected.strength : null}::numeric))
     ), added AS (
-      INSERT INTO shifohalqa.evidence_logs (workspace_id, task_instance_id, entry_kind, level, source, ai_mode, payload)
-      SELECT workspace_id, id, 'medication_box', ${level.level}, ${provenance.source}, ${provenance.ai_mode}, ${JSON.stringify(payload)}::jsonb
+      INSERT INTO public.evidence_logs (workspace_id, task_instance_id, entry_kind, level, source, ai_mode, payload)
+      SELECT workspace_id, id, 'medication_box', ${level.level}, ${provenance.source}, ${provenance.ai_mode}, ${sql.json(payload)}::jsonb
       FROM scoped
       ON CONFLICT (workspace_id, task_instance_id, entry_kind) DO NOTHING
       RETURNING workspace_id, id
     ), flagged AS (
-      INSERT INTO shifohalqa.flags (workspace_id, evidence_log_id, color, rule_key, detail)
+      INSERT INTO public.flags (workspace_id, evidence_log_id, color, rule_key, detail)
       SELECT workspace_id, id, 'red', 'medication_box_mismatch', '{}'::jsonb FROM added WHERE ${mismatch}
     ), audited AS (
-      INSERT INTO shifohalqa.audit_events (workspace_id, evidence_log_id, actor_id, action)
+      INSERT INTO public.audit_events (workspace_id, evidence_log_id, actor_id, action)
       SELECT workspace_id, id, ${actor.patientId}::uuid, 'record_evidence' FROM added
     )
     SELECT CASE WHEN EXISTS (SELECT 1 FROM added) THEN 'saved'

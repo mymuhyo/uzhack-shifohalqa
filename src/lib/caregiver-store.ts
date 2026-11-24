@@ -3,7 +3,6 @@ import { calculateAdherence, dueAdherenceUnitSchema } from './adherence';
 import { createCaregiverToken, digestCaregiverToken } from './caregiver';
 import type { ClinicalActor } from './clinical-types';
 import { getDatabase } from './db';
-import { isDemoEnabled } from './demo-session';
 
 const expiresRow = z.object({ expires_at: z.iso.datetime() });
 export type CaregiverStatusSignal = 'supply_help' | 'doctor_reviewing' | 'doctor_replied' | 'all_good' | 'waiting';
@@ -24,8 +23,8 @@ export async function getCaregiverSharing(actor: ClinicalActor) {
 
   const [row] = await sql`
     SELECT to_char(link.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at
-    FROM shifohalqa.caregiver_links AS link
-    JOIN shifohalqa.patients AS patient ON patient.workspace_id = link.workspace_id
+    FROM public.caregiver_links AS link
+    JOIN public.patients AS patient ON patient.workspace_id = link.workspace_id
       AND patient.id = link.patient_id
     WHERE link.workspace_id = ${actor.workspaceId} AND link.patient_id = ${actor.patientId}
       AND patient.doctor_id = ${actor.doctorId}
@@ -43,36 +42,36 @@ export async function changeCaregiverSharing(actor: ClinicalActor, action: 'enab
 
   const [patients, changed] = await sql.transaction((tx) => {
     const lock = tx`
-      SELECT id FROM shifohalqa.patients
+      SELECT id FROM public.patients
       WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
       FOR NO KEY UPDATE
     `;
     if (action === 'disable') {
       return [lock, tx`
         WITH disabled AS (
-          UPDATE shifohalqa.caregiver_links AS link SET revoked_at = clock_timestamp()
-          FROM shifohalqa.patients AS patient
+          UPDATE public.caregiver_links AS link SET revoked_at = clock_timestamp()
+          FROM public.patients AS patient
           WHERE link.workspace_id = ${actor.workspaceId} AND link.patient_id = ${actor.patientId}
             AND patient.workspace_id = link.workspace_id AND patient.id = link.patient_id
             AND patient.doctor_id = ${actor.doctorId} AND link.revoked_at IS NULL
           RETURNING link.workspace_id, link.patient_id
         )
-        INSERT INTO shifohalqa.caregiver_audit_events (workspace_id, patient_id, action)
+        INSERT INTO public.caregiver_audit_events (workspace_id, patient_id, action)
         SELECT workspace_id, patient_id, 'share_disabled' FROM disabled
       `];
     }
 
     return [lock, tx`
       WITH enabled AS (
-        INSERT INTO shifohalqa.caregiver_links AS link (workspace_id, patient_id, token_hash, expires_at)
+        INSERT INTO public.caregiver_links AS link (workspace_id, patient_id, token_hash, expires_at)
         SELECT workspace_id, id, ${tokenHash}, clock_timestamp() + INTERVAL '24 hours'
-        FROM shifohalqa.patients
+        FROM public.patients
         WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
         ON CONFLICT (workspace_id, patient_id) DO UPDATE SET
           token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, revoked_at = NULL
         RETURNING workspace_id, patient_id, expires_at
       ), audited AS (
-        INSERT INTO shifohalqa.caregiver_audit_events (workspace_id, patient_id, action)
+        INSERT INTO public.caregiver_audit_events (workspace_id, patient_id, action)
         SELECT workspace_id, patient_id, 'share_enabled' FROM enabled
         RETURNING 1
       )
@@ -88,18 +87,18 @@ export async function changeCaregiverSharing(actor: ClinicalActor, action: 'enab
 
 export async function readCaregiverSummary(token: unknown) {
   const tokenHash = digestCaregiverToken(token);
-  if (!tokenHash || !isDemoEnabled()) return null;
+  if (!tokenHash) return null;
   const sql = getDatabase();
   if (!sql) return null;
 
   const [row] = await sql`
     WITH active AS (
       SELECT workspace_id, patient_id
-      FROM shifohalqa.caregiver_links
+      FROM public.caregiver_links
       WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()
       FOR SHARE
     ), audited AS (
-      INSERT INTO shifohalqa.caregiver_audit_events (workspace_id, patient_id, action)
+      INSERT INTO public.caregiver_audit_events (workspace_id, patient_id, action)
       SELECT workspace_id, patient_id, 'summary_viewed' FROM active
       RETURNING workspace_id, patient_id
     ), clock AS (
@@ -107,52 +106,52 @@ export async function readCaregiverSummary(token: unknown) {
     ), due AS (
       SELECT item.id AS "planItemId", to_char(clock.local_now, 'YYYY-MM-DD') AS "scheduledDate", task.status
       FROM audited
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      JOIN public.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
       CROSS JOIN clock
-      LEFT JOIN shifohalqa.task_instances AS task ON task.workspace_id = item.workspace_id
+      LEFT JOIN public.task_instances AS task ON task.workspace_id = item.workspace_id
         AND task.plan_item_id = item.id AND task.scheduled_date = clock.local_now::date
       WHERE item.type IN ('medication', 'vitals') AND clock.local_now::date >= plan.start_date
         AND clock.local_now::date + item.due_time <= clock.local_now
     ), today_flags AS (
       SELECT flag.id, flag.decision
       FROM audited
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
-      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
-      JOIN shifohalqa.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
+      JOIN public.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      JOIN public.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
+      JOIN public.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
+      JOIN public.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
       CROSS JOIN clock
       WHERE task.scheduled_date = clock.local_now::date
     ), supply_reports AS (
       SELECT 1
       FROM audited
-      JOIN shifohalqa.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
-      JOIN shifohalqa.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
-      JOIN shifohalqa.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
-      JOIN shifohalqa.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
-      LEFT JOIN shifohalqa.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
+      JOIN public.plans AS plan ON plan.workspace_id = audited.workspace_id AND plan.patient_id = audited.patient_id
+      JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
+      JOIN public.task_instances AS task ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
+      JOIN public.evidence_logs AS evidence ON evidence.workspace_id = task.workspace_id AND evidence.task_instance_id = task.id
+      LEFT JOIN public.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
       CROSS JOIN clock
       WHERE task.scheduled_date = clock.local_now::date
         AND evidence.entry_kind = 'task'
         AND evidence.payload->>'kind' = 'medication'
         AND evidence.payload->>'reason' = 'out_of_supply'
         AND NOT EXISTS (
-          SELECT 1 FROM shifohalqa.flag_followups AS followup
+          SELECT 1 FROM public.flag_followups AS followup
           WHERE followup.workspace_id = flag.workspace_id AND followup.flag_id = flag.id
             AND followup.kind = 'supply_resolved'
         )
     ), today_symptoms AS (
       SELECT symptom.review_decision
       FROM audited
-      JOIN shifohalqa.urgent_symptoms AS symptom ON symptom.workspace_id = audited.workspace_id AND symptom.patient_id = audited.patient_id
+      JOIN public.urgent_symptoms AS symptom ON symptom.workspace_id = audited.workspace_id AND symptom.patient_id = audited.patient_id
       CROSS JOIN clock
       WHERE (symptom.created_at AT TIME ZONE 'Asia/Tashkent')::date = clock.local_now::date
     ), today_ack AS (
       SELECT ack.kind,
              to_char(ack.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
       FROM audited
-      JOIN shifohalqa.caregiver_acks AS ack ON ack.workspace_id = audited.workspace_id AND ack.patient_id = audited.patient_id
+      JOIN public.caregiver_acks AS ack ON ack.workspace_id = audited.workspace_id AND ack.patient_id = audited.patient_id
       CROSS JOIN clock
       WHERE ack.activity_date = clock.local_now::date
     )
@@ -191,17 +190,17 @@ export async function acknowledgeCaregiverHelp(
   kind: 'supply_on_the_way' | 'checked_in',
 ): Promise<{ status: 'saved'; kind: 'supply_on_the_way' | 'checked_in'; createdAt: string } | null> {
   const tokenHash = digestCaregiverToken(token);
-  if (!tokenHash || !isDemoEnabled()) return null;
+  if (!tokenHash) return null;
   const sql = getDatabase();
   if (!sql) return null;
 
   const [row] = await sql`
     WITH active AS (
       SELECT workspace_id, patient_id
-      FROM shifohalqa.caregiver_links
+      FROM public.caregiver_links
       WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()
     ), saved AS (
-      INSERT INTO shifohalqa.caregiver_acks (workspace_id, patient_id, activity_date, kind)
+      INSERT INTO public.caregiver_acks (workspace_id, patient_id, activity_date, kind)
       SELECT workspace_id, patient_id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${kind}
       FROM active
       ON CONFLICT (workspace_id, patient_id, activity_date) DO UPDATE SET

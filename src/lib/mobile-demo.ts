@@ -30,7 +30,7 @@ export async function issueAndroidPairing(workspaceId: string, patientId: string
   const sql = database();
   const code = randomBytes(16).toString('hex');
   const [row] = await sql`
-    INSERT INTO shifohalqa.android_demo_access (workspace_id, patient_id, pairing_hash, pairing_expires_at)
+    INSERT INTO public.android_demo_access (workspace_id, patient_id, pairing_hash, pairing_expires_at)
     VALUES (${workspaceId}, ${patientId}, ${hash(code)}, CURRENT_TIMESTAMP + interval '10 minutes')
     ON CONFLICT (workspace_id) DO UPDATE SET
       patient_id = EXCLUDED.patient_id, pairing_hash = EXCLUDED.pairing_hash,
@@ -44,7 +44,7 @@ export async function redeemAndroidPairing(code: string) {
   const sql = database();
   const token = randomBytes(32).toString('hex');
   const [row] = await sql`
-    UPDATE shifohalqa.android_demo_access
+    UPDATE public.android_demo_access
     SET pairing_hash = NULL, pairing_expires_at = NULL,
         session_hash = ${hash(token)}, session_expires_at = CURRENT_TIMESTAMP + interval '8 hours'
     WHERE pairing_hash = ${hash(code)} AND pairing_expires_at > CURRENT_TIMESTAMP
@@ -61,8 +61,10 @@ export async function androidPatient(request: Request): Promise<(ClinicalActor &
   const [row] = await sql`
     SELECT access.workspace_id AS "workspaceId", access.patient_id AS "patientId",
            patient.doctor_id AS "doctorId", patient.name AS "patientName"
-    FROM shifohalqa.android_demo_access AS access
-    JOIN shifohalqa.patients AS patient
+    FROM public.android_demo_access AS access
+    JOIN public.workspaces AS workspace
+      ON workspace.id = access.workspace_id AND workspace.is_demo = true
+    JOIN public.patients AS patient
       ON patient.workspace_id = access.workspace_id AND patient.id = access.patient_id
     WHERE access.session_hash = ${hash(token)} AND access.session_expires_at > CURRENT_TIMESTAMP
   `;

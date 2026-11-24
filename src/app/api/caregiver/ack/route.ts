@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { acknowledgeCaregiverHelp } from '@/lib/caregiver-store';
-import { isSameOriginDemoPost } from '@/lib/demo-session';
-import { readRequestJson } from '@/lib/request-body';
+import { acknowledgeCaregiverHelp } from '../../../../lib/caregiver-store';
+import { isSameOriginPost, readRequestJson } from '../../../../lib/request-body';
 
 const ackInput = z.strictObject({
   token: z.string().min(1),
@@ -17,7 +16,7 @@ function json(data: object, status = 200) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isSameOriginDemoPost(request)) return json({ error: 'forbidden' }, 403);
+  if (!isSameOriginPost(request)) return json({ error: 'forbidden' }, 403);
   const body = await readRequestJson(request, 2048);
   if (!body.ok) return json({ error: 'invalid' }, 400);
   const parsed = ackInput.safeParse(body.body);

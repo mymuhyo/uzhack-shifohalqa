@@ -1,21 +1,21 @@
-import { getActivityDashboard, saveStepCount } from '@/lib/activity-store';
-import { defaultDailyStepGoal, mobileStepsInputSchema } from '@/lib/adherence';
-import { androidPatient, isAndroidDemoEnabled, mobileJson, readMobileBody } from '@/lib/mobile-demo';
+import { getActivityDashboard, saveStepCount } from '../../../../../lib/activity-store';
+import { defaultDailyStepGoal, mobileStepsInputSchema } from '../../../../../lib/adherence';
+import { resolveMobilePatientActor } from '../../../../../lib/auth';
+import { mobileJson, readMobileBody } from '../../../../../lib/mobile-demo';
 
 export async function POST(request: Request) {
-  if (!isAndroidDemoEnabled()) return mobileJson({ error: 'not_found' }, 404);
   try {
-    const actor = await androidPatient(request);
-    if (!actor) return mobileJson({ error: 'unauthorized' }, 401);
+    const auth = await resolveMobilePatientActor(request);
+    if (!auth.ok) return mobileJson({ error: auth.error }, auth.status);
     const body = await readMobileBody(request);
     if (!body.ok) return mobileJson({ error: body.status === 413 ? 'too_large' : 'invalid' }, body.status);
     const parsed = mobileStepsInputSchema.safeParse(body.body);
     if (!parsed.success) return mobileJson({ error: 'invalid' }, 400);
 
-    const status = await saveStepCount(actor, parsed.data);
+    const status = await saveStepCount(auth.actor, parsed.data);
     if (status === 'not_found') return mobileJson({ error: 'not_found' }, 404);
 
-    const dashboard = await getActivityDashboard(actor).catch(() => null);
+    const dashboard = await getActivityDashboard(auth.actor).catch(() => null);
     const goal = dashboard?.dailyStepGoal ?? defaultDailyStepGoal;
     return mobileJson({
       status,

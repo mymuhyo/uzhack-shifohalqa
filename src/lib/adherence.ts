@@ -16,6 +16,17 @@ export const mobileStepsInputSchema = z.strictObject({
 });
 export type MobileStepsInput = z.infer<typeof mobileStepsInputSchema>;
 
+export const stepsJsonInput = z.strictObject({
+  steps: stepCountSchema.optional(),
+  count: stepCountSchema.optional(),
+  source: stepSourceSchema.optional(),
+}).refine((value) => value.steps !== undefined || value.count !== undefined, {
+  path: ['count'],
+}).transform((value) => ({
+  count: (value.count ?? value.steps)!,
+  source: value.source ?? ('self_report' as const),
+}));
+
 export const dueAdherenceUnitSchema = z.object({
   planItemId: z.string(),
   scheduledDate: z.iso.date(),

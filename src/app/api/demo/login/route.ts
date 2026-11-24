@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { clearSupabaseCookies } from '../../../../lib/auth';
 import { demoRoleSchema, isDemoEnabled, isSameOriginDemoPost, issueDemoSession } from '../../../../lib/demo-session';
 import { readRequestText } from '../../../../lib/request-body';
 
@@ -17,5 +18,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     headers: { Location: role.data === 'doctor' ? '/doctor' : '/patient', 'Cache-Control': 'no-store' },
   });
   if (!issueDemoSession(request, response, role.data)) return new Response('Demo rejimi yopiq.', { status: 404 });
+  clearSupabaseCookies(request, response);
   return response;
 }

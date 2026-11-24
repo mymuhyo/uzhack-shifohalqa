@@ -113,6 +113,141 @@ export const symptomReviewForm = z.strictObject({
 
 export type SymptomReviewInput = z.infer<typeof symptomReviewForm>;
 
+const jsonPositiveReading = z.number().int().min(1).max(999);
+const jsonDailyStepGoal = z.number().int().min(100).max(50000);
+
+export const planJsonInput = z.strictObject({
+  patientId: id.optional(),
+  medicationName: z.string().trim().min(1).max(80),
+  medicationStrengthMg: z.number().positive().max(999999).nullable().optional(),
+  medicationTime: time,
+  vitalsTime: time,
+  maxSystolic: jsonPositiveReading,
+  maxDiastolic: jsonPositiveReading,
+  warnSystolic: jsonPositiveReading,
+  warnDiastolic: jsonPositiveReading,
+  supplyFollowUp: z.boolean().optional().default(false),
+  dailyStepGoal: jsonDailyStepGoal.optional().default(3000),
+}).refine(({ medicationName, medicationStrengthMg }) => medicationStrengthMg === undefined || medicationStrengthMg === null || /\p{L}/u.test(medicationName), {
+  path: ['medicationName'],
+}).refine(value => value.warnSystolic <= value.maxSystolic, { path: ['warnSystolic'] })
+  .refine(value => value.warnDiastolic <= value.maxDiastolic, { path: ['warnDiastolic'] })
+  .transform(({ patientId, medicationName, medicationStrengthMg, medicationTime, vitalsTime, supplyFollowUp, dailyStepGoal, ...targets }) => ({
+    patientId,
+    plan: {
+      medicationName,
+      medicationStrengthMg: medicationStrengthMg ?? null,
+      medicationTime,
+      vitalsTime,
+      supplyFollowUp,
+      dailyStepGoal,
+      targets,
+    } satisfies PlanInput,
+  }));
+
+export const evidenceJsonInput = z.union([
+  z.strictObject({
+    patientId: id.optional(),
+    taskId: id,
+    medicationStatus: z.literal('taken'),
+  }).transform(({ patientId, taskId }) => ({
+    patientId,
+    command: { taskId, payload: { kind: 'medication', status: 'taken' } } satisfies EvidenceCommand,
+  })),
+  z.strictObject({
+    patientId: id.optional(),
+    taskId: id,
+    medicationStatus: z.literal('missed'),
+    reason: z.enum(['out_of_supply', 'side_effects', 'forgot', 'other']),
+  }).transform(({ patientId, taskId, reason }) => ({
+    patientId,
+    command: { taskId, payload: { kind: 'medication', status: 'missed', reason } } satisfies EvidenceCommand,
+  })),
+  z.strictObject({
+    patientId: id.optional(),
+    taskId: id,
+    systolic: jsonPositiveReading.nullable().optional().default(null),
+    diastolic: jsonPositiveReading.nullable().optional().default(null),
+    chestPain: z.boolean().optional().default(false),
+  }).refine(({ systolic, diastolic, chestPain }) => (
+    (systolic !== null && diastolic !== null) || (chestPain && systolic === null && diastolic === null)
+  )).transform(({ patientId, taskId, systolic, diastolic, chestPain }) => ({
+    patientId,
+    command: { taskId, payload: { kind: 'vitals', systolic, diastolic, chestPain } } satisfies EvidenceCommand,
+  })),
+]);
+
+export const reviewJsonInput = z.strictObject({
+  patientId: id.optional(),
+  flagId: id,
+  decision: z.enum(['approved', 'retake']),
+  reply: z.string().trim().min(1).max(500),
+  note: z.string().trim().max(500).optional().default(''),
+});
+
+export const followupJsonInput = z.union([
+  z.strictObject({
+    patientId: id.optional(),
+    flagId: id,
+    kind: z.enum(['supply_resolved', 'still_need_help']),
+  }).transform(({ patientId, flagId, kind }) => ({
+    patientId,
+    followup: {
+      flagId,
+      kind,
+      payload: {} as Record<string, unknown>,
+    } satisfies FollowupInput,
+  })),
+  z.strictObject({
+    patientId: id.optional(),
+    flagId: id,
+    kind: z.literal('retake_vitals'),
+    systolic: jsonPositiveReading,
+    diastolic: jsonPositiveReading,
+    chestPain: z.boolean().optional().default(false),
+  }).transform(({ patientId, flagId, kind, systolic, diastolic, chestPain }) => ({
+    patientId,
+    followup: {
+      flagId,
+      kind,
+      payload: { systolic, diastolic, chestPain } as Record<string, unknown>,
+    } satisfies FollowupInput,
+  })),
+  z.strictObject({
+    patientId: id.optional(),
+    flagId: id,
+    kind: z.literal('retake_medication'),
+    medicationStatus: z.enum(['taken', 'missed']),
+  }).transform(({ patientId, flagId, kind, medicationStatus }) => ({
+    patientId,
+    followup: {
+      flagId,
+      kind,
+      payload: { status: medicationStatus } as Record<string, unknown>,
+    } satisfies FollowupInput,
+  })),
+]);
+
+export const followupAckJsonInput = z.strictObject({
+  patientId: id.optional(),
+  followupId: id,
+  note: z.string().trim().max(500).optional().default(''),
+});
+
+export const urgentSymptomJsonInput = z.strictObject({
+  patientId: id.optional(),
+  symptom: z.enum(['chest_pain', 'dizziness', 'shortness_of_breath', 'severe_headache']),
+  note: z.string().trim().max(300).optional().default(''),
+});
+
+export const symptomReviewJsonInput = z.strictObject({
+  patientId: id.optional(),
+  symptomId: id,
+  decision: z.enum(['approved', 'retake']),
+  reply: z.string().trim().min(1).max(500),
+  note: z.string().trim().max(500).optional().default(''),
+});
+
 function asEvidenceFlag(rule: RuleFlag | null): EvidenceFlag | null {
   if (!rule) return null;
   const { rule_key: ruleKey, ...details } = rule;

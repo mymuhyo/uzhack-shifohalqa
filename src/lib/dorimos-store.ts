@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ClinicalActor, MutationResult } from './clinical-types';
+import { isPatientSideRole, type ClinicalActor, type MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 import { medicationBoxEvidenceSchema, type MedicationBoxEvidence } from './dorimos-contract';
 import { deriveEvidenceLevel } from './rules/evidence-level';
@@ -25,7 +25,7 @@ export async function reserveDorimosScan(workspaceId: string): Promise<boolean> 
 }
 
 export async function saveDorimosEvidence(actor: ClinicalActor, taskId: string, input: MedicationBoxEvidence): Promise<MutationResult> {
-  if (actor.role !== 'patient') return 'not_found';
+  if (!isPatientSideRole(actor.role)) return 'not_found';
   const sql = getDatabase();
   if (!sql) throw new Error('DoriMos database is unavailable');
 
@@ -45,7 +45,7 @@ export async function saveDorimosEvidence(actor: ClinicalActor, taskId: string, 
       JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
       JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${taskId}
-        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND item.type = 'medication' AND task.scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
         AND (${payload.result === 'manual'} OR (item.title = ${'expected' in payload ? payload.expected.drugName : null}
           AND item.box_strength_mg = ${'expected' in payload ? payload.expected.strength : null}::numeric))

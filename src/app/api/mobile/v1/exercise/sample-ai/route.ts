@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { explainExerciseComparison } from '@/lib/ai/exercise-explanation';
-import { availableExerciseProviders, reviewExerciseSample } from '@/lib/ai/exercise-video';
-import { exerciseProvider } from '@/lib/exercise-analysis';
-import { exerciseExplanationRequest } from '@/lib/exercise-explanation';
-import { androidPatient, isAndroidDemoEnabled, mobileJson } from '@/lib/mobile-demo';
-import { readRequestJson } from '@/lib/request-body';
+import { explainExerciseComparison } from '../../../../../../lib/ai/exercise-explanation';
+import { availableExerciseProviders, reviewExerciseSample } from '../../../../../../lib/ai/exercise-video';
+import { resolveMobilePatientActor } from '../../../../../../lib/auth';
+import { exerciseProvider } from '../../../../../../lib/exercise-analysis';
+import { exerciseExplanationRequest } from '../../../../../../lib/exercise-explanation';
+import { mobileJson } from '../../../../../../lib/mobile-demo';
+import { readRequestJson } from '../../../../../../lib/request-body';
 
 const requestSchema = z.union([
   z.strictObject({ provider: exerciseProvider }),
@@ -12,9 +13,9 @@ const requestSchema = z.union([
 ]);
 
 export async function POST(request: Request) {
-  if (!isAndroidDemoEnabled()) return mobileJson({ error: 'not_found' }, 404);
   try {
-    if (!(await androidPatient(request))) return mobileJson({ error: 'unauthorized' }, 401);
+    const auth = await resolveMobilePatientActor(request);
+    if (!auth.ok) return mobileJson({ error: auth.error }, auth.status);
     const body = await readRequestJson(request, 256);
     if (!body.ok) return mobileJson({ error: 'invalid' }, body.status);
     const input = requestSchema.safeParse(body.body);

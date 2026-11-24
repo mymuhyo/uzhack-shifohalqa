@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { compareAttempt } from './anticheat/compare-attempt';
-import type { ClinicalActor, MutationResult } from './clinical-types';
+import { isPatientSideRole, type ClinicalActor, type MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 import type { ExerciseInput, ExercisePlan, ExerciseReview, MobileExerciseInput } from './exercise-inputs';
 import { elbowSample, exerciseSample } from './exercise-sample';
@@ -42,7 +42,7 @@ function requireDatabase() {
 }
 
 export async function assignExercise(actor: ClinicalActor, input: ExercisePlan): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -62,16 +62,19 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
 }
 
 export async function readExercisePlan(actor: ClinicalActor) {
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return null;
   const sql = requireDatabase();
   const [row] = await sql`
     SELECT id, movement, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
     FROM public.exercise_prescriptions
-    WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
+    WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}
+      AND doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
   `;
   return row ? exercisePlanRow.parse(row) : null;
 }
 
 export async function readExerciseAttempts(actor: ClinicalActor) {
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return [];
   const sql = requireDatabase();
   const rows = await sql`
     SELECT attempt.id, attempt.movement, attempt.diagnostics, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
@@ -85,7 +88,8 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
       ) END AS review
     FROM public.exercise_attempts AS attempt
     JOIN public.exercise_prescriptions AS plan ON plan.workspace_id = attempt.workspace_id AND plan.id = attempt.prescription_id
-    WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+    WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
+      AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
       AND (
         (${actor.role} = 'doctor' AND attempt.flag_color IS NOT NULL AND attempt.review_decision IS NULL)
         OR attempt.id IN (
@@ -118,7 +122,7 @@ async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, ha
 }
 
 export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, mobile?: MobileExerciseInput) {
-  if (actor.role !== 'patient') return { status: 'invalid' } as const;
+  if (!isPatientSideRole(actor.role)) return { status: 'invalid' } as const;
   const plan = await readExercisePlan(actor);
   if (!plan || (mobile && mobile.prescriptionId !== plan.id)) return { status: 'invalid' } as const;
 
@@ -203,7 +207,7 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
 }
 
 export async function reviewExerciseAttempt(actor: ClinicalActor, input: ExerciseReview): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const [result] = await requireDatabase()`
     WITH scoped AS (
       SELECT attempt.id FROM public.exercise_attempts AS attempt

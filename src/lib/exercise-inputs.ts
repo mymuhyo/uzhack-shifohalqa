@@ -66,6 +66,25 @@ export const exerciseReviewForm = z.strictObject({
   reply: z.string().trim().min(1).max(500),
 });
 
+export const exercisePlanJsonInput = z.strictObject({
+  patientId: z.uuid().optional(),
+  movement: movementId.default('chair_stand'),
+  targetAngle: z.int().min(60).max(170),
+  targetReps: z.int().min(1).max(40),
+  maxShallow: z.int().min(0).max(40),
+  painColor: z.enum(['yellow', 'red']),
+}).refine(({ movement, targetAngle }) => {
+  const { min, max } = exerciseCatalog[movement].angleBounds;
+  return targetAngle >= min && targetAngle <= max;
+}, { path: ['targetAngle'] });
+
+export const exerciseReviewJsonInput = z.strictObject({
+  patientId: z.uuid().optional(),
+  attemptId: z.uuid(),
+  decision: z.enum(['reviewed', 'retake']),
+  reply: z.string().trim().min(1).max(500),
+});
+
 export type MobileExerciseInput = z.infer<typeof mobileExerciseInput>;
 export type ExerciseReview = z.infer<typeof exerciseReviewForm>;
 

@@ -8,7 +8,7 @@ import { readRequestJson } from './request-body';
 
 const bearerPattern = /^[a-f0-9]{64}$/;
 const bodyLimit = 2048;
-const accessRow = z.object({ workspaceId: z.uuid(), patientId: z.uuid(), doctorId: z.uuid(), patientName: z.string() });
+const accessRow = z.object({ workspaceId: z.uuid(), patientId: z.uuid(), doctorId: z.uuid().nullable(), patientName: z.string() });
 const expiryRow = z.object({ expiresAt: z.iso.datetime() });
 export const androidPairingForm = z.strictObject({ code: z.string().regex(/^[a-f0-9]{32}$/) });
 
@@ -68,7 +68,7 @@ export async function androidPatient(request: Request): Promise<(ClinicalActor &
       ON patient.workspace_id = access.workspace_id AND patient.id = access.patient_id
     WHERE access.session_hash = ${hash(token)} AND access.session_expires_at > CURRENT_TIMESTAMP
   `;
-  return row ? { ...accessRow.parse(row), role: 'patient' } : null;
+  return row ? { ...accessRow.parse(row), role: 'patient', isDemo: true } : null;
 }
 
 export async function readMobileBody(request: Request) {

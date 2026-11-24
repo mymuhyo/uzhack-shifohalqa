@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { ClinicalActor } from './clinical-types';
+import { isPatientSideRole, type ClinicalActor } from './clinical-types';
 import { getDatabase } from './db';
 
 function digest(code: string) {
@@ -13,7 +13,7 @@ function database() {
 }
 
 export async function getDoctorTelegramStatus(actor: ClinicalActor): Promise<boolean> {
-  if (actor.role !== 'doctor') return false;
+  if (actor.role !== 'doctor' || !actor.doctorId) return false;
   const sql = database();
   const rows = await sql`
     SELECT 1 FROM public.telegram_doctor_links
@@ -23,7 +23,7 @@ export async function getDoctorTelegramStatus(actor: ClinicalActor): Promise<boo
 }
 
 export async function getPatientTelegramStatus(actor: ClinicalActor): Promise<boolean> {
-  if (actor.role !== 'patient') return false;
+  if (!isPatientSideRole(actor.role)) return false;
   const sql = database();
   const rows = await sql`
     SELECT 1 FROM public.telegram_patient_links
@@ -33,9 +33,10 @@ export async function getPatientTelegramStatus(actor: ClinicalActor): Promise<bo
 }
 
 export async function createTelegramPairing(actor: ClinicalActor): Promise<string | null> {
-  const sql = database();
-  const code = randomBytes(32).toString('base64url');
   if (actor.role === 'doctor') {
+    if (!actor.doctorId) return null;
+    const sql = database();
+    const code = randomBytes(32).toString('base64url');
     const rows = await sql`
       INSERT INTO public.telegram_pairings AS pairing (workspace_id, doctor_id, code_hash, expires_at)
       SELECT doctor.workspace_id, doctor.id, ${digest(code)}, CURRENT_TIMESTAMP + interval '10 minutes'
@@ -52,6 +53,9 @@ export async function createTelegramPairing(actor: ClinicalActor): Promise<strin
     return rows.length ? code : null;
   }
 
+  if (!isPatientSideRole(actor.role)) return null;
+  const sql = database();
+  const code = randomBytes(32).toString('base64url');
   const rows = await sql`
     INSERT INTO public.telegram_patient_pairings AS pairing (workspace_id, patient_id, code_hash, expires_at)
     SELECT patient.workspace_id, patient.id, ${digest(code)}, CURRENT_TIMESTAMP + interval '10 minutes'
@@ -69,7 +73,7 @@ export async function createTelegramPairing(actor: ClinicalActor): Promise<strin
 }
 
 export async function disconnectDoctorTelegram(actor: ClinicalActor): Promise<void> {
-  if (actor.role !== 'doctor') return;
+  if (actor.role !== 'doctor' || !actor.doctorId) return;
   const sql = database();
   await sql.transaction((tx) => [
     tx`DELETE FROM public.telegram_pairings WHERE workspace_id = ${actor.workspaceId} AND doctor_id = ${actor.doctorId}`,
@@ -78,7 +82,7 @@ export async function disconnectDoctorTelegram(actor: ClinicalActor): Promise<vo
 }
 
 export async function disconnectPatientTelegram(actor: ClinicalActor): Promise<void> {
-  if (actor.role !== 'patient') return;
+  if (!isPatientSideRole(actor.role)) return;
   const sql = database();
   await sql.transaction((tx) => [
     tx`DELETE FROM public.telegram_patient_pairings WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,

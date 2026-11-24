@@ -11,7 +11,7 @@
 | Milestone | Scope | Status | Dependencies |
 |---|---|---|---|
 | **M1a** | Cross-harness docs (`AGENTS.md`, `DECISIONS.md`, `PLAN.md`, `PROGRESS.md`), 7 Supabase SQL migrations, RLS, Storage, Realtime, `database.types.ts` | `[x]` | `supabase_mcp` (`byswnhfcqxjvnallggxj`) |
-| **M1b** | `@supabase/supabase-js` + `@supabase/ssr` + `postgres` driver, `src/proxy.ts`, CSP, 8 stores migrated off Neon, Dual Auth (`supabase` vs `demo`) & isolation | `[ ]` | M1a |
+| **M1b** | `@supabase/supabase-js` + `@supabase/ssr` + `postgres` driver, `src/proxy.ts`, CSP, 8 stores migrated off Neon, Dual Auth (`supabase` vs `demo`) & isolation | `[x]` | M1a |
 | **M2** | Tonometr OCR, persisted Teach-Back, AI 7-Day Clinical Brief, PAR-Q+ `individual`, deep AI/CV video analysis & suspicious segment extraction, `INTERFACES.md` | `[ ]` | M1b |
 | **M3** | Web UI/UX overhaul (Tailwind v4, shadcn/ui, Motion, Lucide), optimistic JSON mutations, lazy CV/video, interactive exemplars, segment review queue | `[ ]` | M1b, M2 |
 | **M4** | Android clean-architecture rewrite (`data`, `domain`, `ui`, `cv`, `sync`), Compose M3 + animations, Supabase Auth + 1-click Demo, Tonometr, PAR-Q+, segments | `[ ]` | M1b, M2 |
@@ -45,18 +45,18 @@
 
 ---
 
-## M1b — Supabase Client Layer, Store Migration & Dual Auth + Isolation (`[ ]`)
+## M1b — Supabase Client Layer, Store Migration & Dual Auth + Isolation (`[x]`)
 
-- [ ] **Packages & Supabase Client Helpers**
+- [x] **Packages & Supabase Client Helpers**
   - **Files**: `package.json`, `package-lock.json`, `src/lib/supabase/{client,server,admin,middleware}.ts`, `src/proxy.ts`, `next.config.ts`
   - **Acceptance Criteria**: Install `@supabase/supabase-js`, `@supabase/ssr`, `postgres`; remove `@neondatabase/serverless`; compose `/caregiver/:path*` `405` guard with `@supabase/ssr` session refresh in `src/proxy.ts`; update `next.config.ts` CSP `connect-src` for `https://*.supabase.co` and `wss://*.supabase.co`.
   - **Verify**: `npm run typecheck && npm run lint`.
-- [ ] **Database Driver & Store Migration off Neon**
+- [x] **Database Driver & Store Migration off Neon**
   - **Files**: `src/lib/db.ts`, `src/lib/seed.ts`, `src/lib/clinical-store.ts`, `src/lib/exercise-store.ts`, `src/lib/caregiver-store.ts`, `src/lib/activity-store.ts`, `src/lib/dorimos-store.ts`, `src/lib/mobile-demo.ts`, `src/lib/telegram-store.ts`, `services/telegram_bot/shifo_telegram/store.py`, `tests/e2e/{clinical,caregiver,telegram}.spec.ts`
   - **Acceptance Criteria**: Replace `@neondatabase/serverless` with `postgres` behind `getDatabase()` preserving `sql.transaction()` + `ReadCommitted` + `FOR NO KEY UPDATE` semantics; update `shifohalqa.` -> `public.` and `demo_workspaces` -> `workspaces`; omit `doctor_note`/`acknowledged_note` from patient/caregiver DTOs; decouple valid caregiver share tokens in `caregiver-store.ts` from `isDemoEnabled()`.
   - **Verify**: `npm run verify` + `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests`.
-- [ ] **Dual Auth (`supabase` vs `demo`) & Hard Tenant Isolation**
-  - **Files**: `src/lib/auth-types.ts`, `src/lib/auth.ts`, `src/lib/demo-session.ts`, `src/app/api/auth/{login,signup,logout,session}/route.ts`, `tests/unit/auth-isolation.test.ts`
+- [x] **Dual Auth (`supabase` vs `demo`) & Hard Tenant Isolation**
+  - **Files**: `src/lib/auth-types.ts`, `src/lib/auth.ts`, `src/lib/demo-session.ts`, `src/app/api/auth/{login,signup,logout,session}/route.ts`, `src/lib/clinical-handlers.ts`, `src/app/api/clinical/**`, `src/app/api/mobile/v1/**`, `tests/unit/auth-isolation.test.ts`
   - **Acceptance Criteria**: Real users (`doctor`, `patient`, `caregiver`, `individual`) authenticate via Supabase Auth (`@supabase/ssr` / Bearer JWT) and resolve `SessionContext` (`isDemo: false`); 1-click Judge Demo authenticates via signed `shifohalqa_demo` cookie or `android_demo_access` (`isDemo: true`); zero cross-access between `is_demo = true` and `is_demo = false` workspaces.
   - **Verify**: `npm run verify` (with new unit tests covering real vs demo isolation).
 

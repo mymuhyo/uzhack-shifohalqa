@@ -7,7 +7,7 @@ import {
   stepSourceSchema,
   type StepSource,
 } from './adherence';
-import type { ClinicalActor, MutationResult } from './clinical-types';
+import { isPatientSideRole, type ClinicalActor, type MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 
 const activityRow = z.object({
@@ -26,6 +26,7 @@ const activityRow = z.object({
 const mutationRow = z.object({ result: z.enum(['saved', 'already_saved', 'not_found']) });
 
 export async function getActivityDashboard(actor: ClinicalActor) {
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return null;
   const sql = getDatabase();
   if (!sql) return null;
 
@@ -33,7 +34,8 @@ export async function getActivityDashboard(actor: ClinicalActor) {
     WITH clock AS (SELECT CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent' AS local_now),
     scoped AS (
       SELECT workspace_id, id, doctor_id FROM public.patients
-      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
+      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId}
+        AND doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
     ), due AS (
       SELECT item.id AS "planItemId", item.title, left(item.due_time::text, 5) AS "dueTime",
              to_char(days.calendar_date, 'YYYY-MM-DD') AS "scheduledDate", task.status
@@ -81,7 +83,7 @@ export async function saveStepCount(
   actor: ClinicalActor,
   input: number | { count: number; source?: StepSource },
 ): Promise<MutationResult> {
-  if (actor.role !== 'patient') return 'not_found';
+  if (!isPatientSideRole(actor.role)) return 'not_found';
   const sql = getDatabase();
   if (!sql) throw new Error('Activity database is unavailable');
   const count = stepCountSchema.parse(typeof input === 'number' ? input : input.count);
@@ -90,7 +92,8 @@ export async function saveStepCount(
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id FROM public.patients
-      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
+      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId}
+        AND doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
     ), saved AS (
       INSERT INTO public.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count, source)
       SELECT workspace_id, id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${count}, ${source}

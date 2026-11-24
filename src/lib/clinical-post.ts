@@ -16,7 +16,7 @@ async function readForm(request: NextRequest) {
 }
 
 export function createClinicalPost<T>(
-  role: ClinicalActor['role'],
+  role: 'doctor' | 'patient',
   form: ZodType<T>,
   mutate: (actor: ClinicalActor, input: T) => Promise<MutationResult>,
 ) {
@@ -47,6 +47,7 @@ export function createClinicalPost<T>(
         role,
         doctorId: workspace.doctor.id,
         patientId: workspace.patient.id,
+        isDemo: true,
       }, parsed.data);
       return returnToRole(result === 'saved' ? undefined : result);
     } catch {

@@ -1,14 +1,15 @@
 import { z } from 'zod';
-import type {
-  ClinicalActor,
-  ClinicalView,
-  EvidenceView,
-  EvidenceWrite,
-  FlagFollowup,
-  MutationResult,
-  PlanInput,
-  ReviewInput,
-  TaskContext,
+import {
+  isPatientSideRole,
+  type ClinicalActor,
+  type ClinicalView,
+  type EvidenceView,
+  type EvidenceWrite,
+  type FlagFollowup,
+  type MutationResult,
+  type PlanInput,
+  type ReviewInput,
+  type TaskContext,
 } from './clinical-types';
 import type { FollowupAckInput, FollowupInput, SymptomReviewInput, UrgentSymptomInput } from './clinical-inputs';
 import { getDatabase } from './db';
@@ -105,7 +106,7 @@ function requireDatabase() {
 }
 
 export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -136,6 +137,9 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
 }
 
 export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalView> {
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) {
+    return { plan: null, tasks: [], flags: [], urgentSymptoms: [], caregiverAck: null };
+  }
   const sql = requireDatabase();
   const [plans, , taskRows, followupRows, symptomRows, ackRows] = await sql.transaction((tx) => [
     tx`
@@ -149,7 +153,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       JOIN public.plan_items AS vitals
         ON vitals.workspace_id = plan.workspace_id AND vitals.plan_id = plan.id AND vitals.type = 'vitals'
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
-        AND plan.doctor_id = ${actor.doctorId}
+        AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
     `,
     tx`
       INSERT INTO public.task_instances (workspace_id, plan_item_id, scheduled_date)
@@ -157,7 +161,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       FROM public.plans AS plan
       JOIN public.plan_items AS item ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
-        AND plan.doctor_id = ${actor.doctorId}
+        AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND plan.start_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
       ON CONFLICT (workspace_id, plan_item_id, scheduled_date) DO NOTHING
     `,
@@ -178,7 +182,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       LEFT JOIN public.flags AS flag ON flag.workspace_id = evidence.workspace_id AND flag.evidence_log_id = evidence.id
       CROSS JOIN local_date
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
-        AND plan.doctor_id = ${actor.doctorId}
+        AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND (task.scheduled_date = local_date.today
           OR (task.scheduled_date < local_date.today AND evidence.id IS NOT NULL
             AND (task.scheduled_date >= local_date.today - 6
@@ -241,7 +245,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
       JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE followup.workspace_id = ${actor.workspaceId}
-        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
       ORDER BY followup.created_at ASC, followup.id ASC
     `,
     tx`
@@ -252,7 +256,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       FROM public.urgent_symptoms AS symptom
       JOIN public.patients AS patient ON patient.workspace_id = symptom.workspace_id AND patient.id = symptom.patient_id
       WHERE symptom.workspace_id = ${actor.workspaceId}
-        AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
+        AND patient.id = ${actor.patientId} AND patient.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND ((symptom.created_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6)
           OR (symptom.reviewed_at IS NOT NULL AND (symptom.reviewed_at AT TIME ZONE 'Asia/Tashkent')::date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date - 6))
           OR (${actor.role === 'doctor'} AND symptom.review_decision IS NULL))
@@ -264,7 +268,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
       FROM public.caregiver_acks AS ack
       JOIN public.patients AS patient ON patient.workspace_id = ack.workspace_id AND patient.id = ack.patient_id
       WHERE ack.workspace_id = ${actor.workspaceId}
-        AND patient.id = ${actor.patientId} AND patient.doctor_id = ${actor.doctorId}
+        AND patient.id = ${actor.patientId} AND patient.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND ack.activity_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
     `,
   ], { isolationLevel: 'ReadCommitted' });
@@ -304,7 +308,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
         review: task.decision ? resolvedFields.parse(row) : null,
       };
     }
-    if (task.recent || (actor.role === 'patient' && evidence?.review)) {
+    if (task.recent || (isPatientSideRole(actor.role) && evidence?.review)) {
       let item = visibleTasks.get(task.taskId);
       if (!item) {
         item = { id: task.taskId, type: task.type, title: task.title, date: task.date,
@@ -330,7 +334,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
 }
 
 export async function getTaskContext(actor: ClinicalActor, taskId: string): Promise<TaskContext | null> {
-  if (actor.role !== 'patient') return null;
+  if (!isPatientSideRole(actor.role)) return null;
   const sql = requireDatabase();
   const [row] = await sql`
     SELECT item.type, to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
@@ -355,7 +359,7 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
       ON previous_evidence.workspace_id = prior.workspace_id AND previous_evidence.task_instance_id = prior.id
         AND previous_evidence.entry_kind = 'task'
     WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${taskId}
-      AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+      AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
       AND (task.scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date OR task.status <> 'pending')
   `;
   if (!row) return null;
@@ -369,7 +373,7 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
 }
 
 export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): Promise<MutationResult> {
-  if (actor.role !== 'patient') return 'not_found';
+  if (!isPatientSideRole(actor.role)) return 'not_found';
   const sql = requireDatabase();
   const status = input.payload.kind === 'medication' ? input.payload.status : 'recorded';
   const { color = null, ruleKey = null, ...detail } = input.flag ?? {};
@@ -380,7 +384,7 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
       JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
       JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${input.taskId}
-        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND item.type = ${input.payload.kind}
     ), added AS (
       INSERT INTO public.evidence_logs (workspace_id, task_instance_id, level, source, ai_mode, payload)
@@ -413,7 +417,7 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
 }
 
 export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -452,7 +456,7 @@ export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Prom
 }
 
 export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInput): Promise<MutationResult> {
-  if (actor.role !== 'patient') return 'not_found';
+  if (!isPatientSideRole(actor.role)) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -463,7 +467,7 @@ export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInpu
       JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
       JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
       WHERE flag.workspace_id = ${actor.workspaceId} AND flag.id = ${input.flagId}
-        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id = ${actor.doctorId}
+        AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND flag.decision IS NOT NULL
         AND (
           (${input.kind}::text IN ('supply_resolved', 'still_need_help')
@@ -512,7 +516,7 @@ export async function acknowledgeFlagFollowup(
   actor: ClinicalActor,
   input: FollowupAckInput,
 ): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -565,13 +569,14 @@ export async function acknowledgeFlagFollowup(
 }
 
 export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSymptomInput): Promise<MutationResult> {
-  if (actor.role !== 'patient') return 'not_found';
+  if (!isPatientSideRole(actor.role)) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id
       FROM public.patients
-      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId} AND doctor_id = ${actor.doctorId}
+      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId}
+        AND doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
     ), inserted AS (
       INSERT INTO public.urgent_symptoms (workspace_id, patient_id, symptom, note)
       SELECT workspace_id, id, ${input.symptom}, ${input.note}
@@ -596,7 +601,7 @@ export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSympt
 }
 
 export async function reviewUrgentSymptom(actor: ClinicalActor, input: SymptomReviewInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor') return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (

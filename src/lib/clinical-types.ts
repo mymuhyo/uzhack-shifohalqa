@@ -1,10 +1,17 @@
 import type { MedicationBoxEvidence } from './dorimos-contract';
 
+export type AppRole = 'doctor' | 'patient' | 'caregiver' | 'individual';
+
+export function isPatientSideRole(role: AppRole): role is 'patient' | 'individual' {
+  return role === 'patient' || role === 'individual';
+}
+
 export type ClinicalActor = {
   workspaceId: string;
-  doctorId: string;
+  doctorId: string | null;
   patientId: string;
-  role: 'doctor' | 'patient';
+  role: AppRole;
+  isDemo?: boolean;
 };
 
 export type BloodPressureTargets = {

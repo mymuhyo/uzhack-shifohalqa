@@ -174,3 +174,16 @@ This append-only log coordinates handoffs across **Codex**, **OpenCode**, and **
   - `qa-m3.mjs` against `next start` (`:3425`) -> exit `0` (`QA_M3_SUCCESS`, `0` HTTP/console/page errors, `0` horizontal overflow across desktop/mobile & light/dark/large-text modes; fresh PNG screenshots visually inspected).
 - **Caveats / Blockers**: None (`main` untouched at `bc27a09`).
 - **Next Concrete Task**: **M4.1** in `docs/PLAN.md` — Android Dark Mode (`ShifoTheme.kt`) + dual auth (`resolveMobilePatientActor`) + 3 movements (`Full`/`Heavy`).
+
+## [2026-11-25T16:17:00Z] M3.6 Rethink Clinical Refinement (Context.dev & Anti-Slop Pass) — Antigravity
+- **Branch / Commit**: `final` / `16ec3fa` + docs commit (`main` untouched at `bc27a09`)
+- **Completed**:
+  - **Skills applied**: `frontend-design`, `emil-design-eng`, and `frontend-ui-engineering` alongside measured `context.dev` specification in [`docs/DESIGN.md`](docs/DESIGN.md).
+  - **Typography overhaul (`package.json`, `src/app/layout.tsx`, `src/app/globals.css`)**: Replaced Inter + JetBrains Mono with self-hosted `@fontsource-variable/rethink-sans` (`Rethink Sans Variable` weight `400`, `-0.035em` headline tracking, unified across display, headings, body, and `tabular-nums` clinical numbers) and `@fontsource/dm-mono` strictly scoped to literal `<code>` IDs and pairing tokens.
+  - **AI-slop removal (`src/app/globals.css`, `src/app/icon.svg`, `src/app/page.tsx`, `src/app/caregiver/[token]/page.tsx`, `src/components/ui/{button,badge,card,input,textarea,native-select}.tsx`, `src/components/*.{tsx,module.css}`)**: Replaced radial background washes, card drop shadows, `rounded-2xl` bloat, ALL-CAPS eyebrows (`CLINICAL OS`, `FAQAT BUGUNGI QISQA HOLAT`), decorative icon squares next to headings/KPIs, and hardcoded landing stat/preview boxes with pure `#FFFFFF` → `#F7F8FA` → `#E9EFFD` (light) / `#0A0A0B` → `#121316` → `#181A20` → `#1D2538` (dark) tonal surfaces, `1px` hairline borders, `7.2px` cards / `5.4px` chips / `10.8px` buttons, and `#2563EB` primary vs `#000000` (`#FFFFFF` in dark) secondary contrast.
+- **Verification**:
+  - `npm run verify` (`next typegen && tsc --noEmit && eslint . && vitest run tests/unit && next build`) -> exit `0` (`0` TS/ESLint errors/warnings, `32` test files / `295` unit tests passed, `62/62` routes built).
+  - `SHIFO_E2E_DATABASE_URL="$DATABASE_URL" npm run e2e` -> exit `0` (`31 passed`, `1 skipped` optional live AI test, `0 failed`).
+  - `qa-m3.mjs` against `next start` (`:3425`) -> exit `0` (`QA_M3_SUCCESS`, `0` HTTP/console/page errors, `0` horizontal overflow across desktop/mobile & light/dark/large-text modes; fresh PNG screenshots visually inspected).
+- **Caveats / Blockers**: None (`main` untouched at `bc27a09`).
+- **Next Concrete Task**: **M4.1** in `docs/PLAN.md` — Android Dark Mode (`ShifoTheme.kt`) + dual auth (`resolveMobilePatientActor`) + 3 movements (`Full`/`Heavy`).

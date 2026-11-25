@@ -76,7 +76,7 @@ export async function readMobileBody(request: Request) {
 }
 
 export function mobileJson(data: object, status = 200) {
-  return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+  return Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex' } });
 }
 
 const tashkentDate = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone: 'Asia/Tashkent' });
@@ -113,9 +113,11 @@ export function mobileToday(
     record: medicationRecord(task),
     ...(activity !== undefined ? { boxAvailable, boxDone: task.boxEvidence !== null } : {}),
   }));
-  const replies = medication.flatMap((task) => {
-    const record = medicationRecord(task);
-    return record?.reply ? [{ recordId: record.id, taskTitle: task.title, date: task.date, ...record.reply }] : [];
+  const replies = view.tasks.flatMap((task) => {
+    const entry = task.evidence;
+    if (!entry?.review) return [];
+    const { reply, decision, reviewedAt } = entry.review;
+    return [{ recordId: entry.id, taskTitle: task.title, date: task.date, body: reply, decision, reviewedAt }];
   });
   if (activity === undefined) return { patientName, date, tasks, replies };
   const goal = view.plan?.dailyStepGoal ?? activity?.dailyStepGoal ?? defaultDailyStepGoal;

@@ -4,7 +4,7 @@ import { compareAttempt } from './anticheat/compare-attempt';
 import { isPatientSideRole, type ClinicalActor, type MutationResult } from './clinical-types';
 import { getDatabase } from './db';
 import type { ExerciseInput, ExercisePlan, ExerciseReview, MobileExerciseInput } from './exercise-inputs';
-import { elbowSample, exerciseSample } from './exercise-sample';
+import { elbowSample, exerciseSample, seatedKneeSample } from './exercise-sample';
 import { analyzeExerciseDiagnostics, exerciseDiagnosticsSchema } from './pose/diagnostics';
 import { movementId } from './pose/engine';
 import { deriveEvidenceLevel } from './rules/evidence-level';
@@ -79,7 +79,7 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
   const rows = await sql`
     SELECT attempt.id, attempt.movement, attempt.diagnostics, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
       min_angle AS "minAngle", confidence, is_primary AS "primary", similar_motion AS "similarMotion", flag_color AS "flagColor",
-      COALESCE(attempt.file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}), false) AS sample,
+      COALESCE(attempt.file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}, ${seatedKneeSample.sha256}), false) AS sample,
       attempt.client_attempt_id IS NOT NULL AS android, attempt.scheduled_date::text AS "scheduledDate",
       to_char(attempt.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
       CASE WHEN attempt.review_decision IS NOT NULL THEN jsonb_build_object(
@@ -111,7 +111,7 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
 async function readReceipt(actor: ClinicalActor, mobile: MobileExerciseInput, hash: string) {
   const [row] = await requireDatabase()`
     SELECT id, level, is_primary AS "primary", similar_motion AS "similarMotion",
-      COALESCE(file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}), false) AS sample, client_request_hash AS hash
+      COALESCE(file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}, ${seatedKneeSample.sha256}), false) AS sample, client_request_hash AS hash
     FROM public.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${mobile.prescriptionId}
       AND client_attempt_id = ${mobile.clientAttemptId}
@@ -155,14 +155,21 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
 
   const sql = requireDatabase();
   const fileSha256 = measured?.fileSha256?.toLowerCase() ?? null;
-  const sample = fileSha256 === exerciseSample.sha256 || fileSha256 === elbowSample.sha256;
-  if (sample && (fileSha256 === elbowSample.sha256 ? 'elbow_bend' : 'chair_stand') !== movement) return { status: 'invalid' } as const;
+  const sampleMovement = fileSha256 === exerciseSample.sha256
+    ? 'chair_stand'
+    : fileSha256 === elbowSample.sha256
+      ? 'elbow_bend'
+      : fileSha256 === seatedKneeSample.sha256
+        ? 'seated_knee_ext'
+        : null;
+  const sample = sampleMovement !== null;
+  if (sample && sampleMovement !== movement) return { status: 'invalid' } as const;
   const motionSignature = measured?.motionSignature ?? null;
   const previous = measured ? z.array(fingerprint).parse(await sql`
     SELECT file_sha256 AS "fileSha256", motion_signature AS "motionSignature"
     FROM public.exercise_attempts
     WHERE workspace_id = ${actor.workspaceId} AND prescription_id = ${plan.id}
-      AND (file_sha256 = ${fileSha256} OR (motion_signature IS NOT NULL AND file_sha256 IS DISTINCT FROM ${exerciseSample.sha256} AND file_sha256 IS DISTINCT FROM ${elbowSample.sha256}))
+      AND (file_sha256 = ${fileSha256} OR (motion_signature IS NOT NULL AND file_sha256 IS DISTINCT FROM ${exerciseSample.sha256} AND file_sha256 IS DISTINCT FROM ${elbowSample.sha256} AND file_sha256 IS DISTINCT FROM ${seatedKneeSample.sha256}))
     ORDER BY (file_sha256 = ${fileSha256}) DESC NULLS LAST, created_at DESC LIMIT 100
   `) : [];
   const { duplicateFile, similarMotion } = compareAttempt({ fileSha256, motionSignature: sample ? null : motionSignature, previous });

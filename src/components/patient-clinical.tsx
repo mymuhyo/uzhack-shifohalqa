@@ -308,7 +308,7 @@ export function PatientClinical({
           </div>
           <div className="mt-3 flex flex-col gap-2">
             <p className="whitespace-pre-wrap text-sm text-foreground">{patientBrief.approvedReplyUz}</p>
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground tabular-nums">
               Tasdiqlangan vaqt: <time dateTime={patientBrief.approvedAt}>{displayTimestamp.format(new Date(patientBrief.approvedAt))}</time> · Toshkent
             </p>
           </div>
@@ -321,8 +321,8 @@ export function PatientClinical({
           hasMultipleTimes ? (
             <div className="mt-3 flex flex-col gap-4">
               {Array.from(timeGroups.entries()).map(([dueTime, tasks]) => (
-                <div key={dueTime} className="rounded-xl border border-border bg-secondary/45 p-3.5">
-                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 font-mono text-xs font-semibold text-primary tabular-nums">
+                <div key={dueTime} className="rounded-[7.2px] border border-border bg-secondary/70 p-3.5">
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-primary tabular-nums">
                     <Clock className="size-3.5" aria-hidden="true" />
                     <span>{dueTime} · Toshkent</span>
                   </div>

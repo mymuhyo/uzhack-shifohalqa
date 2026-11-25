@@ -64,7 +64,7 @@ export async function DoctorExercise({
   return (
     <div className="ledger">
       <section aria-labelledby="exercise-heading">
-        <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
+        <Card className="border border-border bg-card">
           <CardHeader>
             <CardTitle className="text-xl font-medium">
               <h2 id="exercise-heading" className="text-inherit font-inherit leading-inherit">

@@ -49,7 +49,7 @@ export function DoctorExerciseVideoPlayer({
 
   if (expired) {
     return (
-      <div className="mt-3 rounded-xl border border-border bg-secondary/50 p-3 text-sm">
+      <div className="mt-3 rounded-[7.2px] border border-border bg-secondary/50 p-3 text-sm">
         <div className="flex items-center gap-2 font-semibold text-foreground">
           <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
           <span>Video saqlash muddati tugagan</span>
@@ -92,7 +92,7 @@ export function DoctorExerciseVideoPlayer({
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-3.5">
+    <div className="mt-3 flex flex-col gap-3 rounded-[7.2px] border border-border bg-background/70 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -128,7 +128,7 @@ export function DoctorExerciseVideoPlayer({
 
       {playback && (
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#090a0d] shadow-[var(--surface-shadow-lg)]">
+          <div className="overflow-hidden rounded-[7.2px] border border-white/10 bg-[#090a0d]">
             <video
               ref={videoRef}
               src={playback.playbackUrl}

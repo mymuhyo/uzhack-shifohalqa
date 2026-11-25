@@ -13,8 +13,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: var(--surface-shadow);
-}
+  }
 
 .panel + .panel {
   margin-block-start: 1.15rem;
@@ -178,8 +177,7 @@
   align-items: center;
   gap: 0.25rem 0.85rem;
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+    font-size: 0.78rem;
 }
 
 .urgent,
@@ -219,8 +217,7 @@
 
 .reading {
   margin-block-start: 0.25rem;
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
+    font-size: 1.1rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -279,8 +276,7 @@
 }
 
 .metadata dd {
-  font-family: var(--font-mono);
-  font-size: 0.84rem;
+    font-size: 0.84rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -312,8 +308,7 @@
 .reviewed time {
   display: block;
   margin-block-start: 0.3rem;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+    font-size: 0.78rem;
 }
 
 @media (min-width: 64rem) {

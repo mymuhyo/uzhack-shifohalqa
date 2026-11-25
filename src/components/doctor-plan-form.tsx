@@ -144,7 +144,7 @@ export function DoctorPlanForm({
   const firstMed = meds[0]!;
 
   return (
-    <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
+    <Card className="border border-border bg-card">
       <CardHeader>
         <CardTitle className="text-xl font-medium">
           <h2 id="plan-heading" className="text-inherit font-inherit leading-inherit">
@@ -178,7 +178,7 @@ export function DoctorPlanForm({
               return (
                 <div
                   key={idx}
-                  className="flex flex-col gap-3 rounded-xl border border-border bg-background/60 p-3.5"
+                  className="flex flex-col gap-3 rounded-[7.2px] border border-border bg-background/60 p-3.5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-foreground">
@@ -336,7 +336,7 @@ export function DoctorPlanForm({
             </div>
           </div>
 
-          <fieldset className="flex flex-col gap-3 rounded-xl border border-border bg-background/50 p-3.5">
+          <fieldset className="flex flex-col gap-3 rounded-[7.2px] border border-border bg-background/50 p-3.5">
             <legend className="px-1 text-sm font-semibold">Bosim chegaralari (mmHg)</legend>
             <div className="grid gap-3 sm:grid-cols-2">
               {pressureFields.map(({ name, label }) => (

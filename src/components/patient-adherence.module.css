@@ -34,8 +34,7 @@
 
 .completion.completion {
   color: var(--ink);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
   font-size: 1rem;
   font-weight: 600;
 }

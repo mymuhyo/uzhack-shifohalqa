@@ -63,7 +63,7 @@ export default async function ExercisePage() {
             </form>
             <div className="mt-2 flex flex-col gap-3">
               {attempts.filter((attempt) => attempt.review).map((attempt) => (
-                <Card key={attempt.id} className="border border-border bg-card shadow-[var(--surface-shadow)]">
+                <Card key={attempt.id} className="border border-border bg-card">
                   <CardHeader>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="text-base font-semibold">

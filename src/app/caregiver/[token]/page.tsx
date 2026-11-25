@@ -1,4 +1,4 @@
-import { Clock, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Clock, ShieldAlert } from 'lucide-react';
 import { CaregiverAckButton } from '@/components/caregiver-ack-button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,28 +57,20 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
   return (
     <main className="frame content flex flex-col items-center" id="content" tabIndex={-1}>
       <div className="w-full max-w-2xl">
-        <div className="mb-4 flex items-center gap-2.5">
-          <span className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-primary shadow-xs">
-            <ShieldCheck className="size-4" aria-hidden="true" />
-          </span>
-          <h1>Yaqinim</h1>
-        </div>
+        <h1 className="mb-4">Yaqinim</h1>
 
         {summary && status ? (
-          <Card className="border border-border bg-card shadow-[var(--surface-shadow-lg)]">
-            <CardHeader className="gap-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Badge variant={status.variant}>{status.pill}</Badge>
-                <span className="font-mono text-[11px] text-muted-foreground">FAQAT BUGUNGI QISQA HOLAT</span>
-              </div>
-              <CardTitle className="text-2xl font-semibold">
+          <Card className="border border-border bg-card">
+            <CardHeader className="gap-2">
+              <Badge variant={status.variant}>{status.pill}</Badge>
+              <CardTitle className="text-2xl font-normal">
                 <h2 className="text-inherit font-inherit leading-inherit">Bugungi qisqa holat</h2>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">{status.body}</p>
+              <p className="text-sm text-[var(--ink-secondary)]">{status.body}</p>
               {summary.counts.scheduled === 0 ? (
-                <p className="rounded-xl border border-border bg-secondary/70 px-3.5 py-2.5 text-sm text-muted-foreground">
+                <p className="rounded-[7.2px] border border-border bg-secondary px-3.5 py-2.5 text-sm text-muted-foreground">
                   Bugun muddati kelgan vazifa yo‘q.
                 </p>
               ) : (
@@ -97,7 +89,7 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
                       <span>Bajarildi</span>
                     </div>
                   </div>
-                  <div className="grid gap-1 rounded-xl border border-border bg-secondary/70 px-3.5 py-2.5 text-sm text-foreground">
+                  <div className="grid gap-1 rounded-[7.2px] border border-border bg-secondary px-3.5 py-2.5 text-sm text-foreground">
                     <p>{summary.counts.scheduled} ta vazifaning muddati keldi.</p>
                     <p>{summary.counts.answered} ta vazifaga javob berildi.</p>
                     <p>{summary.counts.completed} ta vazifa bajarildi.</p>
@@ -117,7 +109,7 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
 
               <Separator />
 
-              <p className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground tabular-nums">
+              <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground tabular-nums">
                 <Clock className="size-3.5 text-primary" aria-hidden="true" />
                 <span>
                   Ochilgan vaqt · Farg‘ona{' '}
@@ -129,7 +121,7 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
             </CardContent>
           </Card>
         ) : (
-          <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
+          <Card className="border border-border bg-card">
             <CardContent className="flex items-center gap-3 pt-5 text-sm text-muted-foreground">
               <ShieldAlert className="size-5 shrink-0 text-[var(--warn)]" aria-hidden="true" />
               <p>Havola faol emas. Bemor bilan bog‘lanib, yangi havola so‘rang.</p>

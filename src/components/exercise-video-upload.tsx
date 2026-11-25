@@ -172,7 +172,7 @@ export function ExerciseVideoUpload({
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-card p-3.5 shadow-[var(--surface-shadow)]">
+    <div className="mt-3 flex flex-col gap-3 rounded-[7.2px] border border-border bg-card p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
           <Film className="size-4 text-primary" aria-hidden="true" />

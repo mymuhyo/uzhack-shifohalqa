@@ -26,15 +26,15 @@ export function DoctorPatientSwitcher({
   return (
     <section
       aria-label="Biriktirilgan bemorlar ro‘yxati"
-      className="mt-4 rounded-2xl border border-border bg-card p-3.5 shadow-[var(--surface-shadow)]"
+      className="mt-4 rounded-[7.2px] border border-border bg-card p-3.5"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+        <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
           <Users className="size-4 text-primary" aria-hidden="true" />
           <span>Bemorlar navbati ({patients.length})</span>
         </span>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          Ustuvorlik: qizil → sariq
+        <span className="text-xs text-muted-foreground">
+          Tartib: shoshilinchdan tekshiruvga
         </span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -51,16 +51,16 @@ export function DoctorPatientSwitcher({
               key={patient.id}
               href={`/doctor?patientId=${patient.id}`}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-12 items-center justify-between gap-2.5 rounded-xl border px-3 py-2 text-sm font-semibold no-underline transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] ${
+              className={`flex min-h-12 items-center justify-between gap-2.5 rounded-[7.2px] border px-3 py-2 text-sm font-medium no-underline transition-[background-color,border-color,transform] duration-150 active:scale-[0.98] ${
                 active
-                  ? 'border-primary bg-[var(--action-soft)] text-foreground shadow-[0_0_0_1px_var(--action)]'
-                  : 'border-border bg-secondary/75 text-foreground hover:bg-secondary'
+                  ? 'border-primary bg-accent text-foreground'
+                  : 'border-border bg-secondary text-foreground hover:bg-muted'
               }`}
             >
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card font-mono text-xs font-semibold text-foreground">
+                <span className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-xs font-medium text-foreground">
                   {getInitials(patient.name)}
-                  <span className={`absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card ${dotColor}`} aria-hidden="true" />
+                  <span className={`absolute -right-0.5 -bottom-0.5 size-2 rounded-full ring-2 ring-card ${dotColor}`} aria-hidden="true" />
                 </span>
                 <span className="truncate">{patient.name}</span>
               </span>

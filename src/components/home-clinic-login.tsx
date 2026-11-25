@@ -69,7 +69,7 @@ export function HomeClinicLogin() {
   }
 
   return (
-    <Card className="mt-4 border border-border bg-card shadow-[var(--surface-shadow)]">
+    <Card className="mt-4 border border-border bg-card">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">

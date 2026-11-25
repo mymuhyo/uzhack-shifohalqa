@@ -61,7 +61,7 @@ export function DoctorExerciseReviewForm({
         action="/api/demo/exercise-review"
         method="post"
         onSubmit={(event) => void handleSubmit(event)}
-        className="mt-2 flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-3.5"
+        className="mt-2 flex flex-col gap-3 rounded-[7.2px] border border-border bg-background/70 p-3.5"
         aria-labelledby={`exercise-review-${attemptId}`}
       >
         <h4 id={`exercise-review-${attemptId}`} className="text-sm font-semibold">

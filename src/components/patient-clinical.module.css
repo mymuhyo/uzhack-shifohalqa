@@ -31,8 +31,7 @@
 .metadata,
 .reply time {
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
+    font-size: 0.8rem;
 }
 
 .controls,

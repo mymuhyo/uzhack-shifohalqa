@@ -68,7 +68,7 @@ function PlanSummary({ plan }: { plan: PlanInput }) {
 
   return (
     <section aria-labelledby="plan-heading">
-      <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
+      <Card className="border border-border bg-card">
         <CardHeader>
           <CardTitle className="text-xl font-medium">
             <h2 id="plan-heading" className="text-inherit font-inherit leading-inherit">

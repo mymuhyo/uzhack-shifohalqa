@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { AlertOctagon, ArrowRightLeft, PhoneCall, ShieldCheck, Stethoscope, User } from 'lucide-react';
+import { AlertOctagon, ArrowRightLeft, PhoneCall } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getActivityDashboard } from '@/lib/activity-store';
 import { readLatestClinicalBrief } from '@/lib/ai/clinical-brief-ai';
@@ -94,29 +94,15 @@ export async function DemoRolePage({
 
   return (
     <main className="frame content" id="content" tabIndex={-1}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-primary shadow-xs">
-              {role === 'doctor'
-                ? <Stethoscope className="size-4" aria-hidden="true" />
-                : <User className="size-4" aria-hidden="true" />}
-            </span>
-            <h1>{titles[role]}</h1>
-            <Badge variant={isDemo ? 'secondary' : 'ok'}>
-              {isDemo ? 'Sintetik Judge Demo' : 'Klinika sessiyasi'}
-            </Badge>
-          </div>
-          <p className="lede">
-            {actorName} · {isDemo ? 'Namuna foydalanuvchi' : role === 'doctor' ? `Tanlangan bemor: ${patientName}` : 'Klinika bemori'}
-          </p>
-        </div>
-
-        <div className="hidden items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
-          <ShieldCheck className="size-3.5 text-[var(--ok)]" aria-hidden="true" />
-          <span>Toshkent vaqti · Halqa nazorati</span>
-        </div>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h1>{titles[role]}</h1>
+        <Badge variant={isDemo ? 'secondary' : 'ok'}>
+          {isDemo ? 'Sintetik Judge Demo' : 'Klinika sessiyasi'}
+        </Badge>
       </div>
+      <p className="lede">
+        {actorName} · {isDemo ? 'Namuna foydalanuvchi' : role === 'doctor' ? `Tanlangan bemor: ${patientName}` : 'Klinika bemori'}
+      </p>
 
       <div className="sticky-bar" role="region" aria-label="Tezkor boshqaruv">
         {role === 'patient' && (

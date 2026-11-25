@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteTelemetry } from '@/components/site-telemetry';
-import '@fontsource-variable/inter';
-import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/500.css';
-import '@fontsource/jetbrains-mono/600.css';
+import '@fontsource-variable/rethink-sans';
+import '@fontsource/dm-mono/400.css';
+import '@fontsource/dm-mono/500.css';
 import { OfflineBanner, TextScaleToggle, ThemeToggle } from '@/components/accessibility-controls';
 import { Providers } from '@/components/providers';
 import './globals.css';
@@ -32,16 +31,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link className="wordmark" href="/">
                 <span className="wordmark-symbol" aria-hidden="true" />
                 <span>ShifoHalqa</span>
-                <span className="hidden rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-muted-foreground sm:inline-flex">
-                  CLINICAL OS
-                </span>
               </Link>
               <nav className="header-nav" aria-label="Asosiy menyu">
                 <ThemeToggle />
                 <TextScaleToggle />
                 <Link
                   href="/about"
-                  className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-secondary hover:text-foreground"
+                  className="rounded-full px-3 py-1.5 text-sm font-normal text-muted-foreground no-underline transition-colors hover:bg-secondary hover:text-foreground"
                 >
                   Demo haqida
                 </Link>

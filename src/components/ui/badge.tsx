@@ -4,17 +4,17 @@ import { cn } from 'cn';
 import { Slot } from 'radix-ui';
 
 const badgeVariants = cva(
-  'group/badge inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 font-mono text-[11px] font-medium tracking-[-0.01em] whitespace-nowrap transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&>svg]:pointer-events-none [&>svg]:size-3!',
+  'group/badge inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&>svg]:pointer-events-none [&>svg]:size-3!',
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground',
-        secondary: 'bg-secondary text-secondary-foreground border-border',
-        destructive: 'bg-[var(--urgent-bg)] text-[var(--urgent)] border-[var(--urgent)]/30',
+        secondary: 'border-border bg-secondary text-secondary-foreground',
+        destructive: 'border-[var(--urgent)]/25 bg-[var(--urgent-bg)] text-[var(--urgent)]',
         outline: 'border-input bg-card text-foreground',
-        ok: 'bg-[var(--ok-bg)] text-[var(--ok)] border-[var(--ok)]/25',
-        warn: 'bg-[var(--warn-bg)] text-[var(--warn)] border-[var(--warn)]/25',
-        urgent: 'bg-[var(--urgent-bg)] text-[var(--urgent)] border-[var(--urgent)]/30',
+        ok: 'border-[var(--ok)]/25 bg-[var(--ok-bg)] text-[var(--ok)]',
+        warn: 'border-[var(--warn)]/25 bg-[var(--warn-bg)] text-[var(--warn)]',
+        urgent: 'border-[var(--urgent)]/25 bg-[var(--urgent-bg)] text-[var(--urgent)]',
         ghost: 'hover:bg-secondary hover:text-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },

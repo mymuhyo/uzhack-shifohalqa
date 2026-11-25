@@ -3,13 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Activity,
-  AlertOctagon,
   CheckCircle2,
-  Clock,
   Copy,
-  Footprints,
-  HeartPulse,
   Link2,
   Loader2,
   Printer,
@@ -167,51 +162,26 @@ export function DoctorBriefCard({
     <section aria-label="Shifokor uchun tezkor ko‘rsatkichlar va 7 kunlik xulosa">
       <div className="kpi-grid">
         <div className="kpi-card">
-          <div className="flex items-center justify-between gap-2">
-            <span className="kpi-label">Shoshilinch ochiq</span>
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--urgent-bg)] text-[var(--urgent)]">
-              <AlertOctagon className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
+          <span className="kpi-label">Shoshilinch ochiq</span>
           <strong className="kpi-value">{brief.metrics.openUrgent}</strong>
         </div>
         <div className="kpi-card">
-          <div className="flex items-center justify-between gap-2">
-            <span className="kpi-label">Tekshirish navbati</span>
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--warn-bg)] text-[var(--warn)]">
-              <Clock className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
+          <span className="kpi-label">Tekshirish navbati</span>
           <strong className="kpi-value">{brief.metrics.openWarning}</strong>
         </div>
         <div className="kpi-card">
-          <div className="flex items-center justify-between gap-2">
-            <span className="kpi-label">Oxirgi qon bosimi</span>
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--action-soft)] text-primary">
-              <HeartPulse className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
+          <span className="kpi-label">Oxirgi qon bosimi</span>
           <strong className="kpi-value">{brief.metrics.latestBp ?? '—'}</strong>
         </div>
         <div className="kpi-card">
-          <div className="flex items-center justify-between gap-2">
-            <span className="kpi-label">7 kunlik reja ijrosi</span>
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--ok-bg)] text-[var(--ok)]">
-              <Activity className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
+          <span className="kpi-label">7 kunlik reja ijrosi</span>
           <strong className="kpi-value">
             {brief.metrics.adherencePercent === null ? '—' : `${brief.metrics.adherencePercent}%`}
           </strong>
         </div>
         {brief.metrics.stepsToday !== null && (
           <div className="kpi-card">
-            <div className="flex items-center justify-between gap-2">
-              <span className="kpi-label">Bugungi qadamlar</span>
-              <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--action-soft)] text-primary">
-                <Footprints className="size-3.5" aria-hidden="true" />
-              </span>
-            </div>
+            <span className="kpi-label">Bugungi qadamlar</span>
             <strong className="kpi-value">{numberFormat.format(brief.metrics.stepsToday)}</strong>
           </div>
         )}
@@ -292,7 +262,7 @@ export function DoctorBriefCard({
 
         <Separator className="my-4" />
 
-        <div className="no-print flex flex-col gap-3 rounded-xl border border-primary/20 bg-[var(--action-soft)]/35 p-4" aria-label="Nazorat ostidagi AI 7 kunlik tahlil">
+        <div className="no-print flex flex-col gap-3 rounded-[7.2px] border border-primary/20 bg-accent/55 p-4" aria-label="Nazorat ostidagi AI 7 kunlik tahlil">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -343,7 +313,7 @@ export function DoctorBriefCard({
           )}
 
           {aiBrief ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-3.5">
+            <div className="flex flex-col gap-3 rounded-[7.2px] border border-border bg-background/70 p-3.5">
               <p className="text-sm text-foreground">{aiBrief.narrativeUz}</p>
 
               {aiBrief.highlights.length > 0 && (

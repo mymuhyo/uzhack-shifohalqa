@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 
 export type QueueFilterMode = 'all' | 'red' | 'yellow';
 
@@ -60,9 +61,16 @@ export function DoctorQueueFilter({
           </button>
         )}
       </div>
-      <ul role="list" className={listClassName}>
+      <motion.ul
+        key={mode}
+        initial={{ opacity: 0.88 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
+        role="list"
+        className={listClassName}
+      >
         {visible.map((item) => item.node)}
-      </ul>
+      </motion.ul>
     </>
   );
 }

@@ -6,12 +6,19 @@ import type {
   FlagFollowup,
 } from './clinical-types';
 import type { ExerciseAttempt } from './exercise-store';
-import { evaluateRules } from './rules/evaluate-rules';
+import {
+  BP_DIASTOLIC_MAX,
+  BP_DIASTOLIC_MIN,
+  BP_SYSTOLIC_MAX,
+  BP_SYSTOLIC_MIN,
+  evaluateRules,
+} from './rules/evaluate-rules';
 
 export type BpZoneAssessment = {
   tone: 'ok' | 'warn' | 'urgent';
   labelUz: string;
   textUz: string;
+  invalid?: boolean;
 };
 
 export type FollowupEscalation = {
@@ -75,12 +82,47 @@ export function evaluateBpZone({
   const dia = readPositiveInt(diastolic);
   if (sys === null || dia === null || !targets) return null;
 
+  if (sys < BP_SYSTOLIC_MIN || sys > BP_SYSTOLIC_MAX) {
+    return {
+      tone: 'urgent',
+      labelUz: 'Qiymatni tekshiring',
+      textUz: `Yuqori (sistolik) bosim ${BP_SYSTOLIC_MIN}–${BP_SYSTOLIC_MAX} mmHg oralig‘ida bo‘lishi kerak.`,
+      invalid: true,
+    };
+  }
+  if (dia < BP_DIASTOLIC_MIN || dia > BP_DIASTOLIC_MAX) {
+    return {
+      tone: 'urgent',
+      labelUz: 'Qiymatni tekshiring',
+      textUz: `Pastki (diastolik) bosim ${BP_DIASTOLIC_MIN}–${BP_DIASTOLIC_MAX} mmHg oralig‘ida bo‘lishi kerak.`,
+      invalid: true,
+    };
+  }
+  if (sys <= dia) {
+    return {
+      tone: 'urgent',
+      labelUz: 'Qiymatni tekshiring',
+      textUz: 'Yuqori bosim pastki bosimdan katta bo‘lishi kerak.',
+      invalid: true,
+    };
+  }
+
   const flag = evaluateRules({
     kind: 'vitals',
     chest_pain: false,
     reading: { systolic: sys, diastolic: dia, targets },
   });
 
+  if (flag?.color === 'red' && flag.rule_key === 'bp_low') {
+    const lowTarget = targets.minSystolic !== undefined && targets.minDiastolic !== undefined
+      ? `${targets.minSystolic}/${targets.minDiastolic} mmHg`
+      : `${flag.threshold} mmHg`;
+    return {
+      tone: 'urgent',
+      labelUz: 'Past chegara',
+      textUz: `Past chegara (${lowTarget}) dan tushdi — shifokorga shoshilinch navbatga tushadi. Bosh aylansa o‘tiring va 103 ga qo‘ng‘iroq qiling.`,
+    };
+  }
   if (flag?.color === 'red') {
     return {
       tone: 'urgent',

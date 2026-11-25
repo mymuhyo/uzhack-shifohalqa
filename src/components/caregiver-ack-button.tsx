@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { Check, CheckCircle2, Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Button } from '@/components/ui/button';
 
 export function CaregiverAckButton({
   token,
@@ -43,18 +46,30 @@ export function CaregiverAckButton({
 
   if (ackAt) {
     return (
-      <p className="notice" role="status">
-        {confirmedText}
-      </p>
+      <motion.p
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+        className="notice flex items-center gap-2 font-medium"
+        role="status"
+      >
+        <CheckCircle2 className="size-4 shrink-0 text-[var(--ok)]" aria-hidden="true" />
+        <span>{confirmedText}</span>
+      </motion.p>
     );
   }
 
   return (
-    <div>
-      <button type="button" className="role-button" disabled={busy} onClick={() => void sendAck()}>
-        {busy ? 'Yuborilmoqda…' : buttonLabel}
-      </button>
-      {error && <p className="notice" role="alert">{error}</p>}
+    <div className="mt-3 flex flex-col gap-2">
+      <Button type="button" size="lg" className="w-full" disabled={busy} onClick={() => void sendAck()}>
+        {busy ? <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" /> : <Check data-icon="inline-start" aria-hidden="true" />}
+        <span>{busy ? 'Yuborilmoqda…' : buttonLabel}</span>
+      </Button>
+      {error && (
+        <p className="notice" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

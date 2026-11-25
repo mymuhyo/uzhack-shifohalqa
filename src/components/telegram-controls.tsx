@@ -16,8 +16,15 @@ async function readPairingLink(response: Response) {
   return url.href;
 }
 
-export function DoctorTelegramControls({ connected }: { connected: boolean }) {
+export function DoctorTelegramControls({
+  connected,
+  isDemo = true,
+}: {
+  connected: boolean;
+  isDemo?: boolean;
+}) {
   const router = useRouter();
+  const endpoint = isDemo ? '/api/demo/telegram' : '/api/clinical/telegram';
   const [href, setHref] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [refreshing, startRefresh] = useTransition();
@@ -32,7 +39,7 @@ export function DoctorTelegramControls({ connected }: { connected: boolean }) {
     setPending(true);
     setFeedback('');
     try {
-      const response = await fetch('/api/demo/telegram', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -85,10 +92,15 @@ export function DoctorTelegramControls({ connected }: { connected: boolean }) {
           </button>
         )}
         {pairing && (
-          <button className="text-action" type="button" disabled={busy} onClick={() => {
-            setFeedback('');
-            refresh();
-          }}>
+          <button
+            className="text-action"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setFeedback('');
+              refresh();
+            }}
+          >
             Ulanishni tekshirish
           </button>
         )}

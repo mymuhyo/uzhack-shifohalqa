@@ -3,7 +3,10 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ChangeEvent } from 'react';
+import { Camera, Check, Clock, Loader2, ScanLine, X } from 'lucide-react';
 import type { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dorimosResponse, formatBoxLabel, type dorimosInput } from '@/lib/dorimos-contract';
 import { dorimosSamples, type DorimosSampleId } from '@/lib/dorimos-samples';
 import styles from './patient-clinical.module.css';
@@ -32,8 +35,19 @@ async function prepareCameraJpeg(file: File): Promise<Blob> {
   }
 }
 
-export function DorimosCheck({ taskId, available }: { taskId: string; available: boolean }) {
+export function DorimosCheck({
+  taskId,
+  available,
+  isDemo = true,
+  deferred = false,
+}: {
+  taskId: string;
+  available: boolean;
+  isDemo?: boolean;
+  deferred?: boolean;
+}) {
   const router = useRouter();
+  const endpoint = isDemo ? '/api/demo/dorimos' : '/api/clinical/dorimos';
   const [sampleId, setSampleId] = useState<DorimosSampleId>('box-5mg');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -46,7 +60,7 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
     if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
   }, [photoPreviewUrl]);
 
-  function applyResult(result: z.infer<typeof dorimosResponse>, isManual: boolean) {
+  function applyResult(result: z.infer<typeof dorimosResponse>, action: z.infer<typeof dorimosInput>['action']) {
     switch (result.status) {
       case 'needs_confirmation':
         setConfirmation(result);
@@ -56,13 +70,14 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
         setMessage('Quti yozuvini ishonchli o‘qib bo‘lmadi. Yaqinroq, yorug‘roq rasmga oling yoki boshqa namuna tanlang.');
         break;
       case 'manual':
-        setMessage(isManual ? 'Qaydni saqlab bo‘lmadi. Qayta urinib ko‘ring.'
+        setMessage(action === 'manual'
+          ? 'Qaydni saqlab bo‘lmadi. Qayta urinib ko‘ring.'
           : 'Avtomatik tekshiruv hozir ishlamadi. Qayta urinib ko‘ring yoki qo‘lda qayd eting.');
         break;
       case 'saved':
       case 'already_saved':
         setSaved(true);
-        setMessage('Quti qaydi saqlandi.');
+        setMessage(action === 'defer' ? 'Quti tekshiruvi keyinroqqa qoldirildi.' : 'Quti qaydi saqlandi.');
         router.refresh();
         break;
       case 'expired':
@@ -79,13 +94,13 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
     setMessage(input.action === 'scan' ? 'Quti yozuvi tekshirilmoqda…' : 'Qayd saqlanmoqda…');
     if (input.action === 'scan') setConfirmation(null);
     try {
-      const response = await fetch('/api/demo/dorimos', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
       const result = dorimosResponse.parse(await response.json());
-      applyResult(result, input.action === 'manual');
+      applyResult(result, input.action);
     } catch {
       setMessage('Aloqa uzildi. Qayta urinib ko‘ring.');
     } finally {
@@ -109,9 +124,9 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
       form.set('taskId', taskId);
       form.set('image', prepared, prepared.type === 'image/png' ? 'box.png' : 'box.jpg');
 
-      const response = await fetch('/api/demo/dorimos', { method: 'POST', body: form });
+      const response = await fetch(endpoint, { method: 'POST', body: form });
       const result = dorimosResponse.parse(await response.json());
-      applyResult(result, false);
+      applyResult(result, 'confirm');
     } catch {
       setMessage('Rasmni yuborib bo‘lmadi. PNG yoki JPEG rasm tanlang.');
     } finally {
@@ -121,13 +136,20 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
 
   return (
     <details className={`${styles.controls} ${styles.disclosure}`}>
-      <summary>DoriMos · qutini tekshirish</summary>
+      <summary>{deferred ? 'DoriMos · qutini hozir tekshirish' : 'DoriMos · qutini tekshirish'}</summary>
       <div className={styles.fields}>
-        <p>Dori qutisini real kamera bilan rasmga oling yoki tayyor demo namunalaridan birini tekshiring.</p>
+        <p className="text-sm text-muted-foreground">
+          {isDemo
+            ? 'Dori qutisini real kamera bilan rasmga oling yoki tayyor demo namunalaridan birini tekshiring (mg / mkg / g / IU).'
+            : 'Dori qutisini kamera bilan rasmga olib yozuvini tasdiqlang (mg / mkg / g / IU).'}
+        </p>
         {available ? (
           <>
             <div className={styles.fields}>
-              <label htmlFor={`dorimos-camera-${taskId}`}>Real kamera yoki galereyadan quti rasmi</label>
+              <label htmlFor={`dorimos-camera-${taskId}`} className="flex items-center gap-1.5 text-sm font-semibold">
+                <Camera className="size-4 text-primary" aria-hidden="true" />
+                <span>Real kamera yoki galereyadan quti rasmi</span>
+              </label>
               <input
                 id={`dorimos-camera-${taskId}`}
                 className={styles.field}
@@ -142,42 +164,109 @@ export function DorimosCheck({ taskId, available }: { taskId: string; available:
                 <img alt="Yuklangan dori qutisi" src={photoPreviewUrl} className={styles.boxImage} />
               )}
             </div>
-            <form className={styles.fields} onSubmit={(event) => {
-              event.preventDefault();
-              void send({ action: 'scan', taskId, sampleId });
-            }}>
-              <label htmlFor={`dorimos-${taskId}`}>Namuna rasmi</label>
-              <select id={`dorimos-${taskId}`} className={styles.field} value={sampleId} disabled={pending || saved}
-                onChange={(event) => {
-                  const option = options.find(({ id }) => id === event.target.value);
-                  if (!option) return;
-                  setSampleId(option.id);
-                  setConfirmation(null);
-                  setMessage('');
-                }}>
-                {options.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
-              </select>
-              <Image alt={`Demo qutisi · ${sample.label}`} src={sample.imagePath} width={800} height={500}
-                sizes="(max-width: 540px) 90vw, 480px" className={styles.boxImage} unoptimized />
-              <button type="submit" className={styles.submit} disabled={pending || saved}>Rasmni o‘qish</button>
-            </form>
+            {isDemo && (
+              <form
+                className={styles.fields}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void send({ action: 'scan', taskId, sampleId });
+                }}
+              >
+                <label htmlFor={`dorimos-${taskId}`} className="text-sm font-semibold">
+                  Namuna rasmi
+                </label>
+                <NativeSelect
+                  id={`dorimos-${taskId}`}
+                  value={sampleId}
+                  disabled={pending || saved}
+                  onChange={(event) => {
+                    const option = options.find(({ id }) => id === event.target.value);
+                    if (!option) return;
+                    setSampleId(option.id);
+                    setConfirmation(null);
+                    setMessage('');
+                  }}
+                >
+                  {options.map(({ id, label }) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <Image
+                  alt={`Demo qutisi · ${sample.label}`}
+                  src={sample.imagePath}
+                  width={800}
+                  height={500}
+                  sizes="(max-width: 540px) 90vw, 480px"
+                  className={styles.boxImage}
+                  unoptimized
+                />
+                <Button type="submit" size="lg" className="w-full" disabled={pending || saved}>
+                  {pending ? <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" /> : <ScanLine data-icon="inline-start" aria-hidden="true" />}
+                  <span>Rasmni o‘qish</span>
+                </Button>
+              </form>
+            )}
           </>
-        ) : <p>Rejada qutining kuchi ko‘rsatilmagan. Qutini qo‘lda qayd etishingiz mumkin.</p>}
-        <p role="status">{message}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Rejada qutining kuchi ko‘rsatilmagan. Qutini qo‘lda qayd etishingiz mumkin.
+          </p>
+        )}
+
+        <p role="status" className="text-sm font-medium text-foreground">
+          {message}
+        </p>
+
         {confirmation && !saved && (
-          <div className={styles.fields}>
-            <button type="button" className={styles.submit} disabled={pending}
-              onClick={() => void send({ action: 'confirm', taskId, token: confirmation.token })}>
-              Qutidagi yozuvni tasdiqlash
-            </button>
-            <button type="button" className="text-action" disabled={pending} onClick={() => {
-              setConfirmation(null);
-              setMessage('Yozuv tasdiqlanmadi. Boshqa rasm oling yoki qo‘lda qayd eting.');
-            }}>Yozuvni rad etish</button>
+          <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-accent/40 p-3">
+            <Button
+              type="button"
+              size="lg"
+              disabled={pending}
+              onClick={() => void send({ action: 'confirm', taskId, token: confirmation.token })}
+            >
+              <Check data-icon="inline-start" aria-hidden="true" />
+              <span>Qutidagi yozuvni tasdiqlash</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() => {
+                setConfirmation(null);
+                setMessage('Yozuv tasdiqlanmadi. Boshqa rasm oling yoki qo‘lda qayd eting.');
+              }}
+            >
+              <X data-icon="inline-start" aria-hidden="true" />
+              <span>Yozuvni rad etish</span>
+            </Button>
           </div>
         )}
-        <button type="button" className="text-action" disabled={pending || saved}
-          onClick={() => void send({ action: 'manual', taskId })}>Tekshirilmaganini qo‘lda qayd etish · L0</button>
+
+        <div className="flex flex-wrap gap-2">
+          {!deferred && (
+            <button
+              type="button"
+              className="text-action"
+              disabled={pending || saved}
+              onClick={() => void send({ action: 'defer', taskId })}
+            >
+              <Clock className="size-3.5" aria-hidden="true" />
+              <span>Keyinroq</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="text-action"
+            disabled={pending || saved}
+            onClick={() => void send({ action: 'manual', taskId })}
+          >
+            Tekshirilmaganini qo‘lda qayd etish · L0
+          </button>
+        </div>
       </div>
     </details>
   );

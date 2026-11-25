@@ -15,6 +15,10 @@ import type {
   UrgentSymptomView,
 } from '@/lib/clinical-types';
 import { formatBoxLabel } from '@/lib/dorimos-contract';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DoctorFollowupAckForm } from './doctor-followup-ack-form';
+import { DoctorPlanForm } from './doctor-plan-form';
 import { DoctorQueueFilter } from './doctor-queue-filter';
 import { DoctorReviewForm } from './doctor-review-form';
 import styles from './doctor-clinical.module.css';
@@ -40,90 +44,70 @@ const symptomLabels: Record<UrgentSymptomType, string> = {
   severe_headache: 'Kuchli bosh og‘rig‘i',
 };
 
-const pressureFields = [
-  { name: 'warnSystolic', label: 'Sistolik kuzatuv chegarasi', value: 135 },
-  { name: 'warnDiastolic', label: 'Diastolik kuzatuv chegarasi', value: 85 },
-  { name: 'maxSystolic', label: 'Sistolik yuqori chegara', value: 150 },
-  { name: 'maxDiastolic', label: 'Diastolik yuqori chegara', value: 95 },
-] as const;
+const unitDisplay: Record<string, string> = {
+  mg: 'mg',
+  mcg: 'mkg',
+  g: 'g',
+  iu: 'IU',
+};
 
 function LocalTime({ value }: { value: string }) {
   return <time dateTime={value}>{tashkentTime.format(new Date(value))} · Toshkent</time>;
 }
 
-function PlanAssignment({ patientName }: { patientName: string }) {
-  return (
-    <section className={styles.panel} aria-labelledby="plan-heading">
-      <h2 id="plan-heading">Uy rejasini biriktirish</h2>
-      <p className={styles.hint} id="plan-hint">
-        {patientName} uchun demo reja. Namuna qiymatlarini biriktirishdan oldin tahrirlash mumkin.
-      </p>
-      <form
-        className={styles.form}
-        method="post"
-        action="/api/demo/plan"
-        aria-labelledby="plan-heading"
-        aria-describedby="plan-hint"
-      >
-        <div className={styles.field}>
-          <label htmlFor="medication-name">Dori nomi</label>
-          <input id="medication-name" name="medicationName" defaultValue="Namuna dori" maxLength={80}
-            pattern={String.raw`.*\p{L}.*`} title="Dori nomida kamida bitta harf bo‘lsin." required />
-        </div>
-        <div className={styles.pair}>
-          <div className={styles.field}>
-            <label htmlFor="medication-strength">Qutida yozilgan kuch (mg)</label>
-            <input id="medication-strength" name="medicationStrengthMg" type="number"
-              min="0.001" max="999999.999" step="0.001" defaultValue={5} required />
-          </div>
-          <div className={styles.field}>
-            <label htmlFor="medication-time">Dori vaqti</label>
-            <input id="medication-time" name="medicationTime" type="time" defaultValue="08:00" required />
-          </div>
-          <div className={styles.field}>
-            <label htmlFor="vitals-time">Bosim o‘lchash vaqti</label>
-            <input id="vitals-time" name="vitalsTime" type="time" defaultValue="09:00" required />
-          </div>
-          <div className={styles.field}>
-            <label htmlFor="daily-step-goal">Kunlik qadam maqsadi</label>
-            <input id="daily-step-goal" name="dailyStepGoal" type="number" min={100} max={50000} defaultValue={3000} required />
-          </div>
-        </div>
-        <fieldset className={styles.thresholds}>
-          <legend>Bosim chegaralari (mmHg)</legend>
-          <div className={styles.pair}>
-            {pressureFields.map(({ name, label, value }) => (
-              <div className={styles.field} key={name}>
-                <label htmlFor={name}>{label}</label>
-                <input id={name} name={name} type="number" min={1} max={999} defaultValue={value} required />
-              </div>
-            ))}
-          </div>
-        </fieldset>
-        <label className={styles.checkbox}>
-          <input name="supplyFollowUp" type="checkbox" value="yes" defaultChecked />
-          <span>«Dori tugadi» xabarini tekshiruv navbatiga chiqarish</span>
-        </label>
-        <button className={styles.submit} type="submit">Rejani biriktirish</button>
-      </form>
-    </section>
-  );
-}
-
 function PlanSummary({ plan }: { plan: PlanInput }) {
   const { targets } = plan;
+  const medications = plan.medications && plan.medications.length > 0
+    ? plan.medications
+    : [{
+        name: plan.medicationName,
+        strength: plan.medicationStrengthMg,
+        strengthUnit: plan.medicationStrengthUnit ?? 'mg',
+        times: [plan.medicationTime],
+      }];
+
   return (
-    <section className={styles.panel} aria-labelledby="plan-heading">
-      <h2 id="plan-heading">Biriktirilgan reja</h2>
-      <dl className={styles.metadata}>
-        <div><dt>Dori</dt><dd>{plan.medicationName} · {plan.medicationTime}</dd></div>
-        <div><dt>Quti kuchi</dt><dd>{plan.medicationStrengthMg === null ? 'Ko‘rsatilmagan' : `${plan.medicationStrengthMg} mg`}</dd></div>
-        <div><dt>Bosim o‘lchash vaqti</dt><dd>{plan.vitalsTime} · Toshkent</dd></div>
-        <div><dt>Kuzatuv chegarasi</dt><dd>{targets.warnSystolic}/{targets.warnDiastolic} mmHg</dd></div>
-        <div><dt>Yuqori chegara</dt><dd>{targets.maxSystolic}/{targets.maxDiastolic} mmHg</dd></div>
-        <div><dt>Kunlik qadam maqsadi</dt><dd>{plan.dailyStepGoal ?? 3000} qadam</dd></div>
-        <div><dt>«Dori tugadi» bo‘yicha navbat</dt><dd>{plan.supplyFollowUp ? 'Yoqilgan' : 'O‘chirilgan'}</dd></div>
-      </dl>
+    <section aria-labelledby="plan-heading">
+      <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
+        <CardHeader>
+          <CardTitle className="text-xl font-medium">
+            <h2 id="plan-heading" className="text-inherit font-inherit leading-inherit">
+              Biriktirilgan reja
+            </h2>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className={styles.metadata}>
+            {medications.map((med, index) => (
+              <div key={`${med.name}-${index}`}>
+                <dt>{medications.length > 1 ? `${index + 1}-dori` : 'Dori'}</dt>
+                <dd>
+                  {med.name} · {med.times.join(', ')}
+                  {med.strength !== null ? ` (${med.strength} ${unitDisplay[med.strengthUnit] ?? med.strengthUnit})` : ''}
+                </dd>
+              </div>
+            ))}
+            {medications.length === 1 && (
+              <div>
+                <dt>Quti kuchi</dt>
+                <dd>
+                  {plan.medicationStrengthMg === null
+                    ? 'Ko‘rsatilmagan'
+                    : `${plan.medicationStrengthMg} ${unitDisplay[plan.medicationStrengthUnit ?? 'mg'] ?? 'mg'}`}
+                </dd>
+              </div>
+            )}
+            <div><dt>Bosim o‘lchash vaqti</dt><dd>{plan.vitalsTime} · Toshkent</dd></div>
+            <div><dt>Kuzatuv chegarasi</dt><dd>{targets.warnSystolic}/{targets.warnDiastolic} mmHg</dd></div>
+            <div><dt>Yuqori chegara</dt><dd>{targets.maxSystolic}/{targets.maxDiastolic} mmHg</dd></div>
+            {targets.minSystolic !== undefined && targets.minDiastolic !== undefined && (
+              <div><dt>Past chegara</dt><dd>{targets.minSystolic}/{targets.minDiastolic} mmHg</dd></div>
+            )}
+            <div><dt>Kunlik qadam maqsadi</dt><dd>{plan.dailyStepGoal ?? 3000} qadam</dd></div>
+            <div><dt>«Dori tugadi» bo‘yicha navbat</dt><dd>{plan.supplyFollowUp ? 'Yoqilgan' : 'O‘chirilgan'}</dd></div>
+          </dl>
+        </CardContent>
+      </Card>
     </section>
   );
 }
@@ -131,6 +115,7 @@ function PlanSummary({ plan }: { plan: PlanInput }) {
 function flagTitle({ ruleKey, evidence: { payload } }: ClinicalFlag) {
   if (ruleKey === 'medication_box_mismatch') return 'Dori qutisi rejaga mos kelmadi';
   if (ruleKey === 'chest_pain') return 'Ko‘krak og‘rig‘i bildirildi';
+  if (ruleKey === 'bp_low') return 'Qon bosimi past chegaradan tushdi';
   if (ruleKey === 'medication_missed_consecutive_days') return 'Ikki reja kunida dori qoldirildi';
   if (payload.kind === 'medication') return payload.status === 'missed' ? missedReasons[payload.reason] : 'Dori qaydi';
   return 'Bosim reja chegarasiga yetdi';
@@ -138,11 +123,21 @@ function flagTitle({ ruleKey, evidence: { payload } }: ClinicalFlag) {
 
 function FlagDetails({ flag }: { flag: ClinicalFlag }) {
   const { evidence } = flag;
-  const box = evidence.payload.kind === 'medication_box' && evidence.payload.result !== 'manual' && evidence.payload.result !== 'deferred' ? evidence.payload : null;
+  const box = evidence.payload.kind === 'medication_box' && evidence.payload.result !== 'manual' && evidence.payload.result !== 'deferred'
+    ? evidence.payload
+    : null;
   return (
     <dl className={styles.metadata}>
-      <div><dt>AI rejimi</dt><dd>{evidence.aiMode === 'live' ? 'Jonli tahlil (live)'
-        : evidence.aiMode === 'manual' ? 'Qo‘lda (manual)' : 'AI ishlatilmagan (none)'}</dd></div>
+      <div>
+        <dt>AI rejimi</dt>
+        <dd>
+          {evidence.aiMode === 'live'
+            ? 'Jonli tahlil (live)'
+            : evidence.aiMode === 'manual'
+              ? 'Qo‘lda (manual)'
+              : 'AI ishlatilmagan (none)'}
+        </dd>
+      </div>
       {box && (
         <>
           <div><dt>Ajratish modeli</dt><dd>{box.reading.model}</dd></div>
@@ -175,7 +170,17 @@ function formatFollowup(
   }
 }
 
-function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPressureTargets | null }) {
+function QueueEntry({
+  flag,
+  targets,
+  isDemo,
+  patientId,
+}: {
+  flag: ClinicalFlag;
+  targets: BloodPressureTargets | null;
+  isDemo: boolean;
+  patientId: string | null;
+}) {
   const { evidence: { createdAt, level, payload, review, followups }, color, metric, ruleKey, threshold } = flag;
   const titleId = `flag-title-${flag.id}`;
   const headingId = `review-${flag.id}`;
@@ -187,11 +192,11 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
       : styles.warnItem;
 
   return (
-    <li className={`${styles.queueItem} ${severityClass}`}>
+    <li id={`record-${flag.id}`} className={`${styles.queueItem} ${severityClass}`}>
       <article aria-labelledby={titleId}>
         <p className={styles.queueMeta}>
           {review ? (
-            <span>{review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta o‘lchash so‘raldi'}</span>
+            <Badge variant="ok">{review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta o‘lchash so‘raldi'}</Badge>
           ) : (
             <span className={color === 'red' ? styles.urgent : styles.followup}>
               <span className={styles.marker} aria-hidden="true" />
@@ -221,7 +226,9 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
             : 'Bemor kiritgan qayd'} · L{level}
         </p>
         {threshold !== undefined && metric && (
-          <p className={styles.evidenceLine}>Rejadagi {metric === 'systolic' ? 'sistolik' : 'diastolik'} chegara · {threshold} mmHg</p>
+          <p className={styles.evidenceLine}>
+            Rejadagi {metric === 'systolic' ? 'sistolik' : 'diastolik'} chegara · {threshold} mmHg
+          </p>
         )}
         {followups && followups.length > 0 && (
           <div className={styles.reviewed}>
@@ -275,6 +282,8 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
               ruleKey={ruleKey}
               headingId={headingId}
               titleId={titleId}
+              isDemo={isDemo}
+              patientId={patientId}
             />
           )}
         </details>
@@ -283,17 +292,25 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
   );
 }
 
-function UrgentSymptomEntry({ entry }: { entry: UrgentSymptomView }) {
+function UrgentSymptomEntry({
+  entry,
+  isDemo,
+  patientId,
+}: {
+  entry: UrgentSymptomView;
+  isDemo: boolean;
+  patientId: string | null;
+}) {
   const titleId = `symptom-title-${entry.id}`;
   const headingId = `symptom-review-${entry.id}`;
   const severityClass = entry.review ? styles.reviewedItem : styles.urgentItem;
 
   return (
-    <li className={`${styles.queueItem} ${severityClass}`}>
+    <li id={`record-${entry.id}`} className={`${styles.queueItem} ${severityClass}`}>
       <article aria-labelledby={titleId}>
         <p className={styles.queueMeta}>
           {entry.review ? (
-            <span>{entry.review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta ko‘rik so‘raldi'}</span>
+            <Badge variant="ok">{entry.review.decision === 'approved' ? 'Tasdiqlandi' : 'Qayta ko‘rik so‘raldi'}</Badge>
           ) : (
             <span className={styles.urgent}>
               <span className={styles.marker} aria-hidden="true" />
@@ -322,6 +339,8 @@ function UrgentSymptomEntry({ entry }: { entry: UrgentSymptomView }) {
               ruleKey={entry.symptom === 'chest_pain' ? 'chest_pain' : 'urgent_symptom'}
               headingId={headingId}
               titleId={titleId}
+              isDemo={isDemo}
+              patientId={patientId}
             />
           )}
         </details>
@@ -330,7 +349,17 @@ function UrgentSymptomEntry({ entry }: { entry: UrgentSymptomView }) {
   );
 }
 
-export function DoctorClinical({ view, patientName }: { view: ClinicalView; patientName: string }) {
+export function DoctorClinical({
+  view,
+  patientName,
+  isDemo = true,
+  patientId = null,
+}: {
+  view: ClinicalView;
+  patientName: string;
+  isDemo?: boolean;
+  patientId?: string | null;
+}) {
   const openFlags = view.flags.filter(({ evidence }) => evidence.review === null);
   const reviewedFlags = view.flags.filter(({ evidence }) => evidence.review !== null);
   const urgentSymptoms = view.urgentSymptoms ?? [];
@@ -342,7 +371,7 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
 
   return (
     <div className={`${styles.dashboard} ${view.plan ? styles.assigned : ''}`}>
-      {!view.plan && <PlanAssignment patientName={patientName} />}
+      {!view.plan && <DoctorPlanForm patientName={patientName} patientId={patientId} isDemo={isDemo} />}
       <div>
         {view.caregiverAck && (
           <p className="notice" role="status">
@@ -372,26 +401,13 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
                       </p>
                       <h3 id={titleId}>{item.titleUz}</h3>
                       <p>{item.summaryUz}</p>
-                      <form
-                        action="/api/demo/followup-ack"
-                        method="post"
-                        className={styles.form}
-                        aria-labelledby={titleId}
-                      >
-                        <input type="hidden" name="followupId" value={item.followupId} />
-                        <div className={styles.field}>
-                          <label htmlFor={noteId}>Ichki izoh (ixtiyoriy)</label>
-                          <input
-                            id={noteId}
-                            name="note"
-                            maxLength={500}
-                            placeholder="Masalan: bemor bilan telefon orqali bog‘landim"
-                          />
-                        </div>
-                        <div className={styles.buttons}>
-                          <button className={styles.submit} type="submit">Bog‘landim · Nazoratni yopish</button>
-                        </div>
-                      </form>
+                      <DoctorFollowupAckForm
+                        followupId={item.followupId}
+                        noteId={noteId}
+                        titleId={titleId}
+                        isDemo={isDemo}
+                        patientId={patientId}
+                      />
                       <p className="no-print">
                         <a className="text-action" href={`#flag-title-${item.flagId}`}>Asosiy qaydga o‘tish ↓</a>
                       </p>
@@ -406,7 +422,9 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
           <section className={styles.panel} aria-labelledby="urgent-symptoms-heading">
             <h2 id="urgent-symptoms-heading">Shoshilinch simptomlar ({openSymptoms.length})</h2>
             <ul role="list" className={styles.queue}>
-              {openSymptoms.map((entry) => <UrgentSymptomEntry key={entry.id} entry={entry} />)}
+              {openSymptoms.map((entry) => (
+                <UrgentSymptomEntry key={entry.id} entry={entry} isDemo={isDemo} patientId={patientId} />
+              ))}
             </ul>
           </section>
         )}
@@ -419,7 +437,15 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
               items={openFlags.map((flag) => ({
                 id: flag.id,
                 color: flag.color,
-                node: <QueueEntry key={flag.id} flag={flag} targets={view.plan?.targets ?? null} />,
+                node: (
+                  <QueueEntry
+                    key={flag.id}
+                    flag={flag}
+                    targets={view.plan?.targets ?? null}
+                    isDemo={isDemo}
+                    patientId={patientId}
+                  />
+                ),
               }))}
             />
           ) : (
@@ -432,8 +458,18 @@ export function DoctorClinical({ view, patientName }: { view: ClinicalView; pati
           <section className={styles.panel} aria-labelledby="reviewed-heading">
             <h2 id="reviewed-heading">Ko‘rib chiqilgan qaydlar</h2>
             <ul role="list" className={styles.queue}>
-              {reviewedFlags.map((flag) => <QueueEntry key={flag.id} flag={flag} targets={view.plan?.targets ?? null} />)}
-              {reviewedSymptoms.map((entry) => <UrgentSymptomEntry key={entry.id} entry={entry} />)}
+              {reviewedFlags.map((flag) => (
+                <QueueEntry
+                  key={flag.id}
+                  flag={flag}
+                  targets={view.plan?.targets ?? null}
+                  isDemo={isDemo}
+                  patientId={patientId}
+                />
+              ))}
+              {reviewedSymptoms.map((entry) => (
+                <UrgentSymptomEntry key={entry.id} entry={entry} isDemo={isDemo} patientId={patientId} />
+              ))}
             </ul>
           </section>
         )}

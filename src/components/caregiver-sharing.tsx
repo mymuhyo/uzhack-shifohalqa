@@ -15,7 +15,7 @@ export async function CaregiverSharing({ actor }: { actor: ClinicalActor }) {
       <section aria-labelledby="caregiver-title">
         <h2 id="caregiver-title">Yaqinim</h2>
         <p>Havolani olgan inson bugun nechta vazifa muddati kelganini, nechtasiga javob berilganini va nechtasi bajarilganini ko‘radi.</p>
-        <CaregiverSharingControls initialExpiresAt={expiresAt} />
+        <CaregiverSharingControls initialExpiresAt={expiresAt} isDemo={actor.isDemo === true} />
       </section>
     </div>
   );

@@ -67,6 +67,19 @@ describe('evaluateBpZone', () => {
     expect(evaluateBpZone({ systolic: 'abc', diastolic: '80', chestPain: false, targets })).toBeNull();
     expect(evaluateBpZone({ systolic: '120', diastolic: '80', chestPain: false, targets: null })).toBeNull();
   });
+
+  it('classifies low BP (hypotension) and validates physiological bounds without throwing', () => {
+    const lowTargets = { ...targets, minSystolic: 90, minDiastolic: 60 };
+    const low = evaluateBpZone({ systolic: '86', diastolic: '58', chestPain: false, targets: lowTargets });
+    expect(low).toMatchObject({ tone: 'urgent', labelUz: 'Past chegara' });
+    expect(low?.textUz).toContain('90/60 mmHg');
+
+    const inverted = evaluateBpZone({ systolic: '80', diastolic: '120', chestPain: false, targets: lowTargets });
+    expect(inverted).toMatchObject({ tone: 'urgent', labelUz: 'Qiymatni tekshiring', invalid: true });
+
+    const outOfRange = evaluateBpZone({ systolic: '320', diastolic: '80', chestPain: false, targets: lowTargets });
+    expect(outOfRange).toMatchObject({ tone: 'urgent', labelUz: 'Qiymatni tekshiring', invalid: true });
+  });
 });
 
 describe('evaluateFlagFollowupAttention', () => {

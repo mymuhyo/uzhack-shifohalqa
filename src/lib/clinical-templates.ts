@@ -14,6 +14,10 @@ export const doctorReplyTemplatesMap: Record<string, readonly string[]> = {
     'Bugungi dori qabulini o‘tkazib yubormang; bosh og‘rig‘i yoki ko‘krak og‘rig‘i bo‘lsa 103 ga qo‘ng‘iroq qiling.',
     'Qabulga keling — bosim ko‘tarilishi bo‘yicha rejani ko‘rib chiqamiz.',
   ],
+  bp_low: [
+    'Bosim past: yoting yoki o‘tirib suv iching, 20 daqiqadan so‘ng qayta o‘lchab yuboring.',
+    'Kuchli bosh aylanishi yoki hushdan ketish hissi bo‘lsa darhol 103 ga qo‘ng‘iroq qiling.',
+  ],
   bp_warning: [
     'Bosim kuzatuv chegarasida. Tuz va kofeinni kamaytirib, ertaga ertalab qayta o‘lchang.',
     '20 daqiqa dam olib bosimni qayta tekshiring va ilovaga kiriting.',

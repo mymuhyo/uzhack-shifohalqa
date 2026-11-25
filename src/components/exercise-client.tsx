@@ -2,10 +2,13 @@
 
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Loader2, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { exerciseCoachResponseSchema, type ExerciseCoachResponse } from '@/lib/ai/exercise-coach';
 import type { ExerciseProvider } from '@/lib/exercise-analysis';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
-import { elbowSample, exerciseSample } from '@/lib/exercise-sample';
+import { elbowSample, exerciseSample, seatedKneeSample } from '@/lib/exercise-sample';
 import { createAudioCoach } from '@/lib/pose/audio-coach';
 import {
   analyzeExerciseDiagnostics,
@@ -23,6 +26,7 @@ import {
 import { drawPoseOverlay } from '@/lib/pose/overlay';
 import { sampleRecordedFrames } from '@/lib/pose/recorded-frames';
 import { ExerciseAnalysisPanel } from './exercise-analysis-panel';
+import { ExerciseVideoUpload } from './exercise-video-upload';
 import styles from './exercise-client.module.css';
 
 type Source = 'live_camera' | 'uploaded_video';
@@ -39,6 +43,8 @@ type Capture = {
   stream?: MediaStream;
   objectUrl?: string;
   fileSha256: string | null;
+  videoBlob: Blob | null;
+  lastTimestampMs: number;
   cancelFrame?: () => void;
   removeListeners?: () => void;
 };
@@ -63,10 +69,28 @@ type Screen =
       feedback: ReturnType<Tracker['feedback']>;
       biomechanics: BiomechanicsSummary;
       fileSha256: string | null;
+      videoBlob: Blob | null;
+      durationSec: number;
     };
 
+type KeyframeObservationView = {
+  cycleNumber: number;
+  timeRangeLabel: string;
+  visibility: string;
+  sourceMode: string;
+  observationUz: string;
+  uncertaintyNoteUz: string;
+  possibleCausesUz: string[];
+};
+
 type Report = 'measurement' | 'manual' | 'pain';
-type SaveStatus = { state: 'saving' | 'saved' | 'error'; report: Report; message: string };
+type SaveStatus = {
+  state: 'saving' | 'saved' | 'error';
+  report: Report;
+  message: string;
+  attemptId?: string;
+  sample?: boolean;
+};
 
 const maxVideoBytes = 50_000_000;
 const minimumFrameIntervalMs = 80;
@@ -161,7 +185,8 @@ function saveMessage(body: unknown, ok: boolean, report: Report): SaveStatus {
       const label = body.status === 'already_saved' ? 'Qayd avval saqlangan' : saved;
       const retry = !sample && 'primary' in body && body.primary === false && report !== 'pain' ? ' · Qayta urinish' : '';
       const similar = 'similarMotion' in body && body.similarMotion === true ? ' · O‘xshash harakat tekshiriladi' : '';
-      return { state: 'saved', report, message: `${label} · L${body.level}${retry}${similar}.` };
+      const attemptId = 'id' in body && typeof body.id === 'string' ? body.id : undefined;
+      return { state: 'saved', report, message: `${label} · L${body.level}${retry}${similar}.`, attemptId, sample };
     }
     if (body.status === 'duplicate') {
       return { state: 'error', report, message: 'Bu video oldin qayd etilgan. Boshqa video tanlang.' };
@@ -192,6 +217,57 @@ function toFormMetrics(bio: BiomechanicsSummary): FormMetrics {
   };
 }
 
+async function extractCycleKeyframes(
+  videoBlob: Blob,
+  fromMs: number,
+  toMs: number,
+): Promise<{ timestampMs: number; mimeType: 'image/jpeg'; dataBase64: string }[]> {
+  const url = URL.createObjectURL(videoBlob);
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.src = url;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () => reject(new Error('Video load failed'));
+    });
+    const width = Math.min(384, Math.max(160, video.videoWidth || 320));
+    const height = Math.max(120, Math.round((width * (video.videoHeight || 240)) / (video.videoWidth || 320)));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return [];
+
+    const startMs = Math.max(0, fromMs);
+    const endMs = Math.max(startMs + 200, toMs);
+    const midMs = Math.round((startMs + endMs) / 2);
+    const points = [startMs, midMs, endMs];
+    const frames: { timestampMs: number; mimeType: 'image/jpeg'; dataBase64: string }[] = [];
+
+    for (const ms of points) {
+      video.currentTime = Math.min(ms / 1000, Math.max(0, (video.duration || endMs / 1000) - 0.05));
+      await new Promise<void>((resolve) => {
+        video.onseeked = () => resolve();
+        window.setTimeout(resolve, 350);
+      });
+      ctx.drawImage(video, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+      const base64 = dataUrl.split(',')[1] ?? '';
+      if (base64.length >= 4) {
+        frames.push({ timestampMs: ms, mimeType: 'image/jpeg', dataBase64: base64 });
+      }
+    }
+    return frames;
+  } finally {
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
 const seconds = new Intl.NumberFormat('uz-Latn-UZ', { maximumFractionDigits: 1 });
 
 export function ExerciseClient({
@@ -202,6 +278,7 @@ export function ExerciseClient({
   preview = false,
   analysisProviders = [],
   movement = 'chair_stand',
+  isDemo = true,
 }: {
   targetAngle: number;
   targetReps?: number;
@@ -210,10 +287,20 @@ export function ExerciseClient({
   preview?: boolean;
   analysisProviders?: readonly ExerciseProvider[];
   movement?: PoseMovement;
+  isDemo?: boolean;
 }) {
   const copy = exerciseCatalog[movement];
-  const analysisProvider = analysisProviders.find(provider => provider !== 'gemini');
-  const example = movement === 'elbow_bend' ? elbowSample : movement === 'chair_stand' ? exerciseSample : null;
+  const analysisProvider = analysisProviders.find((provider) => provider !== 'gemini');
+  const example =
+    movement === 'elbow_bend'
+      ? elbowSample
+      : movement === 'chair_stand'
+        ? exerciseSample
+        : movement === 'seated_knee_ext'
+          ? seatedKneeSample
+          : null;
+  const isCdcSampleButton = movement === 'chair_stand' || movement === 'elbow_bend';
+
   const framingMessage: Record<Framing, string> = {
     positioning: `Kameraga yon tomoningizni tuting. ${copy.pointsLabel} kadrga sig‘sin.`,
     waitingForStart: `Tayanch nuqtalar ko‘rinyapti. Sanoqni boshlash uchun ${copy.startCue}.`,
@@ -231,6 +318,13 @@ export function ExerciseClient({
     | { status: 'error'; message: string }
     | { status: 'ready'; advice: ExerciseCoachResponse }
   >({ status: 'idle' });
+  const [keyframeStatus, setKeyframeStatus] = useState<
+    | { status: 'idle' }
+    | { status: 'loading'; cycleIndex: number }
+    | { status: 'error'; message: string }
+    | { status: 'ready'; observation: KeyframeObservationView }
+  >({ status: 'idle' });
+
   const audioRef = useRef<ReturnType<typeof createAudioCoach> | null>(null);
   const audioEnabledRef = useRef(true);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -282,30 +376,43 @@ export function ExerciseClient({
 
   function finish(capture: Capture) {
     if (activeCapture.current !== capture) return;
-    const { tracker, source, fileSha256 } = capture;
+    const { tracker, source, fileSha256, videoBlob, lastTimestampMs } = capture;
     const measurement = tracker.result();
     const cycles = tracker.cycles();
     const feedback = tracker.feedback();
     const biomechanics = tracker.biomechanics();
+    const durationSec = Math.max(1, Math.round((lastTimestampMs || cycles.at(-1)?.toMs || 1000) / 1000));
     takeCapture();
     if (measurement.analyzedFrames < 5 || measurement.minAngle === null || measurement.confidence === null || measurement.confidence < 0.75) {
-      setScreen({ phase: 'retake', message: preview
-        ? 'Tayanch nuqtalar yetarli ko‘rinmadi. Kadrni to‘g‘rilab qayta urinib ko‘ring.'
-        : 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.' });
+      setScreen({
+        phase: 'retake',
+        message: preview
+          ? 'Tayanch nuqtalar yetarli ko‘rinmadi. Kadrni to‘g‘rilab qayta urinib ko‘ring.'
+          : 'Tayanch nuqtalar yetarli ko‘rinmadi. Qayta urinib ko‘ring yoki takrorlarni qo‘lda kiriting.',
+      });
       return;
     }
     announce(`${measurement.validReps} ta to‘liq harakat yakunlandi.`, 'done');
-    setScreen({ phase: 'result', source, measurement, cycles, feedback, biomechanics, fileSha256 });
+    setScreen({ phase: 'result', source, measurement, cycles, feedback, biomechanics, fileSha256, videoBlob, durationSec });
   }
 
   function begin(source: Source, message: string): Capture | null {
     if (!videoRef.current || activeCapture.current || request.current) return null;
     const tracker = createPoseTracker({ targetAngle, movement, liveCamera: source === 'live_camera' });
-    const capture = { source, video: videoRef.current, tracker, controller: new AbortController(), fileSha256: null };
+    const capture: Capture = {
+      source,
+      video: videoRef.current,
+      tracker,
+      controller: new AbortController(),
+      fileSha256: null,
+      videoBlob: null,
+      lastTimestampMs: 0,
+    };
     activeCapture.current = capture;
     coachRequest.current?.abort();
     coachRequest.current = null;
     setCoachState({ status: 'idle' });
+    setKeyframeStatus({ status: 'idle' });
     setConfirmed(false);
     setSaveStatus(null);
     setReviewingSample(false);
@@ -336,6 +443,7 @@ export function ExerciseClient({
 
     const analyze = (timestampMs: number, frameWidth: number, frameHeight: number, draw: (width: number, height: number) => void) => {
       if (!frameWidth || !frameHeight) return;
+      if (timestampMs > capture.lastTimestampMs) capture.lastTimestampMs = timestampMs;
       const scale = Math.min(1, longestFrameSide / Math.max(frameWidth, frameHeight));
       const width = Math.max(1, Math.round(frameWidth * scale));
       const height = Math.max(1, Math.round(frameHeight * scale));
@@ -406,7 +514,7 @@ export function ExerciseClient({
         const decoder = await import('@/lib/pose/sequential-frames').catch(() => null);
         signal.throwIfAborted();
         if (decoder) {
-          decoded = await decoder.sampleSequentialFrames(file, minimumFrameIntervalMs, signal, frame => {
+          decoded = await decoder.sampleSequentialFrames(file, minimumFrameIntervalMs, signal, (frame) => {
             analyze(frame.timestampMs, frame.width, frame.height, (width, height) => frame.draw(context, width, height));
           });
         }
@@ -483,6 +591,7 @@ export function ExerciseClient({
 
   async function analyzeLocalVideo(capture: Capture, file: Blob) {
     if (activeCapture.current !== capture) return;
+    capture.videoBlob = file;
     capture.fileSha256 = await sha256(file);
     if (activeCapture.current !== capture) return;
     capture.objectUrl = URL.createObjectURL(file);
@@ -511,7 +620,7 @@ export function ExerciseClient({
 
   async function playSample() {
     if (!example) return;
-    const capture = begin('uploaded_video', 'CDC namuna videosi tayyorlanmoqda…');
+    const capture = begin('uploaded_video', 'Namuna videosi tayyorlanmoqda…');
     if (!capture) return;
     setReviewingSample(true);
     try {
@@ -529,8 +638,9 @@ export function ExerciseClient({
     const controller = new AbortController();
     request.current = { controller, report };
     setSaveStatus({ state: 'saving', report, message: 'Yuborilmoqda…' });
+    const endpoint = isDemo ? '/api/demo/exercise' : '/api/clinical/exercise';
     try {
-      const response = await fetch('/api/demo/exercise', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -573,31 +683,38 @@ export function ExerciseClient({
     const controller = new AbortController();
     coachRequest.current = controller;
     setCoachState({ status: 'loading' });
+    const endpoint = isDemo ? '/api/demo/exercise-coach' : '/api/clinical/exercise-coach';
     try {
-      const response = await fetch('/api/demo/exercise-coach', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sample && (movement === 'chair_stand' || movement === 'elbow_bend') ? { sample: movement } : {
-          movement,
-          targetAngle,
-          targetReps,
-          maxShallow,
-          validReps: screen.measurement.validReps,
-          shallowReps: screen.measurement.shallowReps,
-          minAngle: screen.measurement.minAngle,
-          avgCycleSeconds: averageCycleDurationSeconds(screen.cycles),
-          interruptedCycles: screen.feedback.interruptedCycles,
-          incompleteCycles: screen.feedback.incompleteCycles,
-          formMetrics: toFormMetrics(screen.biomechanics),
-        }),
+        body: JSON.stringify(
+          sample && (movement === 'chair_stand' || movement === 'elbow_bend')
+            ? { sample: movement }
+            : {
+                movement,
+                targetAngle,
+                targetReps,
+                maxShallow,
+                validReps: screen.measurement.validReps,
+                shallowReps: screen.measurement.shallowReps,
+                minAngle: screen.measurement.minAngle,
+                avgCycleSeconds: averageCycleDurationSeconds(screen.cycles),
+                interruptedCycles: screen.feedback.interruptedCycles,
+                incompleteCycles: screen.feedback.incompleteCycles,
+                formMetrics: toFormMetrics(screen.biomechanics),
+              },
+        ),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error('Coach unavailable');
       const parsed = exerciseCoachResponseSchema.safeParse(await response.json());
       if (!controller.signal.aborted) {
-        setCoachState(parsed.success
-          ? { status: 'ready', advice: parsed.data }
-          : { status: 'error', message: 'AI murabbiy javobini o‘qib bo‘lmadi.' });
+        setCoachState(
+          parsed.success
+            ? { status: 'ready', advice: parsed.data }
+            : { status: 'error', message: 'AI murabbiy javobini o‘qib bo‘lmadi.' },
+        );
       }
     } catch {
       if (!controller.signal.aborted) {
@@ -605,6 +722,47 @@ export function ExerciseClient({
       }
     } finally {
       if (coachRequest.current === controller) coachRequest.current = null;
+    }
+  }
+
+  async function requestKeyframeAiReview(cycle: MeasuredCycle, cycleIndex: number) {
+    if (screen.phase !== 'result' || !screen.videoBlob) return;
+    setKeyframeStatus({ status: 'loading', cycleIndex });
+    try {
+      const keyframes = await extractCycleKeyframes(screen.videoBlob, cycle.fromMs, cycle.toMs);
+      if (keyframes.length < 3) {
+        setKeyframeStatus({ status: 'error', message: 'Sikl kadrlari ajratilmadi.' });
+        return;
+      }
+      const attemptId =
+        saveStatus?.state === 'saved' && saveStatus.report === 'measurement' && saveStatus.attemptId
+          ? saveStatus.attemptId
+          : undefined;
+
+      const response = await fetch('/api/clinical/exercise/keyframe-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(attemptId ? { attemptId } : {}),
+          movement,
+          cycleIndex,
+          fromMs: Math.round(cycle.fromMs),
+          toMs: Math.round(cycle.toMs),
+          severity: cycle.reachesTarget ? 'ok' : 'yellow',
+          peakAngleDeg: cycle.minAngle,
+          targetAngle,
+          errorCodes: cycle.reachesTarget ? [] : ['shallow_range'],
+          keyframes,
+        }),
+      });
+      if (!response.ok) {
+        setKeyframeStatus({ status: 'error', message: 'Kadr kuzatuvi xizmati hozircha javob bermadi.' });
+        return;
+      }
+      const observation = (await response.json()) as KeyframeObservationView;
+      setKeyframeStatus({ status: 'ready', observation });
+    } catch {
+      setKeyframeStatus({ status: 'error', message: 'Kadr tahlilida xatolik yuz berdi.' });
     }
   }
 
@@ -652,6 +810,11 @@ export function ExerciseClient({
     return Math.min(100, Math.max(8, Math.round(((180 - currentAngle) / Math.max(1, 180 - targetAngle)) * 100)));
   }
 
+  const flaggedCycleEntry = screen.phase === 'result'
+    ? screen.cycles.map((c, idx) => ({ cycle: c, idx })).find(({ cycle }) => !cycle.reachesTarget) ??
+      (screen.cycles[0] ? { cycle: screen.cycles[0], idx: 0 } : null)
+    : null;
+
   return (
     <div className={styles.exercise}>
       <p>{copy.pointsLabel} kadrda bir tomondan ko‘rinsin. Video qurilmangizda qoladi.</p>
@@ -661,8 +824,18 @@ export function ExerciseClient({
             <strong>Avval tayyor video bilan sinang</strong>
             <p>Namuna uchun kamera va kirish talab qilinmaydi.</p>
           </div>
-          <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>CDC namunasini sinash</button>
-          <p>{movement === 'elbow_bend' ? 'CDC videosidan qirqilgan klip.' : 'Oldindan yozilgan klip.'} {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'} <a href={example.source}>Video manbasi</a></p>
+          <button className={styles.primary} type="button" disabled={capturing || saving} onClick={playSample}>
+            {isCdcSampleButton ? 'CDC namunasini sinash' : 'Tayyor namunani sinash'}
+          </button>
+          <p>
+            {movement === 'elbow_bend'
+              ? 'CDC videosidan qirqilgan klip.'
+              : movement === 'seated_knee_ext'
+                ? 'James City County Fitness in 5 o‘tirib oyoq tekislash klipi.'
+                : 'Oldindan yozilgan klip.'}{' '}
+            {preview ? 'Mashq natijasi faqat shu sahifada ko‘rinadi.' : 'Namuna kunlik asosiy urinishga kirmaydi.'}{' '}
+            <a href={example.source}>Video manbasi</a>
+          </p>
         </div>
       ) : (
         <p className={styles.notice}>
@@ -693,9 +866,11 @@ export function ExerciseClient({
         <button type="button" className="switch-chip" disabled={!audioEnabled} onClick={() => announce('Sanoq tayyor', 'ready')}>
           Ovozni sinash
         </button>
-        {!preview && <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
-          <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
-        </form>}
+        {!preview && (
+          <form onSubmit={reportPain} aria-label="Og‘riq haqida xabar">
+            <button className={styles.pain} type="submit" disabled={saving && saveStatus.report === 'pain'}>Og‘riq bor</button>
+          </form>
+        )}
       </div>
       <p>Ovoz yoqilganda jonli kamerada takrorlar aytiladi. Namuna video tez tahlil qilinadi va faqat yakunda ovozli xabar beriladi.</p>
       {screen.phase === 'starting' && <p role="status">{screen.message}</p>}
@@ -732,7 +907,7 @@ export function ExerciseClient({
       {screen.phase === 'result' && (
         <div className={styles.result}>
           <h2>MediaPipe o‘lchovi</h2>
-          {sample && <p>CDC namuna videosi</p>}
+          {sample && <p>{movement === 'seated_knee_ext' ? 'Tayyor namuna videosi' : 'CDC namuna videosi'}</p>}
           <p className={styles.counter}>{sourceLabel[screen.source]} · To‘liq {screen.measurement.validReps} · Chala {screen.measurement.shallowReps}</p>
           <p>
             {copy.direction === 'extend' ? 'Eng katta burchak' : 'Eng kichik burchak'} {Math.round(screen.measurement.minAngle ?? 0)}° · O‘lchov ishonchi {Math.round((screen.measurement.confidence ?? 0) * 100)}% · {screen.measurement.analyzedFrames} kadr
@@ -773,8 +948,28 @@ export function ExerciseClient({
                   disabled={coachState.status === 'loading'}
                   onClick={() => void requestAiCoach()}
                 >
-                  {coachState.status === 'loading' ? 'AI murabbiy tahlil qilmoqda…' : sample ? 'AI murabbiydan batafsil maslahat olish' : 'Texnika izohini ko‘rish'}
+                  {coachState.status === 'loading'
+                    ? 'AI murabbiy tahlil qilmoqda…'
+                    : sample
+                      ? 'AI murabbiydan batafsil maslahat olish'
+                      : 'Texnika izohini ko‘rish'}
                 </button>
+                {!preview && screen.videoBlob && flaggedCycleEntry && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={keyframeStatus.status === 'loading'}
+                    onClick={() => void requestKeyframeAiReview(flaggedCycleEntry.cycle, flaggedCycleEntry.idx)}
+                  >
+                    {keyframeStatus.status === 'loading' ? (
+                      <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />
+                    ) : (
+                      <Sparkles data-icon="inline-start" aria-hidden="true" />
+                    )}
+                    <span>Belgilangan sikl AI kuzatuvi</span>
+                  </Button>
+                )}
               </div>
               {coachState.status === 'error' && <p role="status">{coachState.message}</p>}
               {coachState.status === 'ready' && (
@@ -783,6 +978,21 @@ export function ExerciseClient({
                   <p>{coachState.advice.patientAdviceUz}</p>
                   <p><strong>Keyingi e’tibor:</strong> {coachState.advice.focusCueUz}</p>
                   <p className={styles.modelName}>Shifokor uchun xulosa: {coachState.advice.doctorInsightUz}</p>
+                </div>
+              )}
+              {keyframeStatus.status === 'error' && <p role="status">{keyframeStatus.message}</p>}
+              {keyframeStatus.status === 'ready' && (
+                <div className="mt-2 rounded-lg border border-border bg-card p-3 text-sm" role="region" aria-label="Kadr AI kuzatuvi">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>
+                      {keyframeStatus.observation.cycleNumber}-takror · {keyframeStatus.observation.timeRangeLabel}
+                    </strong>
+                    <Badge variant={keyframeStatus.observation.sourceMode === 'ai' ? 'ok' : 'secondary'}>
+                      {keyframeStatus.observation.sourceMode === 'ai' ? 'AI kuzatuv' : 'Deterministik kuzatuv'}
+                    </Badge>
+                  </div>
+                  <p className="mt-1">{keyframeStatus.observation.observationUz}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{keyframeStatus.observation.uncertaintyNoteUz}</p>
                 </div>
               )}
             </div>
@@ -804,7 +1014,7 @@ export function ExerciseClient({
                 </tr>
               </thead>
               <tbody>
-                {screen.cycles.map(cycle => (
+                {screen.cycles.map((cycle) => (
                   <tr key={cycle.fromMs}>
                     <td>{seconds.format(cycle.fromMs / 1000)}–{seconds.format(cycle.toMs / 1000)} s</td>
                     <td>{Math.round(cycle.minAngle)}°</td>
@@ -820,21 +1030,46 @@ export function ExerciseClient({
               Videodagi mashq natijasini tasdiqlayman
             </label>
           )}
-          {!preview && <button className={styles.primary} type="button" onClick={saveMeasurement} disabled={
-            saving || (saveStatus?.state === 'saved' && saveStatus.report === 'measurement') || (screen.source === 'uploaded_video' && !confirmed)
-          }>Natijani yuborish</button>}
+          {!preview && (
+            <button
+              className={styles.primary}
+              type="button"
+              onClick={saveMeasurement}
+              disabled={
+                saving ||
+                (saveStatus?.state === 'saved' && saveStatus.report === 'measurement') ||
+                (screen.source === 'uploaded_video' && !confirmed)
+              }
+            >
+              Natijani yuborish
+            </button>
+          )}
+          {!preview &&
+            saveStatus?.state === 'saved' &&
+            saveStatus.report === 'measurement' &&
+            saveStatus.attemptId &&
+            !saveStatus.sample &&
+            screen.videoBlob && (
+              <ExerciseVideoUpload
+                attemptId={saveStatus.attemptId}
+                videoBlob={screen.videoBlob}
+                durationSec={screen.durationSec}
+              />
+            )}
         </div>
       )}
       {reviewingSample && analysisProvider && <ExerciseAnalysisPanel provider={analysisProvider} poseCycles={poseCycles} />}
       {saveStatus && <p className={styles.notice} role="status">{saveStatus.message}</p>}
-      {!preview && <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
-        <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>
-        <form onSubmit={saveManual} className={styles.manualForm} aria-labelledby="exercise-manual-heading">
-          <label htmlFor="exercise-reps">Takrorlar soni</label>
-          <input id="exercise-reps" name="reps" type="number" inputMode="numeric" min={0} max={999} step={1} required />
-          <button className={styles.primary} type="submit" disabled={capturing || saving}>Qo‘lda qayd yuborish</button>
-        </form>
-      </details>}
+      {!preview && (
+        <details className={styles.manual} open={screen.phase === 'retake' || undefined}>
+          <summary id="exercise-manual-heading">Takrorni qo‘lda kiritish</summary>
+          <form onSubmit={saveManual} className={styles.manualForm} aria-labelledby="exercise-manual-heading">
+            <label htmlFor="exercise-reps">Takrorlar soni</label>
+            <input id="exercise-reps" name="reps" type="number" inputMode="numeric" min={0} max={999} step={1} required />
+            <button className={styles.primary} type="submit" disabled={capturing || saving}>Qo‘lda qayd yuborish</button>
+          </form>
+        </details>
+      )}
     </div>
   );
 }

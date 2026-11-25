@@ -1,25 +1,29 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { AlertOctagon, PhoneCall } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { getActivityDashboard } from '@/lib/activity-store';
+import { readLatestClinicalBrief } from '@/lib/ai/clinical-brief-ai';
 import type { ActivityDashboardData } from '@/lib/clinical-brief';
 import { countOpenClinicalAttention } from '@/lib/clinical-triage';
 import { getClinicalView } from '@/lib/clinical-store';
-import type { ClinicalActor, ClinicalView } from '@/lib/clinical-types';
-import { getDemoSession } from '@/lib/demo-session';
+import type { ClinicalView } from '@/lib/clinical-types';
 import { readExerciseAttempts, readExercisePlan } from '@/lib/exercise-store';
 import { isAndroidDemoEnabled } from '@/lib/mobile-demo';
-import { ensureDemoWorkspace } from '@/lib/seed';
+import { resolveRolePageContext } from '@/lib/role-page-context';
+import { getTeachBackStatus, type TeachBackStatus } from '@/lib/teach-back-store';
+import { AuthLogoutButton } from './auth-logout-button';
 import { CaregiverSharing } from './caregiver-sharing';
 import { DoctorAndroidPairing } from './doctor-android-pairing';
 import { DoctorBriefSection } from './doctor-brief-section';
 import { DoctorClinical } from './doctor-clinical';
 import { DoctorExercise } from './doctor-exercise';
+import { DoctorPatientSwitcher } from './doctor-patient-switcher';
 import { DoctorAdherence, PatientAdherence } from './patient-adherence';
 import { PatientClinical } from './patient-clinical';
 import { PatientExerciseCard } from './patient-exercise-card';
 import { DoctorTelegramPanel, PatientTelegramPanel } from './telegram-panel';
 
-const names = { doctor: 'Dr. Sardor', patient: 'Anvar aka' };
 const titles = { doctor: 'Shifokor sahifasi', patient: 'Bemor sahifasi' };
 const feedback = {
   invalid: 'Ma’lumotlarni tekshiring va qayta yuboring. Bosim kiritilsa, ikkala qiymat ham kerak. Kuzatuv chegarasi maksimumdan oshmasin.',
@@ -28,38 +32,48 @@ const feedback = {
   unavailable: 'So‘rov bajarilmadi. Bir ozdan so‘ng sahifani yangilang va qayta urinib ko‘ring.',
 };
 
-export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient'; result?: string | string[] }) {
-  const session = await getDemoSession();
-  if (session?.role !== role) redirect('/');
+export async function DemoRolePage({
+  role,
+  result,
+  patientId,
+}: {
+  role: 'doctor' | 'patient';
+  result?: string | string[];
+  patientId?: string | string[];
+}) {
+  const ctx = await resolveRolePageContext(role, patientId);
+  if (!ctx) redirect('/');
 
-  let workspace: Awaited<ReturnType<typeof ensureDemoWorkspace>> = null;
+  const { actor, isDemo, actorName, patientName, assignedPatients, selectedPatientId } = ctx;
   let view: ClinicalView | null = null;
-  let actor: ClinicalActor | null = null;
   let exercisePlan: Awaited<ReturnType<typeof readExercisePlan>> = null;
   let exerciseAttempts: Awaited<ReturnType<typeof readExerciseAttempts>> = [];
   let activity: ActivityDashboardData = null;
-  let storageUnavailable = false;
-  try {
-    workspace = await ensureDemoWorkspace(session.workspaceId);
-    if (workspace) {
-      actor = {
-        workspaceId: session.workspaceId, role,
-        doctorId: workspace.doctor.id, patientId: workspace.patient.id, isDemo: true,
-      };
-      const [clinical, plan, attempts, doctorActivity] = await Promise.all([
+  let latestBrief: Awaited<ReturnType<typeof readLatestClinicalBrief>> = null;
+  let teachBackStatus: TeachBackStatus | null = null;
+  let storageUnavailable = ctx.storageUnavailable;
+
+  if (!storageUnavailable && actor.patientId) {
+    try {
+      const [clinical, plan, attempts, doctorActivity, brief, teachBack] = await Promise.all([
         getClinicalView(actor),
         readExercisePlan(actor).catch(() => null),
         readExerciseAttempts(actor).catch(() => []),
         role === 'doctor' ? getActivityDashboard(actor).catch(() => null) : Promise.resolve(null),
+        readLatestClinicalBrief(actor).catch(() => null),
+        role === 'patient' ? getTeachBackStatus(actor).catch(() => null) : Promise.resolve(null),
       ]);
       view = clinical;
       exercisePlan = plan;
       exerciseAttempts = attempts;
       activity = doctorActivity;
+      latestBrief = brief;
+      teachBackStatus = teachBack;
+    } catch {
+      storageUnavailable = true;
     }
-  } catch {
-    storageUnavailable = true;
   }
+
   const message = typeof result === 'string' && Object.hasOwn(feedback, result)
     ? feedback[result as keyof typeof feedback]
     : null;
@@ -67,18 +81,41 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
   const openFlagsCount = view
     ? countOpenClinicalAttention({ view, exerciseAttempts }).totalOpen
     : 0;
+  const doctorAiBrief = latestBrief && 'doctorDraftUz' in latestBrief ? latestBrief : null;
+  const patientAiBrief = latestBrief && !('doctorDraftUz' in latestBrief) ? latestBrief : null;
 
   return (
     <main className="frame content" id="content" tabIndex={-1}>
-      <h1>{titles[role]}</h1>
-      <p className="lede">{workspace?.[role].name ?? names[role]} · Namuna foydalanuvchi</p>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h1>{titles[role]}</h1>
+        <Badge variant={isDemo ? 'secondary' : 'ok'}>
+          {isDemo ? 'Sintetik Judge Demo' : 'Klinika sessiyasi'}
+        </Badge>
+      </div>
+      <p className="lede">
+        {actorName} · {isDemo ? 'Namuna foydalanuvchi' : role === 'doctor' ? `Tanlangan bemor: ${patientName}` : 'Klinika bemori'}
+      </p>
+
       <div className="sticky-bar" role="region" aria-label="Tezkor boshqaruv">
-        {role === 'patient' && <a className="emergency" href="tel:103">Tez yordam · 103</a>}
-        <form action="/api/demo/login" method="post">
-          <button className="switch-chip" type="submit" name="role" value={otherRole}>
-            {role === 'doctor' ? 'Bemor sifatida ko‘rish ↗' : 'Shifokor sifatida ko‘rish ↗'}
-          </button>
-        </form>
+        {role === 'patient' && (
+          <>
+            <a className="emergency" href="tel:103">
+              <PhoneCall className="size-4" aria-hidden="true" />
+              <span>Tez yordam · 103</span>
+            </a>
+            <a className="emergency" href="#urgent-report-section">
+              <AlertOctagon className="size-4" aria-hidden="true" />
+              <span>Og‘riq bor</span>
+            </a>
+          </>
+        )}
+        {isDemo && (
+          <form action="/api/demo/login" method="post">
+            <button className="switch-chip" type="submit" name="role" value={otherRole}>
+              {role === 'doctor' ? 'Bemor sifatida ko‘rish ↗' : 'Shifokor sifatida ko‘rish ↗'}
+            </button>
+          </form>
+        )}
         {role === 'patient' ? (
           <>
             <Link className="text-action" href="/patient/exercise">Mashq</Link>
@@ -98,13 +135,20 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
           </span>
         )}
       </div>
+
+      {role === 'doctor' && !isDemo && (
+        <DoctorPatientSwitcher patients={assignedPatients} selectedPatientId={selectedPatientId} />
+      )}
+
       {message && <p className="notice" role={result === 'already_saved' ? 'status' : 'alert'}>{message}</p>}
-      {view === null && (
+
+      {view === null && (isDemo || actor.patientId !== null) && (
         <p className="notice" role={storageUnavailable ? 'alert' : undefined}>
-          {storageUnavailable ? 'Demo ma’lumotlarini ochib bo‘lmadi. Sahifani qayta yuklang.' : 'Demo ma’lumotlar bazasi ulanmagan.'}
+          {storageUnavailable ? 'Ma’lumotlarni ochib bo‘lmadi. Sahifani qayta yuklang.' : 'Ma’lumotlar bazasi ulanmagan.'}
         </p>
       )}
-      {view && role === 'doctor' && actor && (
+
+      {view && role === 'doctor' && (
         view.plan !== null
         || exercisePlan !== null
         || (view.urgentSymptoms?.length ?? 0) > 0
@@ -113,31 +157,60 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
         <DoctorBriefSection
           actor={actor}
           view={view}
-          patientName={workspace?.patient.name ?? names.patient}
+          patientName={patientName}
           activity={activity}
           exercisePlan={exercisePlan}
           exerciseAttempts={exerciseAttempts}
+          initialAiBrief={doctorAiBrief}
         />
       )}
-      {view && role === 'doctor' && <DoctorClinical view={view} patientName={workspace?.patient.name ?? names.patient} />}
-      {view && role === 'doctor' && isAndroidDemoEnabled() && <DoctorAndroidPairing />}
-      {view && role === 'patient' && <PatientClinical view={view} />}
+
+      {view && role === 'doctor' && (
+        <DoctorClinical
+          view={view}
+          patientName={patientName}
+          isDemo={isDemo}
+          patientId={selectedPatientId}
+        />
+      )}
+
+      {view && role === 'doctor' && isDemo && isAndroidDemoEnabled() && <DoctorAndroidPairing />}
+
+      {view && role === 'patient' && (
+        <PatientClinical
+          view={view}
+          isDemo={isDemo}
+          patientBrief={patientAiBrief}
+          teachBackStatus={teachBackStatus}
+        />
+      )}
+
       {view && role === 'patient' && exercisePlan && (
         <PatientExerciseCard plan={exercisePlan} attempts={exerciseAttempts} />
       )}
-      {view && actor && role === 'patient' && <PatientAdherence actor={actor} />}
-      {actor && role === 'patient' && <CaregiverSharing actor={actor} />}
-      {view && actor && role === 'doctor' && (
+
+      {view && role === 'patient' && <PatientAdherence actor={actor} />}
+
+      {role === 'patient' && actor.patientId && <CaregiverSharing actor={actor} />}
+
+      {view && role === 'doctor' && (
         <DoctorExercise actor={actor} initialPlan={exercisePlan} initialAttempts={exerciseAttempts} />
       )}
-      {view?.plan && actor && role === 'doctor' && <DoctorAdherence actor={actor} initialDashboard={activity} />}
-      {view && actor && role === 'doctor' && <DoctorTelegramPanel actor={actor} />}
-      {view && role === 'patient' && <PatientTelegramPanel actor={actor ?? undefined} />}
+
+      {view?.plan && role === 'doctor' && <DoctorAdherence actor={actor} initialDashboard={activity} />}
+
+      {role === 'doctor' && <DoctorTelegramPanel actor={actor} />}
+      {view && role === 'patient' && <PatientTelegramPanel actor={actor} />}
+
       <div className="role-actions">
         {role === 'patient' && !exercisePlan && <Link className="text-action" href="/patient/exercise">O‘tirib-turish mashqi</Link>}
-        <form action="/api/demo/logout" method="post">
-          <button className="text-action" type="submit">Demodan chiqish</button>
-        </form>
+        {isDemo ? (
+          <form action="/api/demo/logout" method="post">
+            <button className="text-action" type="submit">Demodan chiqish</button>
+          </form>
+        ) : (
+          <AuthLogoutButton />
+        )}
       </div>
     </main>
   );

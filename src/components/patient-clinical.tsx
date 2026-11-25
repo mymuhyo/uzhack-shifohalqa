@@ -1,3 +1,7 @@
+import { Clock, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { PatientClinicalBriefView } from '@/lib/ai/clinical-brief-schema';
 import {
   caregiverAckMessage,
   describeRetakeVitalsFollowup,
@@ -13,9 +17,16 @@ import type {
   UrgentSymptomType,
 } from '@/lib/clinical-types';
 import { formatBoxLabel } from '@/lib/dorimos-contract';
+import type { TeachBackStatus } from '@/lib/teach-back-store';
 import { DorimosCheck } from './dorimos-check';
-import { PatientBpForm, PatientRetakeBpForm } from './patient-bp-form';
+import { PatientBpForm, PatientRetakeBpForm, type PriorBpReference } from './patient-bp-form';
+import {
+  PatientMedRetakeFollowupActions,
+  PatientSupplyFollowupActions,
+} from './patient-followup-actions';
+import { PatientMedicationActions } from './patient-medication-actions';
 import { PatientTeachBack } from './patient-teach-back';
+import { PatientUrgentSymptomForm } from './patient-urgent-symptom-form';
 import styles from './patient-clinical.module.css';
 
 const tashkentTimeZone = 'Asia/Tashkent';
@@ -41,33 +52,17 @@ const symptomLabels: Record<UrgentSymptomType, string> = {
   severe_headache: 'Kuchli bosh og‘rig‘i',
 };
 
-function MedicationForm({ taskId }: { taskId: string }) {
-  const reasonId = `reason-${taskId}`;
+const unitDisplay: Record<string, string> = {
+  mg: 'mg',
+  mcg: 'mkg',
+  g: 'g',
+  iu: 'IU',
+};
 
-  return (
-    <div className={styles.controls}>
-      <form action="/api/demo/evidence" method="post" aria-labelledby={`taken-${taskId}`}>
-        <input type="hidden" name="taskId" value={taskId} />
-        <button className={styles.submit} id={`taken-${taskId}`} type="submit" name="medicationStatus" value="taken">Ichdim</button>
-      </form>
-      <details className={styles.disclosure}>
-        <summary id={`missed-${taskId}`}>Icha olmadim</summary>
-        <form className={styles.fields} action="/api/demo/evidence" method="post" aria-labelledby={`missed-${taskId}`}>
-          <input type="hidden" name="taskId" value={taskId} />
-          <input type="hidden" name="medicationStatus" value="missed" />
-          <label htmlFor={reasonId}>Nega icha olmadingiz?</label>
-          <select className={styles.field} id={reasonId} name="reason" defaultValue="" required>
-            <option value="" disabled>Sababni tanlang</option>
-            {Object.entries(missedReasons).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-          </select>
-          <button className={styles.submit} type="submit">Sababni yuborish</button>
-        </form>
-      </details>
-    </div>
-  );
-}
-
-function formatFollowup(item: FlagFollowup, targets: BloodPressureTargets | null): { text: string; tone?: 'ok' | 'warn' | 'urgent' | null; labelUz?: string | null } {
+function formatFollowup(
+  item: FlagFollowup,
+  targets: BloodPressureTargets | null,
+): { text: string; tone?: 'ok' | 'warn' | 'urgent' | null; labelUz?: string | null } {
   switch (item.kind) {
     case 'supply_resolved':
       return { text: 'Sizning tasdiqingiz: Dorini oldim va ichdim.', tone: 'ok', labelUz: 'Halqa yopildi' };
@@ -83,9 +78,11 @@ function formatFollowup(item: FlagFollowup, targets: BloodPressureTargets | null
 function PatientRecord({
   evidence,
   targets,
+  isDemo,
 }: {
   evidence: EvidenceView;
   targets: BloodPressureTargets | null;
+  isDemo: boolean;
 }) {
   const { payload, review, flagId, followups = [] } = evidence;
   const isOutOfSupply = payload.kind === 'medication' && payload.status === 'missed' && payload.reason === 'out_of_supply';
@@ -102,10 +99,17 @@ function PatientRecord({
           {payload.systolic !== null && payload.diastolic !== null && <p>{payload.systolic}/{payload.diastolic} mm sim. ust.</p>}
           {payload.chestPain && <p>Ko‘krak og‘rig‘i bildirildi.</p>}
         </>
-      ) : payload.result === 'manual' ? <p>Quti tekshirilmagani qo‘lda qayd etildi.</p>
-      : payload.result === 'deferred' ? <p>Quti tekshiruvi keyinroqqa qoldirildi.</p> : (
+      ) : payload.result === 'manual' ? (
+        <p>Quti tekshirilmagani qo‘lda qayd etildi.</p>
+      ) : payload.result === 'deferred' ? (
+        <p>Quti tekshiruvi keyinroqqa qoldirildi.</p>
+      ) : (
         <>
-          <p>{payload.result === 'match' ? 'Namuna qutisi rejadagi nom va kuchga mos.' : 'Namuna qutisi rejadan farq qiladi. Qayd shifokor navbatiga yuborildi.'}</p>
+          <p>
+            {payload.result === 'match'
+              ? 'Namuna qutisi rejadagi nom va kuchga mos.'
+              : 'Namuna qutisi rejadan farq qiladi. Qayd shifokor navbatiga yuborildi.'}
+          </p>
           <p>Qutidan o‘qildi · {formatBoxLabel(payload.reading.label)}</p>
           <p>Rejada · {formatBoxLabel(payload.expected)}</p>
         </>
@@ -114,8 +118,15 @@ function PatientRecord({
         <dt>Vaqti</dt>
         <dd><time dateTime={evidence.createdAt}>{displayTimestamp.format(new Date(evidence.createdAt))}</time> · Toshkent</dd>
         <dt>Manba</dt>
-        <dd>{evidence.source === 'photo_ocr' ? 'Sintetik quti · AI o‘qidi, bemor tasdiqladi'
-          : evidence.aiMode === 'manual' ? 'Qo‘lda kiritildi' : 'Bemor qaydi'}</dd>
+        <dd>
+          {evidence.source === 'photo_ocr'
+            ? (payload.kind === 'medication_box' && payload.result !== 'manual' && payload.result !== 'deferred' && payload.sampleId === 'camera_photo'
+              ? 'Kamera rasmi · AI o‘qidi, bemor tasdiqladi'
+              : 'Sintetik quti · AI o‘qidi, bemor tasdiqladi')
+            : evidence.aiMode === 'manual'
+              ? 'Qo‘lda kiritildi'
+              : 'Bemor qaydi'}
+        </dd>
         <dt>AI rejimi</dt>
         <dd>{evidence.aiMode}</dd>
         <dt>Dalil darajasi</dt>
@@ -123,7 +134,9 @@ function PatientRecord({
       </dl>
       {review && (
         <div className={styles.reply}>
-          <p className={styles.recordTitle}>{review.decision === 'approved' ? 'Shifokor ko‘rib tasdiqladi' : 'Shifokor qayta o‘lchashni so‘radi'}</p>
+          <p className={styles.recordTitle}>
+            {review.decision === 'approved' ? 'Shifokor ko‘rib tasdiqladi' : 'Shifokor qayta o‘lchashni so‘radi'}
+          </p>
           <p>Shifokor javobi</p>
           <p className={styles.replyText}>{review.reply}</p>
           <p><time dateTime={review.reviewedAt}>{displayTimestamp.format(new Date(review.reviewedAt))}</time> · Toshkent</p>
@@ -158,41 +171,15 @@ function PatientRecord({
           })}
 
           {flagId && isOutOfSupply && review.decision === 'approved' && !supplyResolved && (
-            <div className={styles.controls}>
-              <form action="/api/demo/followup" method="post">
-                <input type="hidden" name="flagId" value={flagId} />
-                <input type="hidden" name="kind" value="supply_resolved" />
-                <button className={styles.submit} type="submit">Dorini oldim va ichdim</button>
-              </form>
-              <form action="/api/demo/followup" method="post">
-                <input type="hidden" name="flagId" value={flagId} />
-                <input type="hidden" name="kind" value="still_need_help" />
-                <button className="text-action" type="submit">Hali yordam kerak</button>
-              </form>
-            </div>
+            <PatientSupplyFollowupActions flagId={flagId} isDemo={isDemo} />
           )}
 
           {flagId && review.decision === 'retake' && payload.kind === 'vitals' && (
-            <PatientRetakeBpForm flagId={flagId} targets={targets} />
+            <PatientRetakeBpForm flagId={flagId} targets={targets} isDemo={isDemo} />
           )}
 
           {flagId && review.decision === 'retake' && payload.kind === 'medication' && !retakeMedTaken && (
-            <div className={styles.controls}>
-              <form action="/api/demo/followup" method="post">
-                <input type="hidden" name="flagId" value={flagId} />
-                <input type="hidden" name="kind" value="retake_medication" />
-                <button className={styles.submit} type="submit" name="medicationStatus" value="taken">
-                  Qayta tasdiqlash: Ichdim
-                </button>
-              </form>
-              <form action="/api/demo/followup" method="post">
-                <input type="hidden" name="flagId" value={flagId} />
-                <input type="hidden" name="kind" value="retake_medication" />
-                <button className="text-action" type="submit" name="medicationStatus" value="missed">
-                  Hali icha olmadim
-                </button>
-              </form>
-            </div>
+            <PatientMedRetakeFollowupActions flagId={flagId} isDemo={isDemo} />
           )}
 
           {flagId && review.decision === 'retake' && payload.kind === 'medication_box' && (
@@ -211,39 +198,97 @@ function PatientTask({
   today,
   boxStrengthKnown,
   targets,
+  isDemo,
+  priorReadings,
 }: {
   task: ClinicalTask;
   today: boolean;
   boxStrengthKnown: boolean;
   targets: NonNullable<ClinicalView['plan']>['targets'] | null;
+  isDemo: boolean;
+  priorReadings: readonly PriorBpReference[];
 }) {
+  const isBoxDeferred =
+    task.boxEvidence?.payload.kind === 'medication_box' && task.boxEvidence.payload.result === 'deferred';
+  const taskBoxAvailable = task.strength !== undefined ? task.strength !== null : boxStrengthKnown;
+  const strengthText =
+    task.type === 'medication' && task.strength !== undefined && task.strength !== null
+      ? ` · ${task.strength} ${unitDisplay[task.strengthUnit ?? 'mg'] ?? 'mg'}`
+      : '';
+
   return (
     <li className={styles.task}>
       <div className={styles.taskHeading}>
-        <h3>{task.title}</h3>
-        <time dateTime={`${task.date}T${task.dueTime}`}>
+        <h3>
+          {task.title}
+          {strengthText}
+        </h3>
+        <time dateTime={`${task.date}T${task.dueTime}`} className="tabular-nums">
           {!today && `${displayDate.format(new Date(`${task.date}T00:00:00Z`))}, `}{task.dueTime} · Toshkent
         </time>
       </div>
-      {task.evidence ? <PatientRecord evidence={task.evidence} targets={targets} /> : (
-        today && task.status === 'pending' && (task.type === 'medication'
-          ? <MedicationForm taskId={task.id} />
-          : <PatientBpForm taskId={task.id} targets={targets} />)
+      {task.evidence ? (
+        <PatientRecord evidence={task.evidence} targets={targets} isDemo={isDemo} />
+      ) : (
+        today && task.status === 'pending' && (
+          task.type === 'medication'
+            ? <PatientMedicationActions taskId={task.id} taskTitle={task.title} isDemo={isDemo} />
+            : <PatientBpForm taskId={task.id} targets={targets} isDemo={isDemo} priorReadings={priorReadings} />
+        )
       )}
-      {task.boxEvidence ? <PatientRecord evidence={task.boxEvidence} targets={targets} /> : (
-        today && task.type === 'medication' && <DorimosCheck taskId={task.id} available={boxStrengthKnown} />
+      {task.boxEvidence ? (
+        <>
+          <PatientRecord evidence={task.boxEvidence} targets={targets} isDemo={isDemo} />
+          {today && isBoxDeferred && (
+            <DorimosCheck taskId={task.id} available={taskBoxAvailable} isDemo={isDemo} deferred />
+          )}
+        </>
+      ) : (
+        today && task.type === 'medication' && (
+          <DorimosCheck taskId={task.id} available={taskBoxAvailable} isDemo={isDemo} />
+        )
       )}
     </li>
   );
 }
 
-export function PatientClinical({ view }: { view: ClinicalView }) {
+export function PatientClinical({
+  view,
+  isDemo = true,
+  patientBrief = null,
+  teachBackStatus = null,
+}: {
+  view: ClinicalView;
+  isDemo?: boolean;
+  patientBrief?: PatientClinicalBriefView | null;
+  teachBackStatus?: TeachBackStatus | null;
+}) {
   const today = localDate.format(new Date());
   const todayTasks = view.tasks.filter((task) => task.date === today);
   const pastTasks = view.tasks.filter((task) => task.date < today && !task.lateReview && (task.evidence !== null || task.boxEvidence !== null));
   const lateReplies = view.tasks.filter((task) => task.lateReview);
   const boxStrengthKnown = view.plan?.medicationStrengthMg != null;
   const urgentSymptoms = view.urgentSymptoms ?? [];
+
+  const priorReadings: PriorBpReference[] = view.tasks
+    .filter((t) => t.evidence && t.evidence.payload.kind === 'vitals' && t.evidence.payload.systolic !== null)
+    .map((t) => {
+      const p = t.evidence!.payload;
+      const reading = p.kind === 'vitals' ? `${p.systolic}/${p.diastolic} mmHg` : '';
+      return {
+        id: t.evidence!.id,
+        label: `${t.date} · ${reading}`,
+      };
+    });
+
+  // Group today's tasks by dueTime (Asia/Tashkent) while preserving task order
+  const timeGroups = new Map<string, ClinicalTask[]>();
+  for (const task of todayTasks) {
+    const existing = timeGroups.get(task.dueTime);
+    if (existing) existing.push(task);
+    else timeGroups.set(task.dueTime, [task]);
+  }
+  const hasMultipleTimes = timeGroups.size > 1;
 
   return (
     <div className="ledger">
@@ -252,39 +297,83 @@ export function PatientClinical({ view }: { view: ClinicalView }) {
           {caregiverAckMessage(view.caregiverAck, 'patient')} ({displayTimestamp.format(new Date(view.caregiverAck.createdAt))}).
         </p>
       )}
+
+      {patientBrief && (
+        <section aria-labelledby="patient-weekly-brief-heading">
+          <Card className="border-2 border-[var(--ok)]/40 bg-card shadow-[var(--surface-shadow)]">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-lg font-medium">
+                  <h2 id="patient-weekly-brief-heading" className="flex items-center gap-2 text-inherit font-inherit leading-inherit">
+                    <ShieldCheck className="size-5 text-[var(--ok)]" aria-hidden="true" />
+                    <span>Shifokor tasdiqlagan 7 kunlik xulosa</span>
+                  </h2>
+                </CardTitle>
+                <Badge variant="ok">L4 · Tasdiqlandi</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="whitespace-pre-wrap text-sm text-foreground">{patientBrief.approvedReplyUz}</p>
+              <p className="text-xs text-muted-foreground">
+                Tasdiqlangan vaqt: <time dateTime={patientBrief.approvedAt}>{displayTimestamp.format(new Date(patientBrief.approvedAt))}</time> · Toshkent
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
       <section>
         <h2>Bugungi vazifalar</h2>
         {todayTasks.length ? (
-          <ul className={styles.tasks}>
-            {todayTasks.map((task) => (
-              <PatientTask
-                key={task.id}
-                task={task}
-                today
-                boxStrengthKnown={boxStrengthKnown}
-                targets={view.plan?.targets ?? null}
-              />
-            ))}
-          </ul>
-        ) : <p>Hozircha vazifa biriktirilmagan.</p>}
-      </section>
-      {view.plan && <PatientTeachBack plan={view.plan} />}
-      <section aria-labelledby="urgent-report-heading">
-        <h2 id="urgent-report-heading">Kutilmagan simptom yoki og‘riq</h2>
-        <details className={styles.disclosure}>
-          <summary>Shoshilinch simptom bildirish</summary>
-          <form className={styles.fields} action="/api/demo/symptom" method="post">
-            <label htmlFor="urgent-symptom-select">Belgi turi</label>
-            <select id="urgent-symptom-select" name="symptom" className={styles.field} required defaultValue="chest_pain">
-              {Object.entries(symptomLabels).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+          hasMultipleTimes ? (
+            <div className="mt-3 flex flex-col gap-4">
+              {Array.from(timeGroups.entries()).map(([dueTime, tasks]) => (
+                <div key={dueTime} className="rounded-xl border border-border bg-card/60 p-3.5">
+                  <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-primary tabular-nums">
+                    <Clock className="size-4" aria-hidden="true" />
+                    <span>{dueTime} · Toshkent</span>
+                  </div>
+                  <ul className={styles.tasks}>
+                    {tasks.map((task) => (
+                      <PatientTask
+                        key={task.id}
+                        task={task}
+                        today
+                        boxStrengthKnown={boxStrengthKnown}
+                        targets={view.plan?.targets ?? null}
+                        isDemo={isDemo}
+                        priorReadings={priorReadings}
+                      />
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </select>
-            <label htmlFor="urgent-symptom-note">Qisqa izoh (ixtiyoriy)</label>
-            <input id="urgent-symptom-note" name="note" className={styles.field} maxLength={300} placeholder="Masalan: kechqurun boshlandi" />
-            <button className={styles.submit} type="submit">Shifokorga yuborish</button>
-          </form>
-        </details>
+            </div>
+          ) : (
+            <ul className={styles.tasks}>
+              {todayTasks.map((task) => (
+                <PatientTask
+                  key={task.id}
+                  task={task}
+                  today
+                  boxStrengthKnown={boxStrengthKnown}
+                  targets={view.plan?.targets ?? null}
+                  isDemo={isDemo}
+                  priorReadings={priorReadings}
+                />
+              ))}
+            </ul>
+          )
+        ) : (
+          <p>Hozircha vazifa biriktirilmagan.</p>
+        )}
+      </section>
+
+      {view.plan && <PatientTeachBack plan={view.plan} initialStatus={teachBackStatus} />}
+
+      <section id="urgent-report-section" aria-labelledby="urgent-report-heading">
+        <h2 id="urgent-report-heading">Kutilmagan simptom yoki og‘riq</h2>
+        <PatientUrgentSymptomForm isDemo={isDemo} />
         {urgentSymptoms.length > 0 && (
           <ul className={styles.tasks}>
             {urgentSymptoms.map((entry) => (
@@ -309,6 +398,7 @@ export function PatientClinical({ view }: { view: ClinicalView }) {
           </ul>
         )}
       </section>
+
       {[
         { title: 'Eski qaydlarga yangi javoblar', tasks: lateReplies },
         { title: 'Oldingi qaydlar', tasks: pastTasks },
@@ -323,6 +413,8 @@ export function PatientClinical({ view }: { view: ClinicalView }) {
                 today={false}
                 boxStrengthKnown={boxStrengthKnown}
                 targets={view.plan?.targets ?? null}
+                isDemo={isDemo}
+                priorReadings={priorReadings}
               />
             ))}
           </ul>

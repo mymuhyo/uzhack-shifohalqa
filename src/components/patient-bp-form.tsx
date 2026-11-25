@@ -1,9 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { AlertTriangle, HeartPulse, Loader2, PhoneCall } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { evaluateBpZone } from '@/lib/clinical-triage';
 import type { BloodPressureTargets } from '@/lib/clinical-types';
 import styles from './patient-clinical.module.css';
+
+export type PriorBpReference = {
+  id: string;
+  label: string;
+};
 
 function BpZoneBanner({
   systolic,
@@ -32,54 +43,137 @@ function BpZoneBanner({
 export function PatientBpForm({
   taskId,
   targets,
+  isDemo = true,
+  priorReadings = [],
 }: {
   taskId: string;
   targets: BloodPressureTargets | null;
+  isDemo?: boolean;
+  priorReadings?: readonly PriorBpReference[];
 }) {
+  const router = useRouter();
   const hintId = `pressure-hint-${taskId}`;
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [chestPain, setChestPain] = useState(false);
+  const [repeatOfEvidenceId, setRepeatOfEvidenceId] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  const zone = evaluateBpZone({ systolic, diastolic, chestPain, targets });
+  const hasInvalidReading = Boolean(zone?.invalid);
+
+  async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
+    if (isDemo) return;
+    event.preventDefault();
+    if (pending || hasInvalidReading) return;
+
+    const sysTrim = systolic.trim();
+    const diaTrim = diastolic.trim();
+    if ((!sysTrim || !diaTrim) && !chestPain) {
+      setError('Qon bosimi qiymatlarini kiriting yoki ko‘krak og‘rig‘ini belgilang.');
+      return;
+    }
+
+    setPending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/clinical/evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId,
+          systolic: sysTrim ? Number(sysTrim) : null,
+          diastolic: diaTrim ? Number(diaTrim) : null,
+          chestPain,
+          ...(repeatOfEvidenceId ? { repeatOfEvidenceId } : {}),
+        }),
+      });
+      if (!response.ok) {
+        setError('Bosim qiymatlarini tekshiring (sistolik 50–260, diastolik 30–160, sistolik > diastolik).');
+        return;
+      }
+      toast.success('Qon bosimi qaydi saqlandi.');
+      router.refresh();
+    } catch {
+      setError('Aloqa uzildi. Qayta urinib ko‘ring.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form className={styles.controls} action="/api/demo/evidence" method="post" aria-labelledby={`pressure-${taskId}`}>
+    <form
+      className={styles.controls}
+      action="/api/demo/evidence"
+      method="post"
+      onSubmit={(event) => void handleClinicSubmit(event)}
+      aria-labelledby={`pressure-${taskId}`}
+    >
       <input type="hidden" name="taskId" value={taskId} />
-      <fieldset aria-describedby={hintId}>
-        <legend id={`pressure-${taskId}`}>Qon bosimi (mm sim. ust.)</legend>
+      <fieldset aria-describedby={hintId} className="flex flex-col gap-2">
+        <legend id={`pressure-${taskId}`} className="flex items-center gap-1.5 text-sm font-semibold">
+          <HeartPulse className="size-4 text-primary" aria-hidden="true" />
+          <span>Qon bosimi (mm sim. ust.)</span>
+        </legend>
         <div className={styles.readings}>
-          <label htmlFor={`systolic-${taskId}`}>
-            Sistolik bosim
-            <input
-              className={styles.field}
+          <label htmlFor={`systolic-${taskId}`} className="flex flex-col gap-1 text-sm font-medium">
+            <span>Sistolik bosim</span>
+            <Input
               id={`systolic-${taskId}`}
               name="systolic"
               type="number"
               inputMode="numeric"
-              min={1}
-              max={999}
+              min={50}
+              max={260}
               step={1}
               value={systolic}
+              aria-invalid={hasInvalidReading ? true : undefined}
               onChange={(event) => setSystolic(event.currentTarget.value)}
             />
           </label>
-          <label htmlFor={`diastolic-${taskId}`}>
-            Diastolik bosim
-            <input
-              className={styles.field}
+          <label htmlFor={`diastolic-${taskId}`} className="flex flex-col gap-1 text-sm font-medium">
+            <span>Diastolik bosim</span>
+            <Input
               id={`diastolic-${taskId}`}
               name="diastolic"
               type="number"
               inputMode="numeric"
-              min={1}
-              max={999}
+              min={30}
+              max={160}
               step={1}
               value={diastolic}
+              aria-invalid={hasInvalidReading ? true : undefined}
               onChange={(event) => setDiastolic(event.currentTarget.value)}
             />
           </label>
         </div>
-        <p id={hintId}>Bosimni qayd etish uchun ikkala qiymatni kiriting. Faqat og‘riq haqida xabar bersangiz, ularni bo‘sh qoldiring.</p>
+        <p id={hintId} className="text-xs text-muted-foreground">
+          Bosimni qayd etish uchun ikkala qiymatni kiriting. Faqat og‘riq haqida xabar bersangiz, ularni bo‘sh qoldiring.
+        </p>
       </fieldset>
+
+      {priorReadings.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`repeat-${taskId}`} className="text-xs font-semibold text-muted-foreground">
+            Takroriy o‘lchov bo‘lsa oldingi qaydga bog‘lang (ixtiyoriy)
+          </label>
+          <NativeSelect
+            id={`repeat-${taskId}`}
+            name="repeatOfEvidenceId"
+            value={repeatOfEvidenceId}
+            onChange={(e) => setRepeatOfEvidenceId(e.currentTarget.value)}
+          >
+            <option value="">Yangi o‘lchov (bog‘lanmagan)</option>
+            {priorReadings.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+
       <label className={styles.symptom}>
         <input
           type="checkbox"
@@ -88,10 +182,34 @@ export function PatientBpForm({
           checked={chestPain}
           onChange={(event) => setChestPain(event.currentTarget.checked)}
         />
-        Ko‘krak og‘rig‘i bor
+        <span>Ko‘krak og‘rig‘i bor</span>
       </label>
+
       <BpZoneBanner systolic={systolic} diastolic={diastolic} chestPain={chestPain} targets={targets} />
-      <button className={styles.submit} type="submit">Qaydni yuborish</button>
+
+      {zone?.tone === 'urgent' && !zone.invalid && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--urgent)] bg-[var(--urgent-bg)] px-3 py-2 text-xs font-semibold text-[var(--urgent)]">
+          <span className="inline-flex items-center gap-1.5">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            <span>Kuchli bosh aylanishi yoki ko‘krak og‘rig‘ida darhol 103 ga qo‘ng‘iroq qiling.</span>
+          </span>
+          <a className="emergency min-h-8" href="tel:103">
+            <PhoneCall className="size-3.5" aria-hidden="true" />
+            <span>103</span>
+          </a>
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="text-sm font-semibold text-[var(--urgent)]">
+          {error}
+        </p>
+      )}
+
+      <Button type="submit" size="lg" className="w-full" disabled={pending || hasInvalidReading}>
+        {pending && <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />}
+        <span>Qaydni yuborish</span>
+      </Button>
     </form>
   );
 }
@@ -99,44 +217,88 @@ export function PatientBpForm({
 export function PatientRetakeBpForm({
   flagId,
   targets,
+  isDemo = true,
 }: {
   flagId: string;
   targets: BloodPressureTargets | null;
+  isDemo?: boolean;
 }) {
+  const router = useRouter();
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [chestPain, setChestPain] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  const zone = evaluateBpZone({ systolic, diastolic, chestPain, targets });
+  const hasInvalidReading = Boolean(zone?.invalid);
+
+  async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
+    if (isDemo) return;
+    event.preventDefault();
+    if (pending || hasInvalidReading) return;
+    setPending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/clinical/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flagId,
+          kind: 'retake_vitals',
+          systolic: Number(systolic),
+          diastolic: Number(diastolic),
+          chestPain,
+        }),
+      });
+      if (!response.ok) {
+        setError('Qayta o‘lchov qiymatlarini tekshiring.');
+        return;
+      }
+      toast.success('Qayta o‘lchov yuborildi.');
+      router.refresh();
+    } catch {
+      setError('Aloqa uzildi.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form className={styles.controls} action="/api/demo/followup" method="post">
+    <form
+      className={styles.controls}
+      action="/api/demo/followup"
+      method="post"
+      onSubmit={(event) => void handleClinicSubmit(event)}
+    >
       <input type="hidden" name="flagId" value={flagId} />
       <input type="hidden" name="kind" value="retake_vitals" />
       <div className={styles.readings}>
-        <label>
-          Qayta sistolik
-          <input
-            className={styles.field}
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          <span>Qayta sistolik</span>
+          <Input
             name="systolic"
             type="number"
             inputMode="numeric"
-            min={1}
-            max={999}
+            min={50}
+            max={260}
             required
             value={systolic}
+            aria-invalid={hasInvalidReading ? true : undefined}
             onChange={(event) => setSystolic(event.currentTarget.value)}
           />
         </label>
-        <label>
-          Qayta diastolik
-          <input
-            className={styles.field}
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          <span>Qayta diastolik</span>
+          <Input
             name="diastolic"
             type="number"
             inputMode="numeric"
-            min={1}
-            max={999}
+            min={30}
+            max={160}
             required
             value={diastolic}
+            aria-invalid={hasInvalidReading ? true : undefined}
             onChange={(event) => setDiastolic(event.currentTarget.value)}
           />
         </label>
@@ -149,10 +311,18 @@ export function PatientRetakeBpForm({
           checked={chestPain}
           onChange={(event) => setChestPain(event.currentTarget.checked)}
         />
-        Ko‘krak og‘rig‘i bor
+        <span>Ko‘krak og‘rig‘i bor</span>
       </label>
       <BpZoneBanner systolic={systolic} diastolic={diastolic} chestPain={chestPain} targets={targets} />
-      <button className={styles.submit} type="submit">Qayta o‘lchovni yuborish</button>
+      {error && (
+        <p role="alert" className="text-sm font-semibold text-[var(--urgent)]">
+          {error}
+        </p>
+      )}
+      <Button type="submit" size="lg" className="w-full" disabled={pending || hasInvalidReading}>
+        {pending && <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />}
+        <span>Qayta o‘lchovni yuborish</span>
+      </Button>
     </form>
   );
 }

@@ -1,15 +1,27 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { Copy, Link2, Share2, ShieldOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import styles from './caregiver-sharing.module.css';
 
 type Sharing = { path: string | null; expiresAt: string | null };
 
 const expiryFormat = new Intl.DateTimeFormat('uz-Latn-UZ', {
-  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tashkent',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Tashkent',
 });
 
-export function CaregiverSharingControls({ initialExpiresAt }: { initialExpiresAt: string | null }) {
+export function CaregiverSharingControls({
+  initialExpiresAt,
+  isDemo = true,
+}: {
+  initialExpiresAt: string | null;
+  isDemo?: boolean;
+}) {
+  const endpoint = isDemo ? '/api/demo/caregiver' : '/api/clinical/caregiver';
   const [sharing, setSharing] = useState<Sharing>({ path: null, expiresAt: initialExpiresAt });
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -19,7 +31,7 @@ export function CaregiverSharingControls({ initialExpiresAt }: { initialExpiresA
     setPending(true);
     setFeedback('');
     try {
-      const response = await fetch('/api/demo/caregiver', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -53,27 +65,46 @@ export function CaregiverSharingControls({ initialExpiresAt }: { initialExpiresA
   return (
     <div className={styles.controls}>
       {sharing.expiresAt ? (
-        <p>Ulashish yoqilgan. Havola <time dateTime={sharing.expiresAt}>{expiryFormat.format(new Date(sharing.expiresAt))}</time> gacha amal qiladi · Toshkent.</p>
-      ) : <p>Ulashish o‘chiq. Yangi havola 24 soat ishlaydi.</p>}
+        <p>
+          Ulashish yoqilgan. Havola{' '}
+          <time dateTime={sharing.expiresAt}>{expiryFormat.format(new Date(sharing.expiresAt))}</time> gacha amal qiladi · Toshkent.
+        </p>
+      ) : (
+        <p>Ulashish o‘chiq. Yangi havola 24 soat ishlaydi.</p>
+      )}
       {sharing.path && (
         <div className={styles.link}>
-          <label htmlFor="caregiver-share-link">Yaqiningizga beriladigan havola</label>
-          <input id="caregiver-share-link" ref={linkField} value={sharing.path} readOnly spellCheck={false} />
-          <button type="button" className="text-action" onClick={copyLink}>Havolani nusxalash</button>
+          <label htmlFor="caregiver-share-link" className="flex items-center gap-1.5 text-sm font-semibold">
+            <Link2 className="size-4 text-primary" aria-hidden="true" />
+            <span>Yaqiningizga beriladigan havola</span>
+          </label>
+          <Input id="caregiver-share-link" ref={linkField} value={sharing.path} readOnly spellCheck={false} />
+          <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
+            <Copy data-icon="inline-start" aria-hidden="true" />
+            <span>Havolani nusxalash</span>
+          </Button>
         </div>
       )}
       <div className={styles.actions}>
-        <button type="button" className="text-action" disabled={pending} onClick={() => changeSharing('enable')}>
-          {sharing.expiresAt ? 'Havolani yangilash' : 'Ulashishni yoqish'}
+        <button type="button" className="text-action" disabled={pending} onClick={() => void changeSharing('enable')}>
+          <Share2 className="size-4" aria-hidden="true" />
+          <span>{sharing.expiresAt ? 'Havolani yangilash' : 'Ulashishni yoqish'}</span>
         </button>
         {sharing.expiresAt && (
-          <button type="button" className="text-action" disabled={pending} onClick={() => changeSharing('disable')}>
-            Ulashishni o‘chirish
+          <button type="button" className="text-action" disabled={pending} onClick={() => void changeSharing('disable')}>
+            <ShieldOff className="size-4" aria-hidden="true" />
+            <span>Ulashishni o‘chirish</span>
           </button>
         )}
       </div>
-      {sharing.expiresAt && <p>Havolani yangilash oldingi havolani bekor qiladi. Demodan chiqsangiz ham faol havola muddatigacha ishlaydi. Ulashishni tugatish uchun chiqishdan oldin «Ulashishni o‘chirish»ni bosing.</p>}
-      <p role="status" className={styles.feedback}>{feedback}</p>
+      {sharing.expiresAt && (
+        <p>
+          Havolani yangilash oldingi havolani bekor qiladi. Demodan chiqsangiz ham faol havola muddatigacha ishlaydi. Ulashishni tugatish uchun chiqishdan oldin «Ulashishni o‘chirish»ni bosing.
+        </p>
+      )}
+      <p role="status" className={styles.feedback}>
+        {feedback}
+      </p>
     </div>
   );
 }

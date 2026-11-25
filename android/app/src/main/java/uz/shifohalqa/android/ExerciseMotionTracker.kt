@@ -60,6 +60,11 @@ internal class ExerciseMotionTracker(plan: ExercisePlan, private val live: Boole
         )
     }
 
-    fun completedCycles(): List<ExerciseCycle> = chair?.completedCycles()
-        ?: pose.result().cycles.map { ExerciseCycle(it.fromMs, it.toMs) }
+    fun completedCycles(): List<ExerciseCycle> {
+        val measured = pose.result().cycles
+        return chair?.completedCycles()?.map { cycle ->
+            val matching = measured.filter { it.fromMs < cycle.toMs && it.toMs > cycle.fromMs }
+            cycle.copy(postureCodes = matching.flatMap { it.postureCodes }.toSet())
+        } ?: measured.map { ExerciseCycle(it.fromMs, it.toMs, it.minAngle, it.reachesTarget, it.postureCodes) }
+    }
 }

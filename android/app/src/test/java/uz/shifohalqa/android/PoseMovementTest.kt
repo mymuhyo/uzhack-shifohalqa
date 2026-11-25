@@ -28,4 +28,26 @@ class PoseMovementTest {
             assertEquals(movement.apiKey, 1, tracker.result().validReps)
         }
     }
+    @Test fun recordedKneeCycleKeepsItsVisibleLegWhenTheOtherLegBecomesClearer() {
+        val movement = PoseMovement.SeatedKneeExt
+        val tracker = PoseTracker(movement, liveCamera = false)
+        val sequence = List(8) { 100 } + listOf(130, 148) + List(9) { 171 } +
+            listOf(150, 127) + List(8) { 100 }
+        sequence.forEachIndexed { i, angle ->
+            val points = MutableList(33) { PoseLandmarkPoint(0f, 0f, 0f) }
+            fun leg(joints: Triple<Int, Int, Int>, position: Float, angle: Int, visibility: Float) {
+                val (hip, knee, ankle) = joints
+                val radians = Math.toRadians(angle.toDouble())
+                points[hip] = PoseLandmarkPoint(position, .3f, visibility)
+                points[knee] = PoseLandmarkPoint(position, .5f, visibility)
+                points[ankle] = PoseLandmarkPoint((position + .2 * sin(radians)).toFloat(),
+                    (.5 - .2 * cos(radians)).toFloat(), visibility)
+            }
+            leg(movement.leftJoints, .4f, angle, .86f)
+            leg(movement.rightJoints, .6f, 100, if (i < 9) .78f else .98f)
+            tracker.update(points, 640, 640, i * 100L)
+        }
+        assertEquals(1, tracker.result().validReps)
+    }
+
 }

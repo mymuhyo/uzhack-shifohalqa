@@ -33,6 +33,7 @@ internal data class ExerciseReview(val body: String, val retake: Boolean)
 internal data class ExerciseAttempt(
     val id: String, val date: String, val title: String, val reps: Int?, val shallow: Int?, val level: Int,
     val review: ExerciseReview?,
+    val hasVideo: Boolean = false,
     val movement: PoseMovement = PoseMovement.ChairStand,
 )
 
@@ -59,7 +60,8 @@ internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<Exe
                 }
                 ExerciseAttempt(entry.getString("id"), entry.getString("scheduledDate"), title,
                     entry.optInt("validReps", -1).takeIf { it >= 0 },
-                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review, PoseMovement.fromApiKey(entry.optString("movement")))
+                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review,
+                    entry.optBoolean("hasVideo"), PoseMovement.fromApiKey(entry.optString("movement")))
             }
             return ExerciseView(plan, history, data.toString())
         }
@@ -134,12 +136,13 @@ internal class ExerciseRepository(context: Context) {
         dao.prune(System.currentTimeMillis() - 7 * 86_400_000L)
     }
 
-    suspend fun queue(connection: DemoConnection, plan: ExercisePlan, evidence: JSONObject, label: String, date: LocalDate) {
+    suspend fun queue(connection: DemoConnection, plan: ExercisePlan, evidence: JSONObject, label: String, date: LocalDate): String {
         val id = UUID.randomUUID().toString()
         val payload = JSONObject().put("clientAttemptId", id).put("prescriptionId", plan.id)
             .put("scheduledDate", date.toString()).put("evidence", evidence)
         dao.queue(ExerciseOutbox(id, connection.scope, payload.toString(), label, System.currentTimeMillis()))
         schedule(id)
+        return id
     }
 
     suspend fun resume(connection: DemoConnection) {
@@ -166,7 +169,7 @@ class ExerciseSyncWorker(context: Context, params: WorkerParameters) : Coroutine
         } catch (failure: MobileFailure) {
             return when (failure.kind) {
                 MobileFailureKind.Expired -> Result.success()
-                MobileFailureKind.NotFound, MobileFailureKind.Rejected -> {
+                MobileFailureKind.NotFound, MobileFailureKind.Rejected, MobileFailureKind.Forbidden -> {
                     repository.dao.finish(id, "rejected")
                     Result.success()
                 }

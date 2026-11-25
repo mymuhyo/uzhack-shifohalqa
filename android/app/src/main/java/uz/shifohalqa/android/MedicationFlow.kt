@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -56,6 +58,7 @@ internal fun RecordSheet(
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var reason by rememberSaveable { mutableStateOf<MissedReason?>(null) }
     var saving by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -67,7 +70,7 @@ internal fun RecordSheet(
         sheetGesturesEnabled = !saving,
         containerColor = Card,
         contentColor = Ink,
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        shape = RoundedCornerShape(topStart = 11.dp, topEnd = 11.dp),
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
@@ -90,6 +93,7 @@ internal fun RecordSheet(
                 scope.launch {
                     failure = onRecord(reason)
                     if (failure == null) {
+                        haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                         state.hide()
                         onDismiss()
                     }
@@ -107,8 +111,8 @@ internal fun RecordSheet(
 private fun ReasonOption(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(shape).background(if (selected) Mint else Paper)
-            .border(1.dp, if (selected) Green else Border, shape)
+        Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(shape).background(if (selected) Tinted else Paper)
+            .border(1.dp, if (selected) Action else Border, shape)
             .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
             .padding(horizontal = 13.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -136,7 +140,7 @@ internal fun ReplyPage(demo: PatientDemo, onReset: () -> Unit) {
                     ) { reviewed ->
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (reviewed) {
-                                Badge("Namuna javob", Mint, Green)
+                                Badge("Namuna javob", Tinted, Action)
                                 SectionTitle("Shifokor ko‘rib chiqdi")
                                 Text(
                                     "Dori tugagani haqidagi qaydingizni ko‘rdim. Keyingi qadamni kelishish uchun qabulxonaga murojaat qiling.",

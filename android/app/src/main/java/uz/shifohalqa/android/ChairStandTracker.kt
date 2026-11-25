@@ -13,7 +13,10 @@ internal data class ExerciseMeasurement(
         minAngle != null && confidence != null && confidence >= .75
 }
 
-internal data class ExerciseCycle(val fromMs: Long, val toMs: Long)
+internal data class ExerciseCycle(
+    val fromMs: Long, val toMs: Long, val peakAngle: Double? = null, val reachesTarget: Boolean = true,
+    val postureCodes: Set<String> = emptySet(),
+)
 
 internal class ChairStandTracker(private val targetAngle: Int, private val live: Boolean = true) {
     private data class Sample(val time: Long, val angle: Double)
@@ -110,9 +113,10 @@ internal class ChairStandTracker(private val targetAngle: Int, private val live:
         }
         if (sample.angle < 160) return
         if (active.rising && duration >= 350) {
-            if (active.minimum <= targetAngle + 1e-9) valid++ else shallow++
+            val reachesTarget = active.minimum <= targetAngle + 1e-9
+            if (reachesTarget) valid++ else shallow++
             if (signature == null) signature = makeSignature(active.samples, duration)
-            if (!live) cycles += ExerciseCycle(active.samples.first().time, sample.time)
+            if (!live) cycles += ExerciseCycle(active.samples.first().time, sample.time, active.minimum, reachesTarget)
         }
         standing = sample
         cycle = null

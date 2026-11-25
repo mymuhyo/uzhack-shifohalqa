@@ -12,7 +12,7 @@
 |---|---|---|
 | M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [x] |
 | M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [x] |
-| M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [ ] |
+| M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [x] |
 | M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
 | M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [ ] |
 | M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [ ] |
@@ -69,15 +69,15 @@ Freeze shared Zod contracts in `src/lib/*` and update `docs/INTERFACES.md` as ea
 
 Iterate freely on [DESIGN](DESIGN.md) to deliver judge-ready visual craft, tactile animations, and clinical clarity.
 
-- [ ] **M3.1 Design system & motion setup.** Install `lucide-react`, `motion`, and initialize `shadcn/ui` (`components.json`, `src/components/ui/`) mapped directly onto Clinical Ledger light/dark CSS tokens (`--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn`, `--ok`). Wrap with `<MotionConfig reducedMotion="user">`.
-- [ ] **M3.2 Entry, Auth & Multi-Patient Doctor surface (`src/app/page.tsx`, `src/app/doctor/**`).**
+- [x] **M3.1 Design system & motion setup.** Install `lucide-react`, `motion`, and initialize `shadcn/ui` (`components.json`, `src/components/ui/`) mapped directly onto Clinical Ledger light/dark CSS tokens (`--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn`, `--ok`). Wrap with `<MotionConfig reducedMotion="user">`.
+- [x] **M3.2 Entry, Auth & Multi-Patient Doctor surface (`src/app/page.tsx`, `src/app/doctor/**`).**
   - Refocus `/` around Story 1 (Medication → Doctor Reply → 7-day Report) + Story 2 (3-movement Exercise CV), with 1-click Judge Demo AND compact **«Klinika hisobiga kirish»** Supabase login.
   - Upgrade `/doctor` to support both Judge Demo and real Supabase clinic sessions: assigned-patient list/switcher, priority queue (`red` → `yellow`), 7-day Supervised AI Brief card (source-record links, edit & L4 approve), and complete-attempt video player with clickable flagged-cycle timestamp markers + single review reply.
-- [ ] **M3.3 Patient & Caregiver surfaces (`src/app/patient/**`, `src/app/caregiver/**`).**
+- [x] **M3.3 Patient & Caregiver surfaces (`src/app/patient/**`, `src/app/caregiver/**`).**
   - Upgrade `/patient` to support both Demo and Supabase sessions: multi-medication time-grouped schedule (`Ichdim`/`Icha olmadim`/`Dori tugadi`), DoriMos check, compact Teach-Back, manual BP with high/low feedback, 7-day step trend (`Telefon sensori` vs `Qo‘lda`), doctor replies, `Yaqinim` 24-hour share link, and always-reachable `103` + `Og‘riq bor`.
   - Upgrade `/patient/exercise` for all **3 polished movements** (`chair_stand`, `elbow_bend`, `seated_knee_ext`) with lazy-loaded MediaPipe/Mediabunny, prepared-video primary entry, flagged-cycle AI observations, and explicit consent (`Shu urinish videosini shifokorga yuborish`) with upload progress and error/cancel states.
 
-**M3 Checks.** `npm run verify`, `npm run e2e`, responsive check at `360px` & `1280px`, large-text toggle, dark mode, keyboard focus, and reduced-motion verification.
+**M3 Checks.** Verified `npm run verify`, full DB-backed `npm run e2e` (`31 passed, 0 failed`), and Chromium headless visual/functional QA across `360×800` & `1280×800`, light/dark modes, `A+ Katta shrift` toggle, keyboard Tab focus, and Supabase Auth clinic sessions.
 
 ---
 

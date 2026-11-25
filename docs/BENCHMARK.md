@@ -165,3 +165,11 @@ Lokal `exp/mashq-ishonchliligi` filialida haqiqiy Gemini brauzer sinovi zaxira `
 21-noyabr 2026 (MYT) · lokal production build · Chromium 360×800. MediaPipe ommaviy CDC klipida 2 to‘liq va 0 chala sikl ko‘rsatdi. Haqiqiy `baidu/ernie-5.5-flash-preview:free` bu natijani 1 894 ms da izohladi. Video modeli sinov javobida 2 s va 6 s kuzatilganda, Baidu haqiqiy API orqali moslikni 2 412 ms da izohladi. Vaqtlar tugma bosilgach server javobini kutishdan boshlab o‘lchandi. Brauzer yuborgan JSON faqat izoh toifasini o‘z ichiga oldi.
 
 Shu akkaunt bilan jonli OpenRouter video so‘rovlari Nemotron va Gemma 4 26B uchun HTTP 402 qaytardi. Xizmat video kirishi uchun kamida 1 AQSh dollari balans talab qildi. Baidu matn so‘rovlari HTTP 200 qaytardi.
+
+### M4 · Android API 37 emulyatori
+
+26-noyabr 2026 (MYT), x86_64 emulyator, MediaPipe Tasks Vision 1.2.3. O‘tirib-turish namunasini `Full` ilovadagi video oqimida 22,3 soniyada tahlil qildi va 2 to‘liq, 0 chala takror qaytardi. `Heavy` shu ochiq klipning galereya nusxasida instrumentatsiya orqali 18 660 ms da 2 to‘liq, 0 chala takror qaytardi. Bu alohida yakka urinishlar. Model tezligini taqqoslash uchun jismoniy telefonda bir xil sharoitdagi takroriy sinovlar kerak.
+
+`Full` yuklangan tirsak namunasini 9,6 soniyada tahlil qildi. Lokal server tunneli uzilgach, shu SHA-256 bilan tekshirilgan keshdan takroriy tahlil 8,8 soniya oldi. Vaqt model, dekoder va kadrlarni tahlil qilishni qamraydi.
+
+O‘tirib oyoqni tekislash namunasining kadridan bosh va yelka kesilgan. Android emulyatorida oldingi kadr joylashuvi bilan `Full` 0,61, `Heavy` 0,46 ko‘rinish ishonchini va har biri 0 ta yakunlangan siklni qaytardi. Neytral joy qo‘shilgan diagnostika urinishida `Full` 198/200 kadrni o‘qib, 0,95 ishonchga yetdi va 0 ta siklni yakunladi. Shu manbaning 10,4 soniyali boshqa kesimi ham 0 ta sikl berdi. Namuna klipida to‘liq gavda ko‘rinadigan yozuv bilan qayta tekshiruv kerak. Ilova ushbu holatda videoni ko‘rsatish, boshqa fayl tanlash yoki qo‘lda qayd qilish imkonini beradi.

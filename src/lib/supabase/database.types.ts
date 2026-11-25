@@ -16,12 +16,18 @@ export type Database = {
     Tables: {
       ai_clinical_briefs: {
         Row: {
+          approved_at: string | null
+          approved_by_doctor_id: string | null
+          approved_reply_uz: string | null
           brief_date: string
+          cited_record_ids: Json
           created_at: string
           deterministic_metrics: Json
+          doctor_draft_uz: string
           doctor_id: string | null
           highlights: Json
           id: string
+          level: number
           model: string | null
           narrative_uz: string
           patient_id: string
@@ -31,12 +37,18 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by_doctor_id?: string | null
+          approved_reply_uz?: string | null
           brief_date?: string
+          cited_record_ids?: Json
           created_at?: string
           deterministic_metrics: Json
+          doctor_draft_uz?: string
           doctor_id?: string | null
           highlights?: Json
           id?: string
+          level?: number
           model?: string | null
           narrative_uz: string
           patient_id: string
@@ -46,12 +58,18 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by_doctor_id?: string | null
+          approved_reply_uz?: string | null
           brief_date?: string
+          cited_record_ids?: Json
           created_at?: string
           deterministic_metrics?: Json
+          doctor_draft_uz?: string
           doctor_id?: string | null
           highlights?: Json
           id?: string
+          level?: number
           model?: string | null
           narrative_uz?: string
           patient_id?: string
@@ -61,6 +79,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_clinical_briefs_approved_by_doctor_fk"
+            columns: ["workspace_id", "approved_by_doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["workspace_id", "id"]
+          },
           {
             foreignKeyName: "ai_clinical_briefs_workspace_id_doctor_id_fkey"
             columns: ["workspace_id", "doctor_id"]
@@ -76,6 +101,24 @@ export type Database = {
             referencedColumns: ["workspace_id", "id"]
           },
         ]
+      }
+      ai_rate_limits: {
+        Row: {
+          requests: number
+          scope: string
+          window_ends_at: string
+        }
+        Insert: {
+          requests: number
+          scope: string
+          window_ends_at: string
+        }
+        Update: {
+          requests?: number
+          scope?: string
+          window_ends_at?: string
+        }
+        Relationships: []
       }
       android_demo_access: {
         Row: {
@@ -494,7 +537,13 @@ export type Database = {
           source: string
           suspicious_segments: Json
           valid_reps: number | null
+          video_consented: boolean
+          video_duration_sec: number | null
+          video_expires_at: string | null
+          video_mime_type: string | null
+          video_size_bytes: number | null
           video_storage_path: string | null
+          video_uploaded_at: string | null
           workspace_id: string
         }
         Insert: {
@@ -525,7 +574,13 @@ export type Database = {
           source: string
           suspicious_segments?: Json
           valid_reps?: number | null
+          video_consented?: boolean
+          video_duration_sec?: number | null
+          video_expires_at?: string | null
+          video_mime_type?: string | null
+          video_size_bytes?: number | null
           video_storage_path?: string | null
+          video_uploaded_at?: string | null
           workspace_id: string
         }
         Update: {
@@ -556,7 +611,13 @@ export type Database = {
           source?: string
           suspicious_segments?: Json
           valid_reps?: number | null
+          video_consented?: boolean
+          video_duration_sec?: number | null
+          video_expires_at?: string | null
+          video_mime_type?: string | null
+          video_size_bytes?: number | null
           video_storage_path?: string | null
+          video_uploaded_at?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -871,6 +932,8 @@ export type Database = {
           due_time: string
           id: string
           plan_id: string
+          sort_order: number
+          strength_unit: string
           title: string
           type: string
           workspace_id: string
@@ -880,6 +943,8 @@ export type Database = {
           due_time: string
           id?: string
           plan_id: string
+          sort_order?: number
+          strength_unit?: string
           title: string
           type: string
           workspace_id: string
@@ -889,6 +954,8 @@ export type Database = {
           due_time?: string
           id?: string
           plan_id?: string
+          sort_order?: number
+          strength_unit?: string
           title?: string
           type?: string
           workspace_id?: string

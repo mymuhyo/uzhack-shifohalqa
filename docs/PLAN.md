@@ -11,7 +11,7 @@
 | Milestone | Scope | Gate |
 |---|---|---|
 | M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [x] |
-| M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [ ] |
+| M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [x] |
 | M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [ ] |
 | M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
 | M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [ ] |
@@ -46,16 +46,16 @@ M1a and M1b were committed in `140860d`, `12cdfde`, `3c6cf8c`, and `6dd8083`. Be
 
 Freeze shared Zod contracts in `src/lib/*` and update `docs/INTERFACES.md` as each slice lands.
 
-- [ ] **M2.1 Multi-medication schedule & units.** Forward migration relaxing `plan_items` single-medication constraint to support 1–3 distinct medications, 1–2 fixed daily times (`Asia/Tashkent`), and `strength_unit` (`mg`, `mcg`, `g`, `iu`). Update `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts`, `src/lib/clinical-store.ts`, and `/api/mobile/v1/today` while keeping existing `/api/demo/*` smoke contracts passing.
-- [ ] **M2.2 Manual BP (high + low) & source-specific steps.**
+- [x] **M2.1 Multi-medication schedule & units.** Forward migration relaxing `plan_items` single-medication constraint to support 1–3 distinct medications, 1–2 fixed daily times (`Asia/Tashkent`), and `strength_unit` (`mg`, `mcg`, `g`, `iu`). Update `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts`, `src/lib/clinical-store.ts`, and `/api/mobile/v1/today` while keeping existing `/api/demo/*` smoke contracts passing.
+- [x] **M2.2 Manual BP (high + low) & source-specific steps.**
   - Extend `src/lib/rules/evaluate-rules.ts` and `src/lib/clinical-inputs.ts` with clinician-configured **low BP (hypotension)** thresholds (`minSystolic`, `minDiastolic`), physiological bounds (`systolic > diastolic`, 50–260 / 30–160 mmHg), and optional linked repeat reading.
   - Migrate `daily_step_counts` PK to `(workspace_id, patient_id, activity_date, source)` so `device_sensor` and `self_report` (manual) coexist per day; compute 7-day trend preferring `device_sensor` when available and exposing both values to the doctor.
-- [ ] **M2.3 Supervised AI core (Vercel AI Gateway + Cloudflare fallback).**
+- [x] **M2.3 Supervised AI core (Vercel AI Gateway + Cloudflare fallback).**
   - Consolidate `src/lib/ai/provider-config.ts` and `src/lib/ai/completion-fallback.ts` around **Vercel AI Gateway** (primary) → **Cloudflare Workers AI** (fallback) → deterministic Uzbek fallback. Add DB-backed per-workspace AI rate limits and `prompt_hash` response caching.
   - **First AI increment — 7-day clinical brief & cited draft (`src/lib/ai/clinical-brief-ai.ts`):** Gather scoped patient context (per-drug adherence, BP trend, steps, exercises, open issues), generate a plain Uzbek summary + doctor reply draft citing exact DB record IDs (validated programmatically before persistence), let the doctor edit and approve (`L4`), and expose the approved reply on Web, Android, and Telegram.
   - **Compact Teach-Back (`src/lib/teach-back-store.ts`):** Persist 1–2 plan-grounded Uzbek comprehension questions per assigned plan with deterministic fallback.
   - **DoriMos update (`src/lib/dorimos-server.ts`):** Match `mg`/`mcg`/`IU` against the selected medication item and support a clear deferred state.
-- [ ] **M2.4 Three-movement CV, keyframe AI & signed full-attempt video.**
+- [x] **M2.4 Three-movement CV, keyframe AI & signed full-attempt video.**
   - Add 1 cleared public sample video for `seated_knee_ext` alongside `chair_stand` and `elbow_bend` (`public/demo/` + `src/lib/exercise-sample.ts`).
   - Extract 3–5 keyframes + timestamps per flagged cycle and run grounded AI visual observation (`src/lib/ai/exercise-video-review.ts`) with uncertainty phrasing and deterministic fallback.
   - Implement server-authorized **signed upload URL** (`POST /api/clinical/exercise/video-upload` + `/api/mobile/v1/exercise/video-upload`) and **finalize** endpoint enforcing `≤ 60 s`, `≤ 20 MiB` (MP4/WebM), per-workspace quota, explicit consent flag, and immutable binding to `exercise_attempts`.

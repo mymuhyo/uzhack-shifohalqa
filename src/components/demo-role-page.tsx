@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { AlertOctagon, PhoneCall } from 'lucide-react';
+import { AlertOctagon, ArrowRightLeft, PhoneCall, ShieldCheck, Stethoscope, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getActivityDashboard } from '@/lib/activity-store';
 import { readLatestClinicalBrief } from '@/lib/ai/clinical-brief-ai';
@@ -83,18 +83,40 @@ export async function DemoRolePage({
     : 0;
   const doctorAiBrief = latestBrief && 'doctorDraftUz' in latestBrief ? latestBrief : null;
   const patientAiBrief = latestBrief && !('doctorDraftUz' in latestBrief) ? latestBrief : null;
+  const showDoctorBrief = Boolean(
+    view && role === 'doctor' && (
+      view.plan !== null
+      || exercisePlan !== null
+      || (view.urgentSymptoms?.length ?? 0) > 0
+      || exerciseAttempts.length > 0
+    ),
+  );
 
   return (
     <main className="frame content" id="content" tabIndex={-1}>
-      <div className="flex flex-wrap items-center gap-2.5">
-        <h1>{titles[role]}</h1>
-        <Badge variant={isDemo ? 'secondary' : 'ok'}>
-          {isDemo ? 'Sintetik Judge Demo' : 'Klinika sessiyasi'}
-        </Badge>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-primary shadow-xs">
+              {role === 'doctor'
+                ? <Stethoscope className="size-4" aria-hidden="true" />
+                : <User className="size-4" aria-hidden="true" />}
+            </span>
+            <h1>{titles[role]}</h1>
+            <Badge variant={isDemo ? 'secondary' : 'ok'}>
+              {isDemo ? 'Sintetik Judge Demo' : 'Klinika sessiyasi'}
+            </Badge>
+          </div>
+          <p className="lede">
+            {actorName} · {isDemo ? 'Namuna foydalanuvchi' : role === 'doctor' ? `Tanlangan bemor: ${patientName}` : 'Klinika bemori'}
+          </p>
+        </div>
+
+        <div className="hidden items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
+          <ShieldCheck className="size-3.5 text-[var(--ok)]" aria-hidden="true" />
+          <span>Toshkent vaqti · Halqa nazorati</span>
+        </div>
       </div>
-      <p className="lede">
-        {actorName} · {isDemo ? 'Namuna foydalanuvchi' : role === 'doctor' ? `Tanlangan bemor: ${patientName}` : 'Klinika bemori'}
-      </p>
 
       <div className="sticky-bar" role="region" aria-label="Tezkor boshqaruv">
         {role === 'patient' && (
@@ -112,7 +134,8 @@ export async function DemoRolePage({
         {isDemo && (
           <form action="/api/demo/login" method="post">
             <button className="switch-chip" type="submit" name="role" value={otherRole}>
-              {role === 'doctor' ? 'Bemor sifatida ko‘rish ↗' : 'Shifokor sifatida ko‘rish ↗'}
+              <ArrowRightLeft className="size-3.5 text-primary" aria-hidden="true" />
+              <span>{role === 'doctor' ? 'Bemor sifatida ko‘rish ↗' : 'Shifokor sifatida ko‘rish ↗'}</span>
             </button>
           </form>
         )}
@@ -130,7 +153,7 @@ export async function DemoRolePage({
         )}
         <Link className="text-action" href="/">Rolni almashtirish</Link>
         {role === 'doctor' && view && (
-          <span className={`status-pill ${openFlagsCount > 0 ? 'status-warn' : 'status-ok'}`}>
+          <span className={`status-pill ms-auto ${openFlagsCount > 0 ? 'status-warn' : 'status-ok'}`}>
             Ochiq murojaatlar: {openFlagsCount}
           </span>
         )}
@@ -148,12 +171,7 @@ export async function DemoRolePage({
         </p>
       )}
 
-      {view && role === 'doctor' && (
-        view.plan !== null
-        || exercisePlan !== null
-        || (view.urgentSymptoms?.length ?? 0) > 0
-        || exerciseAttempts.length > 0
-      ) && (
+      {view && role === 'doctor' && showDoctorBrief && (
         <DoctorBriefSection
           actor={actor}
           view={view}
@@ -166,41 +184,44 @@ export async function DemoRolePage({
       )}
 
       {view && role === 'doctor' && (
-        <DoctorClinical
-          view={view}
-          patientName={patientName}
-          isDemo={isDemo}
-          patientId={selectedPatientId}
-        />
+        <>
+          <DoctorClinical
+            view={view}
+            patientName={patientName}
+            isDemo={isDemo}
+            patientId={selectedPatientId}
+          />
+          <div className="workspace-doctor">
+            <div className="workspace-column">
+              <DoctorExercise actor={actor} initialPlan={exercisePlan} initialAttempts={exerciseAttempts} />
+            </div>
+            <div className="workspace-column">
+              {view.plan && <DoctorAdherence actor={actor} initialDashboard={activity} />}
+              {isDemo && isAndroidDemoEnabled() && <DoctorAndroidPairing />}
+              <DoctorTelegramPanel actor={actor} />
+            </div>
+          </div>
+        </>
       )}
-
-      {view && role === 'doctor' && isDemo && isAndroidDemoEnabled() && <DoctorAndroidPairing />}
 
       {view && role === 'patient' && (
-        <PatientClinical
-          view={view}
-          isDemo={isDemo}
-          patientBrief={patientAiBrief}
-          teachBackStatus={teachBackStatus}
-        />
+        <div className="workspace-patient">
+          <div className="workspace-column">
+            <PatientClinical
+              view={view}
+              isDemo={isDemo}
+              patientBrief={patientAiBrief}
+              teachBackStatus={teachBackStatus}
+            />
+          </div>
+          <div className="workspace-column">
+            {exercisePlan && <PatientExerciseCard plan={exercisePlan} attempts={exerciseAttempts} />}
+            <PatientAdherence actor={actor} />
+            {actor.patientId && <CaregiverSharing actor={actor} />}
+            <PatientTelegramPanel actor={actor} />
+          </div>
+        </div>
       )}
-
-      {view && role === 'patient' && exercisePlan && (
-        <PatientExerciseCard plan={exercisePlan} attempts={exerciseAttempts} />
-      )}
-
-      {view && role === 'patient' && <PatientAdherence actor={actor} />}
-
-      {role === 'patient' && actor.patientId && <CaregiverSharing actor={actor} />}
-
-      {view && role === 'doctor' && (
-        <DoctorExercise actor={actor} initialPlan={exercisePlan} initialAttempts={exerciseAttempts} />
-      )}
-
-      {view?.plan && role === 'doctor' && <DoctorAdherence actor={actor} initialDashboard={activity} />}
-
-      {role === 'doctor' && <DoctorTelegramPanel actor={actor} />}
-      {view && role === 'patient' && <PatientTelegramPanel actor={actor} />}
 
       <div className="role-actions">
         {role === 'patient' && !exercisePlan && <Link className="text-action" href="/patient/exercise">O‘tirib-turish mashqi</Link>}

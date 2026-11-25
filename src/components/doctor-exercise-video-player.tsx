@@ -128,7 +128,7 @@ export function DoctorExerciseVideoPlayer({
 
       {playback && (
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <div className="overflow-hidden rounded-lg border border-border bg-black">
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#090a0d] shadow-[var(--surface-shadow-lg)]">
             <video
               ref={videoRef}
               src={playback.playbackUrl}

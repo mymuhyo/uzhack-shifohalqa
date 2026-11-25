@@ -38,16 +38,23 @@ export function DoctorAndroidPairing() {
   }
 
   return (
-    <section className="ledger" aria-labelledby="android-pairing-heading">
-      <h2 id="android-pairing-heading">Android ilovasi</h2>
-      <p>Shu demo ish joyini bemor telefoniga ulang. Kod 10 daqiqa va bir marta amal qiladi. Yangi kod avvalgi ulanishni tugatadi.</p>
-      <button className="text-action" type="button" disabled={busy} onClick={() => void issue()}>
-        Android ulash kodini olish
-      </button>
-      {code && <p><code data-testid="android-pair-code">{code}</code>{' '}
-        <button className="text-action" type="button" onClick={() => void copy()}>Kodni nusxalash</button>
-      </p>}
-      <p role="status">{status}</p>
-    </section>
+    <div className="ledger">
+      <section aria-labelledby="android-pairing-heading">
+        <h2 id="android-pairing-heading">Android ilovasi</h2>
+        <p>Shu demo ish joyini bemor telefoniga ulang. Kod 10 daqiqa va bir marta amal qiladi. Yangi kod avvalgi ulanishni tugatadi.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button className="switch-chip" type="button" disabled={busy} onClick={() => void issue()}>
+            Android ulash kodini olish
+          </button>
+          {code && (
+            <span className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-1.5 font-mono text-xs">
+              <code data-testid="android-pair-code">{code}</code>
+              <button className="text-action" type="button" onClick={() => void copy()}>Kodni nusxalash</button>
+            </span>
+          )}
+        </div>
+        <p role="status" className="mt-2 text-xs text-muted-foreground">{status}</p>
+      </section>
+    </div>
   );
 }

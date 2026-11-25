@@ -1,18 +1,22 @@
 .summaries {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
   gap: 0.75rem;
-  margin-block-start: 1rem;
+  margin-block-start: 0.9rem;
 }
 
 .summary {
   min-inline-size: 0;
-  padding: 0.9rem;
-  border: 1px solid var(--line);
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
 }
 
 .summary h3 {
+  font-size: 0.88rem;
   font-weight: 600;
+  color: var(--muted);
 }
 
 .summaryBody {
@@ -20,37 +24,41 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  margin-block-start: 0.35rem;
 }
 
 .summaryBody p {
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .completion.completion {
   color: var(--ink);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .bar {
   inline-size: 100%;
   accent-color: var(--action);
+  margin-block-start: 0.35rem;
 }
 
 .ring {
   --ring-fill: var(--action);
-  --ring-track: var(--line);
-  --ring-center: var(--paper);
+  --ring-track: var(--panel-strong);
+  --ring-center: var(--panel);
   display: grid;
-  inline-size: 3.75rem;
+  inline-size: 3.35rem;
   aspect-ratio: 1;
   place-items: center;
   border-radius: 50%;
 }
 
 .ring::after {
-  inline-size: 74%;
+  inline-size: 72%;
   aspect-ratio: 1;
   border-radius: 50%;
   background: var(--ring-center);
@@ -77,35 +85,39 @@
 }
 
 .stepRecord {
-  margin-block: 1rem;
-  padding: 0.4rem 1rem 0.8rem;
-  border-inline-start: 3px solid var(--line);
+  margin-block: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-inline-start: 3.5px solid var(--action);
+  border-radius: var(--radius-md);
   background: var(--panel);
 }
 
 .stepsForm {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.55rem;
   max-inline-size: 24rem;
-  margin-block-start: 1rem;
+  margin-block-start: 0.85rem;
 }
 
 .field,
 .submit {
-  min-block-size: 3rem;
-  padding: 0.6rem 0.8rem;
+  min-block-size: 2.85rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: var(--radius-sm);
 }
 
 .field {
   min-inline-size: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--input);
   background: var(--paper);
   color: var(--ink);
+  font: inherit;
 }
 
 .field:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  outline: 2.5px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .field:user-invalid {

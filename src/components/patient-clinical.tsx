@@ -1,6 +1,5 @@
 import { Clock, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PatientClinicalBriefView } from '@/lib/ai/clinical-brief-schema';
 import {
   caregiverAckMessage,
@@ -299,26 +298,20 @@ export function PatientClinical({
       )}
 
       {patientBrief && (
-        <section aria-labelledby="patient-weekly-brief-heading">
-          <Card className="border-2 border-[var(--ok)]/40 bg-card shadow-[var(--surface-shadow)]">
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-lg font-medium">
-                  <h2 id="patient-weekly-brief-heading" className="flex items-center gap-2 text-inherit font-inherit leading-inherit">
-                    <ShieldCheck className="size-5 text-[var(--ok)]" aria-hidden="true" />
-                    <span>Shifokor tasdiqlagan 7 kunlik xulosa</span>
-                  </h2>
-                </CardTitle>
-                <Badge variant="ok">L4 · Tasdiqlandi</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <p className="whitespace-pre-wrap text-sm text-foreground">{patientBrief.approvedReplyUz}</p>
-              <p className="text-xs text-muted-foreground">
-                Tasdiqlangan vaqt: <time dateTime={patientBrief.approvedAt}>{displayTimestamp.format(new Date(patientBrief.approvedAt))}</time> · Toshkent
-              </p>
-            </CardContent>
-          </Card>
+        <section aria-labelledby="patient-weekly-brief-heading" className="!border-[var(--ok)]/35 !bg-[var(--ok-bg)]/25">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="patient-weekly-brief-heading" className="flex items-center gap-2">
+              <ShieldCheck className="size-5 text-[var(--ok)]" aria-hidden="true" />
+              <span>Shifokor tasdiqlagan 7 kunlik xulosa</span>
+            </h2>
+            <Badge variant="ok">L4 · Tasdiqlandi</Badge>
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="whitespace-pre-wrap text-sm text-foreground">{patientBrief.approvedReplyUz}</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              Tasdiqlangan vaqt: <time dateTime={patientBrief.approvedAt}>{displayTimestamp.format(new Date(patientBrief.approvedAt))}</time> · Toshkent
+            </p>
+          </div>
         </section>
       )}
 
@@ -328,9 +321,9 @@ export function PatientClinical({
           hasMultipleTimes ? (
             <div className="mt-3 flex flex-col gap-4">
               {Array.from(timeGroups.entries()).map(([dueTime, tasks]) => (
-                <div key={dueTime} className="rounded-xl border border-border bg-card/60 p-3.5">
-                  <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-primary tabular-nums">
-                    <Clock className="size-4" aria-hidden="true" />
+                <div key={dueTime} className="rounded-xl border border-border bg-secondary/45 p-3.5">
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 font-mono text-xs font-semibold text-primary tabular-nums">
+                    <Clock className="size-3.5" aria-hidden="true" />
                     <span>{dueTime} · Toshkent</span>
                   </div>
                   <ul className={styles.tasks}>

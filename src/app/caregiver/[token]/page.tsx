@@ -1,53 +1,49 @@
-import type { Metadata } from 'next';
-import { Clock, ShieldAlert } from 'lucide-react';
+import { Clock, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { CaregiverAckButton } from '@/components/caregiver-ack-button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { readCaregiverSummary, type CaregiverStatusSignal } from '@/lib/caregiver-store';
+import { readCaregiverSummary } from '@/lib/caregiver-store';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Yaqinim',
-  robots: { index: false, follow: false },
-  referrer: 'no-referrer',
-};
+const ferganaClock = new Intl.DateTimeFormat('uz-Latn-UZ', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'Asia/Tashkent',
+});
+const kualaLumpurClock = new Intl.DateTimeFormat('uz-Latn-UZ', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'Asia/Kuala_Lumpur',
+});
 
-const clockFormat = (timeZone: string) =>
-  new Intl.DateTimeFormat('uz-Latn-UZ', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    timeZone,
-  });
-const ferganaClock = clockFormat('Asia/Tashkent');
-const kualaLumpurClock = clockFormat('Asia/Kuala_Lumpur');
-
-const statusCopy: Record<CaregiverStatusSignal, { pill: string; variant: 'warn' | 'urgent' | 'ok'; body: string }> = {
+const statusCopy = {
   supply_help: {
     pill: 'Oila yordami kerak',
-    variant: 'warn',
-    body: 'Bugun ta’minot bo‘yicha oila yordami kerak. Yaqiningiz bilan bog‘laning yoki quyidagi tugma orqali xabardor ekaningizni bildiring.',
+    variant: 'warn' as const,
+    body: 'Bugungi vazifalardan birida dori yoki yordam bo‘yicha xabar yuborildi.',
   },
   doctor_reviewing: {
-    pill: 'Shifokor ko‘rigida',
-    variant: 'urgent',
-    body: 'Shifokor ko‘rigida qayd bor. Klinik javob kutilmoqda.',
+    pill: 'Shifokor ko‘rib chiqmoqda',
+    variant: 'warn' as const,
+    body: 'Bugungi qaydlar shifokor tekshiruvida.',
   },
   doctor_replied: {
     pill: 'Shifokor javob berdi',
-    variant: 'ok',
+    variant: 'ok' as const,
     body: 'Shifokor so‘nggi qaydga javob berdi.',
   },
   all_good: {
     pill: 'Hammasi tinch',
-    variant: 'ok',
+    variant: 'ok' as const,
     body: 'Bugungi reja tinch bajarildi.',
   },
   waiting: {
     pill: 'Kuzatuvda',
-    variant: 'ok',
+    variant: 'ok' as const,
     body: 'Kunlik vazifalar bo‘yicha navbat kutilmoqda.',
   },
 };
@@ -59,24 +55,35 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
   const ackKind = summary?.statusSignal === 'supply_help' ? 'supply_on_the_way' : 'checked_in';
 
   return (
-    <main className="frame content" id="content" tabIndex={-1}>
-      <h1>Yaqinim</h1>
-      <div className="mt-4 max-w-2xl">
+    <main className="frame content flex flex-col items-center" id="content" tabIndex={-1}>
+      <div className="w-full max-w-2xl">
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-primary shadow-xs">
+            <ShieldCheck className="size-4" aria-hidden="true" />
+          </span>
+          <h1>Yaqinim</h1>
+        </div>
+
         {summary && status ? (
-          <Card className="border border-border bg-card shadow-[var(--surface-shadow)]">
-            <CardHeader className="gap-2">
-              <Badge variant={status.variant}>{status.pill}</Badge>
-              <CardTitle className="text-2xl font-medium">
+          <Card className="border border-border bg-card shadow-[var(--surface-shadow-lg)]">
+            <CardHeader className="gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Badge variant={status.variant}>{status.pill}</Badge>
+                <span className="font-mono text-[11px] text-muted-foreground">FAQAT BUGUNGI QISQA HOLAT</span>
+              </div>
+              <CardTitle className="text-2xl font-semibold">
                 <h2 className="text-inherit font-inherit leading-inherit">Bugungi qisqa holat</h2>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+            <CardContent className="flex flex-col gap-4">
               <p className="text-sm text-muted-foreground">{status.body}</p>
               {summary.counts.scheduled === 0 ? (
-                <p className="text-sm text-muted-foreground">Bugun muddati kelgan vazifa yo‘q.</p>
+                <p className="rounded-xl border border-border bg-secondary/70 px-3.5 py-2.5 text-sm text-muted-foreground">
+                  Bugun muddati kelgan vazifa yo‘q.
+                </p>
               ) : (
                 <>
-                  <div className="caregiver-metrics" aria-label="Kunlik ko‘rsatkichlar">
+                  <div className="caregiver-metrics" aria-label="Bugungi bajarilish">
                     <div className="caregiver-metric">
                       <strong>{summary.counts.scheduled}</strong>
                       <span>Muddati keldi</span>
@@ -90,7 +97,7 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
                       <span>Bajarildi</span>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  <div className="grid gap-1 rounded-xl border border-border bg-secondary/70 px-3.5 py-2.5 text-sm text-foreground">
                     <p>{summary.counts.scheduled} ta vazifaning muddati keldi.</p>
                     <p>{summary.counts.answered} ta vazifaga javob berildi.</p>
                     <p>{summary.counts.completed} ta vazifa bajarildi.</p>
@@ -110,8 +117,8 @@ export default async function CaregiverPage({ params }: PageProps<'/caregiver/[t
 
               <Separator />
 
-              <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
-                <Clock className="size-3.5" aria-hidden="true" />
+              <p className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground tabular-nums">
+                <Clock className="size-3.5 text-primary" aria-hidden="true" />
                 <span>
                   Ochilgan vaqt · Farg‘ona{' '}
                   <time dateTime={summary.observedAt}>{ferganaClock.format(new Date(summary.observedAt))}</time>

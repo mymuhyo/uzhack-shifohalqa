@@ -84,13 +84,13 @@ function MedicationBreakdown({ items }: { items?: MedicationAdherenceBreakdown[]
         {items.map((med) => (
           <div
             key={`${med.medicationName}-${med.strengthUnit}`}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-secondary/75 px-3 py-2 text-sm"
           >
             <span className="font-semibold">
               {med.medicationName}
               {med.strength !== null ? ` (${med.strength} ${unitDisplay[med.strengthUnit] ?? med.strengthUnit})` : ''}
             </span>
-            <span className="tabular-nums text-muted-foreground">
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
               {med.week.taken}/{med.week.scheduled} ichildi · {med.week.missed} qoldirildi · {med.week.unanswered} javobsiz
             </span>
           </div>
@@ -123,15 +123,15 @@ function StepTrendList({
           return (
             <li
               key={day.date}
-              className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-border/70 bg-card/70 px-3 py-1.5 text-xs"
+              className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border border-border bg-secondary/70 px-3 py-2 text-xs"
             >
-              <time dateTime={day.date} className="tabular-nums font-medium text-muted-foreground">
+              <time dateTime={day.date} className="font-mono tabular-nums font-medium text-muted-foreground">
                 {day.date.slice(5)}
               </time>
               {day.effectiveCount !== null && day.effectiveSource ? (
                 <>
                   <div className="flex flex-col gap-1">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-background/80 ring-1 ring-border">
                       <div
                         className={`h-full rounded-full ${achieved ? 'bg-[var(--ok)]' : 'bg-primary'}`}
                         style={{ width: `${pct}%` }}
@@ -142,13 +142,13 @@ function StepTrendList({
                         {shortStepSource[day.effectiveSource]}
                       </Badge>
                       {showDualSources && day.deviceSensor && day.selfReport && (
-                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                           (Sensor: {numberFormat.format(day.deviceSensor.count)} · Qo‘lda: {numberFormat.format(day.selfReport.count)})
                         </span>
                       )}
                     </div>
                   </div>
-                  <strong className="tabular-nums text-sm">
+                  <strong className="font-mono tabular-nums text-sm">
                     {numberFormat.format(count)}
                   </strong>
                 </>

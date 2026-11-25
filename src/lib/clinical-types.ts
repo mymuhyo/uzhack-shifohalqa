@@ -9,7 +9,7 @@ export function isPatientSideRole(role: AppRole): role is 'patient' | 'individua
 export type ClinicalActor = {
   workspaceId: string;
   doctorId: string | null;
-  patientId: string;
+  patientId: string | null;
   role: AppRole;
   isDemo?: boolean;
 };

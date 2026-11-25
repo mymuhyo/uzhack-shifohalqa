@@ -11,6 +11,9 @@ export async function POST(request: Request) {
     if (!body.ok) return mobileJson({ error: body.status === 413 ? 'too_large' : 'invalid' }, body.status);
     const parsed = mobileStepsInputSchema.safeParse(body.body);
     if (!parsed.success) return mobileJson({ error: 'invalid' }, 400);
+    if (parsed.data.source === 'demo_sim' && auth.actor.isDemo !== true) {
+      return mobileJson({ error: 'forbidden' }, 403);
+    }
 
     const status = await saveStepCount(auth.actor, parsed.data);
     if (status === 'not_found') return mobileJson({ error: 'not_found' }, 404);

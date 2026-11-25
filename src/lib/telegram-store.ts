@@ -23,7 +23,7 @@ export async function getDoctorTelegramStatus(actor: ClinicalActor): Promise<boo
 }
 
 export async function getPatientTelegramStatus(actor: ClinicalActor): Promise<boolean> {
-  if (!isPatientSideRole(actor.role)) return false;
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return false;
   const sql = database();
   const rows = await sql`
     SELECT 1 FROM public.telegram_patient_links
@@ -53,7 +53,7 @@ export async function createTelegramPairing(actor: ClinicalActor): Promise<strin
     return rows.length ? code : null;
   }
 
-  if (!isPatientSideRole(actor.role)) return null;
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return null;
   const sql = database();
   const code = randomBytes(32).toString('base64url');
   const rows = await sql`
@@ -82,7 +82,7 @@ export async function disconnectDoctorTelegram(actor: ClinicalActor): Promise<vo
 }
 
 export async function disconnectPatientTelegram(actor: ClinicalActor): Promise<void> {
-  if (!isPatientSideRole(actor.role)) return;
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return;
   const sql = database();
   await sql.transaction((tx) => [
     tx`DELETE FROM public.telegram_patient_pairings WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}`,

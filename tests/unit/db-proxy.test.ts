@@ -40,6 +40,10 @@ const mocks = vi.hoisted(() => {
   const sqlClient = Object.assign(
     vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
       queryCalls.push({ strings, values });
+      const sqlText = strings.join('?');
+      if (sqlText.includes('public.environment_identity')) {
+        return Promise.resolve([{ envId: 'final-preview' }]);
+      }
       return Promise.resolve([{ id: 'row-1' }]);
     }),
     {
@@ -126,7 +130,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import nextConfig from '../../next.config';
-import { createDatabase, getDatabase } from '../../src/lib/db';
+import { assertDatabaseEnvironment, createDatabase, EnvironmentIdentityError, getDatabase } from '../../src/lib/db';
 import { createSupabaseAdminClient } from '../../src/lib/supabase/admin';
 import { createSupabaseBrowserClient } from '../../src/lib/supabase/client';
 import { updateSession } from '../../src/lib/supabase/middleware';
@@ -199,6 +203,7 @@ describe('src/lib/db.ts postgres.js adapter', () => {
   });
 
   it('executes transaction queries sequentially with ReadCommitted isolation mode', async () => {
+    vi.stubEnv('SHIFO_ENV_ID', 'final-preview');
     const db = createDatabase('postgres://localhost:5432/db_tx');
 
     const results = await db.transaction(
@@ -212,6 +217,7 @@ describe('src/lib/db.ts postgres.js adapter', () => {
   });
 
   it('executes transaction without isolation options and delegates end()', async () => {
+    vi.stubEnv('SHIFO_ENV_ID', 'final-preview');
     const db = createDatabase('postgres://localhost:5432/db_default');
 
     await db.transaction((tx) => [tx`SELECT 'a'`]);
@@ -222,6 +228,7 @@ describe('src/lib/db.ts postgres.js adapter', () => {
   });
 
   it('exposes json() on db and tx inside ReadCommitted transactions without pre-stringifying', async () => {
+    vi.stubEnv('SHIFO_ENV_ID', 'final-preview');
     const db = createDatabase('postgres://localhost:5432/db_json');
     const payload = { maxSystolic: 140, warnSystolic: 130 };
 
@@ -235,7 +242,24 @@ describe('src/lib/db.ts postgres.js adapter', () => {
     );
 
     expect(mocks.beginCalls).toEqual([{ mode: 'isolation level read committed' }]);
-    expect(mocks.queryCalls[0]?.values[0]).toEqual({ type: 3802, value: payload, raw: payload });
+    expect(mocks.queryCalls.at(-1)?.values[0]).toEqual({ type: 3802, value: payload, raw: payload });
+  });
+
+  it('blocks writes and transactions when SHIFO_ENV_ID is missing or environment_identity mismatches', async () => {
+    vi.stubEnv('SHIFO_ENV_ID', '');
+    const dbNoEnv = createDatabase('postgres://localhost:5432/db_guard_missing');
+    await expect(dbNoEnv`INSERT INTO public.patients (name) VALUES ('Test')`).rejects.toBeInstanceOf(
+      EnvironmentIdentityError,
+    );
+    await expect(dbNoEnv.transaction((tx) => [tx`SELECT 1`])).rejects.toBeInstanceOf(EnvironmentIdentityError);
+
+    vi.stubEnv('SHIFO_ENV_ID', 'wrong-env');
+    const dbMismatch = createDatabase('postgres://localhost:5432/db_guard_mismatch');
+    await expect(assertDatabaseEnvironment(dbMismatch)).rejects.toBeInstanceOf(EnvironmentIdentityError);
+
+    vi.stubEnv('SHIFO_ENV_ID', 'final-preview');
+    await expect(assertDatabaseEnvironment(dbMismatch)).resolves.toBe('final-preview');
+    await expect(dbMismatch`INSERT INTO public.patients (name) VALUES ('Test')`).resolves.toEqual([{ id: 'row-1' }]);
   });
 
   it('verifies real postgres client.json(obj) produces OID 3802 with raw value and PostgresError exposes .code', async () => {
@@ -512,5 +536,19 @@ describe('next.config.ts CSP and caregiver headers', () => {
       { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
       { key: 'X-Frame-Options', value: 'DENY' },
     ]);
+
+    expect(nextConfig.outputFileTracingIncludes).toEqual({
+      '/api/demo/dorimos': ['./public/demo/box-*.png'],
+      '/api/clinical/dorimos': ['./public/demo/box-*.png'],
+      '/api/mobile/v1/dorimos': ['./public/demo/box-*.png'],
+      '/api/demo/exercise-analysis': [
+        './public/demo/pose-cdc-lower-body.mp4',
+        './public/demo/pose-cdc-contact-sheet.jpg',
+      ],
+      '/api/mobile/v1/exercise/sample-ai': [
+        './public/demo/pose-cdc-lower-body.mp4',
+        './public/demo/pose-cdc-contact-sheet.jpg',
+      ],
+    });
   });
 });

@@ -12,7 +12,7 @@ const signupSchema = z.strictObject({
   email: z.email().trim().toLowerCase().max(254),
   password: z.string().min(8).max(128),
   fullName: z.string().trim().min(1).max(120),
-  role: z.enum(['doctor', 'patient', 'caregiver', 'individual']),
+  role: z.enum(['patient', 'caregiver', 'individual']),
   clinicName: z.string().trim().min(1).max(120).optional(),
 });
 
@@ -24,6 +24,9 @@ function jsonError(error: string, status: number) {
 
 export async function POST(request: NextRequest) {
   if (!isSameOriginPost(request)) return jsonError('forbidden', 403);
+  if (process.env.AUTH_SIGNUP_ENABLED !== 'true') {
+    return jsonError('signup_disabled', 403);
+  }
 
   const body = await readRequestJson(request, 4096);
   if (!body.ok) return jsonError(body.status === 413 ? 'too_large' : 'invalid', body.status);
@@ -77,36 +80,7 @@ export async function POST(request: NextRequest) {
   let session: SessionContext | null = null;
 
   try {
-    if (role === 'doctor') {
-      const workspaceId = randomUUID();
-      const doctorId = randomUUID();
-      createdWorkspaceId = workspaceId;
-      const wsName = clinicName ?? `${fullName} klinikasi`;
-      await sql.transaction((tx) => [
-        tx`
-          INSERT INTO public.workspaces (id, is_demo, kind, name)
-          VALUES (${workspaceId}, false, 'clinic', ${wsName})
-        `,
-        tx`
-          INSERT INTO public.doctors (id, workspace_id, name)
-          VALUES (${doctorId}, ${workspaceId}, ${fullName})
-        `,
-        tx`
-          INSERT INTO public.clinic_memberships (user_id, workspace_id, is_demo, role, actor_id, status)
-          VALUES (${userId}, ${workspaceId}, false, 'doctor', ${doctorId}, 'active')
-        `,
-      ], { isolationLevel: 'ReadCommitted' });
-      session = {
-        kind: 'supabase',
-        userId,
-        workspaceId,
-        role: 'doctor',
-        actorId: doctorId,
-        isDemo: false,
-        email,
-        fullName,
-      };
-    } else if (role === 'individual') {
+    if (role === 'individual') {
       const workspaceId = randomUUID();
       const patientId = randomUUID();
       createdWorkspaceId = workspaceId;

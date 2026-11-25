@@ -10,7 +10,7 @@
 
 | Milestone | Scope | Gate |
 |---|---|---|
-| M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [~] |
+| M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [x] |
 | M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [ ] |
 | M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [ ] |
 | M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
@@ -25,20 +25,20 @@ Close M1 before starting M2. Keep changes atomic and verifiable. Move any enterp
 
 M1a and M1b were committed in `140860d`, `12cdfde`, `3c6cf8c`, and `6dd8083`. Before M2, close the 5 concrete P0 blockers identified in the audit:
 
-- [ ] **M1.1 Direct DB & Realtime lockdown.** Add a forward migration (`20261125000100_lockdown_direct_access_and_fk_fixes.sql`) that:
+- [x] **M1.1 Direct DB & Realtime lockdown.** Add a forward migration (`20261125000100_lockdown_direct_access_and_fk_fixes.sql`) that:
   - revokes `anon` and `authenticated` table privileges on clinical `public.*` tables (`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated`) and drops permissive direct-client policies on clinical tables so Next.js API (`postgres.js`) is the sole clinical data wall;
   - removes raw clinical tables from `supabase_realtime` publication (closing `doctor_note`/`acknowledged_note` CDC leakage);
   - fixes the 4 composite FKs in `000300` (`teach_back_attempts`, `vitals_ocr_scans`, `evidence_logs`, `ai_clinical_briefs`) to `ON DELETE SET NULL (<nullable_col>)`;
   - removes direct patient `UPDATE` and `DELETE` policies on `storage.objects` (`ocr-scans`, `exercise-segments`) so uploaded evidence is immutable after submission.
-- [ ] **M1.2 Environment identity guard & deploy tracing.**
+- [x] **M1.2 Environment identity guard & deploy tracing.**
   - Add `public.environment_identity` table/row (`final-preview`) and require matching `SHIFO_ENV_ID` before app, bot, or E2E database writes (blocking accidental writes to Task 2 Neon `main`).
   - Add `/api/clinical/dorimos`, `/api/mobile/v1/dorimos`, and `/api/mobile/v1/exercise/sample-ai` to `outputFileTracingIncludes` in `next.config.ts`; fix `isSameOriginPost` in `src/lib/request-body.ts` for reverse-proxy `x-forwarded-proto`.
   - Update `.env.example` and `README.md` to reference Supabase `shifohalqa-final` and `supabase/migrations/` (removing stale Neon/`schema.sql` setup pointers on `final`).
-- [ ] **M1.3 Auth hardening & clinical source honesty.**
+- [x] **M1.3 Auth hardening & clinical source honesty.**
   - Gate public `POST /api/auth/signup` behind `AUTH_SIGNUP_ENABLED=false` (never trusting client-supplied `role: 'doctor'`); fix `allowDoctorWithoutPatient` in `src/lib/auth.ts` so `patientId` is `null` instead of the doctor UUID; add a seed script (`scripts/seed-clinic-demo.ts`) for 1 pre-seeded synthetic clinic doctor + 2–3 patients (`is_demo = false`).
   - Scope DoriMos synthetic `sampleId` scans (`src/lib/dorimos-server.ts`) and `demo_sim` steps (`src/lib/activity-store.ts`) strictly to `isDemo === true` sessions.
 
-**M1 Gate checks.** Apply migration via `supabase_mcp` on `byswnhfcqxjvnallggxj`, regenerate `src/lib/supabase/database.types.ts`, verify `get_advisors` (`0` security lints), run `npm run verify`, and verify with a test that an ordinary authenticated Supabase JWT gets `permission denied` on direct clinical table reads/writes and Storage overwrite/delete, while Next.js API flows succeed.
+**M1 Gate checks.** Applied `20261125000100` & `20261125000200` on `byswnhfcqxjvnallggxj`, regenerated `src/lib/supabase/database.types.ts`, verified `get_advisors` (`0` security lints), passed `npm run verify` + Telegram `pytest`, and verified with a live test against `byswnhfcqxjvnallggxj` that an ordinary authenticated Supabase JWT gets `42501` (`permission denied`) on direct clinical table reads/writes and Storage overwrite/delete is rejected while Next.js API flows succeed.
 
 ---
 

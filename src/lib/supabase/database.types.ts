@@ -378,6 +378,27 @@ export type Database = {
         }
         Relationships: []
       }
+      environment_identity: {
+        Row: {
+          description: string
+          env_id: string
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          description?: string
+          env_id: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          description?: string
+          env_id?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       evidence_logs: {
         Row: {
           ai_mode: string

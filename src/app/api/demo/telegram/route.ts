@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       workspaceId: session.workspaceId,
       doctorId: workspace.doctor.id,
       patientId: workspace.patient.id,
+      isDemo: true,
     };
 
     if (parsed.data.action === 'disconnect') {

@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       role: session.role,
       doctorId: workspace.doctor.id,
       patientId: workspace.patient.id,
+      isDemo: true,
     };
     const outcome = await handleDorimosRequest(actor, request);
     return result(outcome.data, outcome.status);

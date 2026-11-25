@@ -12,24 +12,29 @@ Mashq rejasini biriktirgach, bemor sahifasidan «O‘tirib-turish mashqi»ni och
 ## Branch va muhit tartibi
 
 - **`main` (`v1-task2-demo`) — muzlatilgan jonli Task 2 hakamlar demosi.** Vercel (`shifohalqa.vercel.app`) va Railway (`@shifohalqa_bot`) `main` dan deploy oladi va Neon `shifohalqa/main` bazasiga ulangan. Egasi ruxsatisiz `main` ga tegilmaydi.
-- **`final` — faol rivojlantirish branchi.** Grand Final uchun barcha yangi ishlar va arxitektura yangilanishlari shu branchda olib boriladi.
+- **`final` — faol Grand Final rivojlantirish branchi.** Supabase (`shifohalqa-final`, `byswnhfcqxjvnallggxj`, `ap-southeast-1`) va izolyatsiyalangan Vercel/Telegram preview muhitiga (`SHIFO_ENV_ID=final-preview`) ulangan.
 - **Production (Task 2 demo):** https://shifohalqa.vercel.app (Vercel `shifohalqa`, `main`)
 - **Telegram:** [@shifohalqa_bot](https://t.me/shifohalqa_bot) · [Railway healthcheck](https://shifohalqa-telegram-production.up.railway.app/healthz)
-- **AI:** Hybrid — on-device MediaPipe Pose (L3) + Cloudflare Clef + Clairic Flash (synthetic-label quality and extraction) + Gemini Decisions / OpenRouter fallback. OpenRouter also handles public sample observations and Uzbek explanations
+- **AI:** Hybrid — on-device MediaPipe Pose (L3) + Vercel AI Gateway (primary) + Cloudflare Workers AI (Clef + Clairic Flash / fallback) + deterministik o‘zbekcha zaxira.
 
-Tanlanadigan mashqlar — o‘tirib-turish, tirsak bukish, tizza ko‘tarish, yelkadan qo‘l ko‘tarish va o‘tirgan holda oyoqni tekislash. Web va Android kamera yoki mahalliy videodan texnika izohini ko‘rsatadi. `EXERCISE_COACH_OPENROUTER_DEMO=true` bo‘lsa, AI murabbiy serverdagi ikki ommaviy mashq namunasini izohlaydi.
+Tanlanadigan mashqlar — o‘tirib-turish (`chair_stand`), tirsak bukish (`elbow_bend`) va o‘tirgan holda oyoqni tekislash (`seated_knee_ext`). Web va Android kamera yoki mahalliy videodan texnika izohini ko‘rsatadi.
 
 ## O'qish tartibi
 | Fayl | Maqsad |
 |---|---|
 | [`AGENTS.md`](AGENTS.md) | Ish chegaralari, branch qoidalari va pushdan oldingi tekshiruvlar |
+| [`docs/PLAN.md`](docs/PLAN.md) | Grand Final M1–M6 bajarish rejasi va gate tekshiruvlari |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Grand Final arxitektura qarorlari (`ADR-001`–`ADR-008`) |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Interfeys, motion va platformalararo dizayn shartnomasi |
+| [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) | Grand Finaldan keyingi klinik pilot va v2 reja |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Sessiyalararo davomiylik jurnali |
 | [`docs/SPEC.md`](docs/SPEC.md) | Mahsulot + texnik kontrakt: rollar, sxema, AI pipeline, qoidalar |
 | [`docs/INTERFACES.md`](docs/INTERFACES.md) | Engine eksportlari va server integratsiyasi |
 | [`docs/BENCHMARK.md`](docs/BENCHMARK.md) | MediaPipe va AI o‘lchov natijalari |
 
 ## Lokal demo
 
-Node.js 22 yoki yangirog‘i kerak. `.env.example` shablonidan `.env.local` yarating. `DEMO_MODE=true` va `openssl rand -hex 32` bilan yaratilgan `SESSION_SECRET` ni kiriting.
+Node.js 22 yoki yangirog‘i kerak. `.env.example` shablonidan `.env.local` yarating. Supabase `shifohalqa-final` (`byswnhfcqxjvnallggxj`) kalitlarini, `SHIFO_ENV_ID=final-preview`, `AUTH_SIGNUP_ENABLED=false`, `DEMO_MODE=true` va `openssl rand -hex 32` bilan yaratilgan `SESSION_SECRET` ni kiriting.
 
 ```bash
 cd ~/Projects/uzhack
@@ -37,12 +42,12 @@ npm ci
 npm run dev
 ```
 
-[Lokal demo](http://localhost:3000/) sahifasida rolni tanlang. Bir brauzerda rolni almashtirsangiz, o‘sha demo ish joyida qolasiz. Yangi brauzer sessiyasi alohida ish joyini oladi.
+[Lokal demo](http://localhost:3000/) sahifasida 1-click Demo rolini tanlang yoki oldindan seed qilingan klinika hisobiga kiring. Bir brauzerda rolni almashtirsangiz, o‘sha demo ish joyida qolasiz. Yangi brauzer sessiyasi alohida ish joyini oladi.
 
-Bazasiz demo sessiyasi uchun `DATABASE_URL` bo‘sh turadi. Bazaga bog‘liq lokal ish uchun alohida test bazasining pooled URL’ini `.env.local` dagi `DATABASE_URL` ga belgilang. Sxemani qo‘llashda terminaldagi `DATABASE_URL_UNPOOLED` aynan shu test bazasining direct manzili ekanini tekshiring. Birinchi rol tashrifida sintetik yozuvlar avtomatik yaratiladi.
+Bazasiz demo sessiyasi uchun `DATABASE_URL` bo‘sh turadi. Bazaga bog‘liq lokal ish uchun izolyatsiyalangan `shifohalqa-final` bazasining pooled URL’ini `.env.local` dagi `DATABASE_URL` ga, direct URL’ini esa `DATABASE_URL_UNPOOLED` ga belgilang. Har bir DB yozuvi va E2E `public.environment_identity` jadvalidagi `final-preview` qiymatini `SHIFO_ENV_ID` bilan tekshiradi. Sxema migratsiyalari `supabase/migrations/` papkasida saqlanadi (Supabase MCP `apply_migration` yoki `DATABASE_URL_UNPOOLED` orqali qo‘llanadi). Oldindan seed qilingan klinika shifokori va bemorlarini yaratish uchun:
 
 ```bash
-psql "$DATABASE_URL_UNPOOLED" -X --single-transaction --set ON_ERROR_STOP=1 --file schema.sql
+node --env-file=.env.local --experimental-strip-types scripts/seed-clinic-demo.ts
 ```
 
 ## Tekshiruv
@@ -50,12 +55,12 @@ psql "$DATABASE_URL_UNPOOLED" -X --single-transaction --set ON_ERROR_STOP=1 --fi
 ```bash
 npm run verify
 npm exec playwright install chromium
-npm run e2e
+SHIFO_E2E_DATABASE_URL="$DATABASE_URL" SHIFO_ENV_ID=final-preview npm run e2e
 ```
 
-Playwright lokal serverda alohida sessiya kaliti bilan ishlaydi. Standart brauzer smoke sessiya va rol almashishini tekshiradi. Reja, bemor qaydi va shifokor ko‘rigi testlari `npm run verify` yasagan production buildni ishlatadi. Bu testlar uchun `SHIFO_E2E_DATABASE_URL` ga ajratilgan test bazasini bering. Har bir test yangi sintetik ish joyidan foydalanadi. Ochiq relizni veb-interfeysda alohida sintetik sessiya bilan tekshiring.
+Playwright lokal serverda alohida sessiya kaliti bilan ishlaydi. Standart brauzer smoke sessiya va rol almashishini tekshiradi. Reja, bemor qaydi va shifokor ko‘rigi testlari `npm run verify` yasagan production buildni ishlatadi. Bu testlar uchun `SHIFO_E2E_DATABASE_URL` ga `shifohalqa-final` bazasini va `SHIFO_ENV_ID=final-preview` ni bering. Har bir test yangi sintetik ish joyidan foydalanadi. Ochiq relizni veb-interfeysda alohida sintetik sessiya bilan tekshiring.
 
-Ma’lumotlar bazasi bilan E2E Python servisini ham ishga tushiradi. Avval `uv sync --project services/telegram_bot --locked` bilan uning bog‘liqliklarini o‘rnating. Python unit testlari uchun `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests` ishlating. E2E Telegramga chiqmasdan, bitta sintetik chatga bog‘langan navbatni haqiqiy Neon’da sinaydi.
+Ma’lumotlar bazasi bilan E2E Python servisini ham ishga tushiradi. Avval `uv sync --project services/telegram_bot --locked` bilan uning bog‘liqliklarini o‘rnating. Python unit testlari uchun `uv run --project services/telegram_bot --locked pytest services/telegram_bot/tests` ishlating. E2E Telegramga chiqmasdan, bitta sintetik chatga bog‘langan navbatni izolyatsiyalangan `shifohalqa-final` bazasida sinaydi.
 
 Jonli DoriMos brauzer sinovi uchun `SHIFO_E2E_LIVE_DORIMOS=1` va tanlangan provayder kalitlari kerak. `CLOUDFLARE_ACCOUNT_ID` va `CLOUDFLARE_API_TOKEN` berilsa, Clef quti sifatini tekshiradi, Clairic Flash yozuvni o‘qiydi. Cloudflare ishlamay qolsa, `GEMINI_API_KEY` va `OPENROUTER_API_KEY` bilan Gemini Decisions + OpenRouter yo‘li ishlaydi. Xira yoki noaniq namuna qayta olishga yuboriladi. `DORIMOS_PROVIDER=gemini` o‘sha yo‘lni bevosita tanlaydi. Standart E2E tashqi AI provayderlarini chaqirmaydi. Sintetik quti benchmarkini quyidagi buyruq bilan takrorlash mumkin. [Benchmark qaydlari](docs/BENCHMARK.md)
 

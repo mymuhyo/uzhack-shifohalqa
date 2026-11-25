@@ -171,7 +171,7 @@ import { GET as mobileExerciseGet } from '../../src/app/api/mobile/v1/exercise/r
 import { POST as mobileStepsPost } from '../../src/app/api/mobile/v1/steps/route';
 import { GET as mobileTodayGet } from '../../src/app/api/mobile/v1/today/route';
 import { getActivityDashboard, saveStepCount } from '../../src/lib/activity-store';
-import { resolveWebSessionContext } from '../../src/lib/auth';
+import { resolveClinicalActor, resolveWebSessionContext } from '../../src/lib/auth';
 import { changeCaregiverSharing, getCaregiverSharing } from '../../src/lib/caregiver-store';
 import {
   acknowledgeFlagFollowup,
@@ -184,6 +184,7 @@ import {
   saveFlagFollowup,
   saveUrgentSymptom,
 } from '../../src/lib/clinical-store';
+import { handleDorimosRequest } from '../../src/lib/dorimos-server';
 import { saveDorimosEvidence } from '../../src/lib/dorimos-store';
 import {
   assignExercise,
@@ -267,6 +268,7 @@ beforeEach(() => {
 
   vi.stubEnv('DEMO_MODE', 'true');
   vi.stubEnv('DEMO_ANDROID_ENABLED', 'false');
+  vi.stubEnv('AUTH_SIGNUP_ENABLED', 'false');
   vi.stubEnv('SESSION_SECRET', testSecret);
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-test-key');
@@ -311,6 +313,7 @@ describe('M1b-3 Dual Auth & Hard Tenant Isolation', () => {
   });
 
   it('enforces mutually exclusive cookies across /api/auth/{signup,login,logout} and /api/demo/login', async () => {
+    vi.stubEnv('AUTH_SIGNUP_ENABLED', 'true');
     // 1. POST /api/auth/signup for patient provisions placeholder doctor + clears shifohalqa_demo
     state.adminCreateUserResult = { data: { user: { id: userId, email: 'bemor@clinic.uz' } }, error: null };
     state.signInResult = { data: { user: { id: userId, email: 'bemor@clinic.uz' } }, error: null };
@@ -390,6 +393,7 @@ describe('M1b-3 Dual Auth & Hard Tenant Isolation', () => {
   });
 
   it('rolls back workspace and deletes auth user if signup provisioning throws', async () => {
+    vi.stubEnv('AUTH_SIGNUP_ENABLED', 'true');
     state.adminCreateUserResult = { data: { user: { id: userId, email: 'fail@clinic.uz' } }, error: null };
     state.txHandler = async () => {
       throw new Error('simulated DB insert error');
@@ -401,12 +405,146 @@ describe('M1b-3 Dual Auth & Hard Tenant Isolation', () => {
         email: 'fail@clinic.uz',
         password: 'StrongPassword123',
         fullName: 'Fail User',
-        role: 'doctor',
+        role: 'patient',
       }),
     );
     expect(res.status).toBe(503);
     expect(state.capturedSql.some((c) => c.sqlText.includes('DELETE FROM public.workspaces WHERE id = ? AND is_demo = false'))).toBe(true);
     expect(state.adminDeleteUserCalls).toEqual([userId]);
+  });
+
+  it('gates POST /api/auth/signup behind AUTH_SIGNUP_ENABLED and rejects doctor role', async () => {
+    vi.stubEnv('AUTH_SIGNUP_ENABLED', 'false');
+    const gatedRes = await authSignupPost(
+      jsonPostRequest('/api/auth/signup', {
+        email: 'bemor@clinic.uz',
+        password: 'StrongPassword123',
+        fullName: 'Dilshod',
+        role: 'patient',
+      }),
+    );
+    expect(gatedRes.status).toBe(403);
+    await expect(gatedRes.json()).resolves.toEqual({ error: 'signup_disabled' });
+
+    vi.stubEnv('AUTH_SIGNUP_ENABLED', 'true');
+    const doctorRoleRes = await authSignupPost(
+      jsonPostRequest('/api/auth/signup', {
+        email: 'fake-doc@clinic.uz',
+        password: 'StrongPassword123',
+        fullName: 'Fake Doc',
+        role: 'doctor',
+      }),
+    );
+    expect(doctorRoleRes.status).toBe(400);
+    await expect(doctorRoleRes.json()).resolves.toEqual({ error: 'invalid' });
+  });
+
+  it('returns patientId: null for allowDoctorWithoutPatient and scopes synthetic DoriMos/demo_sim to isDemo === true', async () => {
+    const resolved = await resolveClinicalActor(
+      {
+        kind: 'supabase',
+        userId,
+        workspaceId,
+        role: 'doctor',
+        actorId: doctorId,
+        isDemo: false,
+        email: 'doc@clinic.uz',
+        fullName: 'Dr. Clinic',
+      },
+      { allowDoctorWithoutPatient: true },
+    );
+    expect(resolved).toEqual({
+      ok: true,
+      actor: {
+        workspaceId,
+        doctorId,
+        patientId: null,
+        role: 'doctor',
+        isDemo: false,
+      },
+    });
+
+    if (resolved.ok) {
+      state.capturedSql.length = 0;
+      await expect(getClinicalView(resolved.actor)).resolves.toEqual({
+        plan: null,
+        tasks: [],
+        flags: [],
+        urgentSymptoms: [],
+        caregiverAck: null,
+      });
+      await expect(getActivityDashboard(resolved.actor)).resolves.toBeNull();
+      await expect(readExercisePlan(resolved.actor)).resolves.toBeNull();
+      await expect(readExerciseAttempts(resolved.actor)).resolves.toEqual([]);
+      expect(state.capturedSql).toHaveLength(0);
+    }
+
+    // Real non-demo patient cannot run synthetic DoriMos sampleId scan or demo_sim steps
+    const nonDemoPatient: ClinicalActor = {
+      workspaceId,
+      doctorId,
+      patientId: patientId1,
+      role: 'patient',
+      isDemo: false,
+    };
+    state.capturedSql.length = 0;
+    const dorimosNonDemo = await handleDorimosRequest(
+      nonDemoPatient,
+      jsonPostRequest('/api/clinical/dorimos', {
+        action: 'scan',
+        taskId,
+        sampleId: 'box-5mg',
+      }),
+    );
+    expect(dorimosNonDemo.status).toBe(403);
+    expect(dorimosNonDemo.data).toEqual({ status: 'invalid' });
+
+    await expect(saveStepCount(nonDemoPatient, { count: 2500, source: 'demo_sim' })).resolves.toBe('not_found');
+    expect(state.capturedSql).toHaveLength(0);
+
+    state.routeAuthUser = { id: userId, email: 'bemor@clinic.uz', user_metadata: { default_role: 'patient' } };
+    state.sqlHandler = (sqlText) => {
+      if (sqlText.includes('FROM public.profiles')) return [{ fullName: 'Anvar', defaultRole: 'patient' }];
+      if (sqlText.includes('FROM public.clinic_memberships')) {
+        return [{ workspaceId, role: 'patient', actorId: patientId1, isDemo: false }];
+      }
+      if (sqlText.includes('FROM public.patients AS p')) {
+        return [{ id: patientId1, doctorId }];
+      }
+      return [];
+    };
+    const webDemoSimRes = await clinicalStepsPost(
+      jsonPostRequest('/api/clinical/steps', { count: 2500, source: 'demo_sim' }),
+    );
+    expect(webDemoSimRes.status).toBe(403);
+
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signature123';
+    state.adminGetUserResult = { data: { user: { id: userId, email: 'bemor@clinic.uz' } }, error: null };
+    state.sqlHandler = (sqlText) => {
+      if (sqlText.includes('FROM public.clinic_memberships')) {
+        return [{ workspaceId, patientId: patientId1, doctorId, role: 'patient', patientName: 'Anvar', isDemo: false }];
+      }
+      return [];
+    };
+    const mobileDemoSimRes = await mobileStepsPost(
+      new Request(`${origin}/api/mobile/v1/steps`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ count: 2500, source: 'demo_sim' }),
+      }),
+    );
+    expect(mobileDemoSimRes.status).toBe(403);
+
+    // Demo session IS allowed to save demo_sim steps
+    const demoPatient: ClinicalActor = {
+      workspaceId: demoWorkspaceId,
+      doctorId,
+      patientId: patientId1,
+      role: 'patient',
+      isDemo: true,
+    };
+    state.sqlHandler = () => [{ result: 'saved' }];
+    await expect(saveStepCount(demoPatient, { count: 2500, source: 'demo_sim' })).resolves.toBe('saved');
   });
 
   it('supports nullable doctorId for individual role across all stores and blocks caregiver & doctorId=null on doctor mutations', async () => {
@@ -693,6 +831,7 @@ describe('M1b-3 Dual Auth & Hard Tenant Isolation', () => {
   });
 
   it('supports caregiver signup, invite/accept/summary/ack flow, and enforces 403 on clinical routes', async () => {
+    vi.stubEnv('AUTH_SIGNUP_ENABLED', 'true');
     // 1. Caregiver signup creates no workspace
     state.adminCreateUserResult = { data: { user: { id: userId, email: 'yaqin@clinic.uz' } }, error: null };
     state.signInResult = { data: { user: { id: userId, email: 'yaqin@clinic.uz' } }, error: null };

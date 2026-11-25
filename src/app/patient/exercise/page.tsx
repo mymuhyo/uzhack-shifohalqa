@@ -21,7 +21,7 @@ export default async function ExercisePage() {
     const workspace = await ensureDemoWorkspace(session.workspaceId);
     if (workspace) {
       const actor = { workspaceId: session.workspaceId, role: session.role,
-        doctorId: workspace.doctor.id, patientId: workspace.patient.id };
+        doctorId: workspace.doctor.id, patientId: workspace.patient.id, isDemo: true };
       [plan, attempts] = await Promise.all([readExercisePlan(actor), readExerciseAttempts(actor)]);
     }
     else unavailable = true;

@@ -12,6 +12,10 @@ function readPort(name: string, fallback: number) {
 const webPort = readPort('SHIFO_E2E_WEB_PORT', 3419);
 const baseURL = `http://127.0.0.1:${webPort}`;
 const databaseUrl = process.env.SHIFO_E2E_DATABASE_URL ?? '';
+const envId = process.env.SHIFO_ENV_ID?.trim() || 'final-preview';
+if (databaseUrl && !process.env.SHIFO_ENV_ID?.trim()) {
+  process.env.SHIFO_ENV_ID = envId;
+}
 const serverScript = databaseUrl ? 'start' : 'dev';
 const useLiveOcr = Boolean(databaseUrl) && process.env.SHIFO_E2E_LIVE_DORIMOS === '1';
 const useExerciseOpenRouter = process.env.SHIFO_E2E_EXERCISE_OPENROUTER === '1';
@@ -33,6 +37,8 @@ export default defineConfig({
     url: baseURL,
     env: {
       DATABASE_URL: databaseUrl,
+      SHIFO_ENV_ID: envId,
+      AUTH_SIGNUP_ENABLED: 'false',
       DEMO_MODE: 'true',
       DEMO_ANDROID_ENABLED: databaseUrl ? 'true' : 'false',
       ...(useLiveOcr || useExerciseAuto ? {} : { GEMINI_API_KEY: '', CLOUDFLARE_ACCOUNT_ID: '', CLOUDFLARE_API_TOKEN: '' }),
@@ -58,6 +64,7 @@ export default defineConfig({
     url: `http://127.0.0.1:${telegramPort}/healthz`,
     env: {
       TELEGRAM_DATABASE_URL: databaseUrl,
+      SHIFO_ENV_ID: envId,
       TELEGRAM_BOT_TOKEN: '123456789:shifohalqa_e2e_not_a_live_telegram_token',
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       TELEGRAM_WEBHOOK_SECRET: 'shifohalqa-e2e-webhook-secret',

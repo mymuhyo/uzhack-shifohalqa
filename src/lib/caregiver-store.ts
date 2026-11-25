@@ -58,7 +58,7 @@ function parseCaregiverAckRow(row: unknown): CaregiverAckResult {
 
 export async function getCaregiverSharing(actor: ClinicalActor) {
   const sql = getDatabase();
-  if (!sql || !isPatientSideRole(actor.role)) return null;
+  if (!sql || !isPatientSideRole(actor.role) || !actor.patientId) return null;
 
   const [row] = await sql`
     SELECT to_char(link.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at
@@ -75,7 +75,7 @@ export async function getCaregiverSharing(actor: ClinicalActor) {
 
 export async function changeCaregiverSharing(actor: ClinicalActor, action: 'enable' | 'disable') {
   const sql = getDatabase();
-  if (!sql || !isPatientSideRole(actor.role)) return null;
+  if (!sql || !isPatientSideRole(actor.role) || !actor.patientId) return null;
   const token = action === 'enable' ? createCaregiverToken() : null;
   const tokenHash = digestCaregiverToken(token);
 
@@ -307,7 +307,7 @@ export async function readCaregiverSummaryByPatient(
 }
 
 export async function readAuthenticatedCaregiverSummary(actor: ClinicalActor): Promise<CaregiverSummary | null> {
-  if (actor.role !== 'caregiver' || actor.isDemo !== false) return null;
+  if (actor.role !== 'caregiver' || actor.isDemo !== false || !actor.patientId) return null;
   return readCaregiverSummaryByPatient(actor.workspaceId, actor.patientId);
 }
 
@@ -343,7 +343,7 @@ export async function acknowledgeAuthenticatedCaregiverHelp(
   actor: ClinicalActor,
   kind: 'supply_on_the_way' | 'checked_in',
 ): Promise<CaregiverAckResult | null> {
-  if (actor.role !== 'caregiver' || actor.isDemo !== false) return null;
+  if (actor.role !== 'caregiver' || actor.isDemo !== false || !actor.patientId) return null;
   return acknowledgeCaregiverHelpByPatient(actor.workspaceId, actor.patientId, kind);
 }
 

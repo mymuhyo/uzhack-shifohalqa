@@ -32,6 +32,7 @@ class Config:
     database_url: str = field(repr=False)
     host: str = "127.0.0.1"
     port: int = 8081
+    env_id: str = ""
 
     @classmethod
     def from_env(cls, *, require_database: bool = True) -> "Config":
@@ -42,6 +43,7 @@ class Config:
         database_url = _env("TELEGRAM_DATABASE_URL") or _env("DATABASE_URL")
         host = _env("TELEGRAM_HOST") or "127.0.0.1"
         port = _env("TELEGRAM_PORT") or "8081"
+        env_id = _env("SHIFO_ENV_ID")
 
         if re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{30,128}", bot_token) is None:
             raise ValueError("Set a valid TELEGRAM_BOT_TOKEN.")
@@ -51,7 +53,9 @@ class Config:
             raise ValueError("Set TELEGRAM_BOT_USERNAME without the @ prefix.")
         if require_database and not database_url.startswith(("postgresql://", "postgres://")):
             raise ValueError("Set TELEGRAM_DATABASE_URL or DATABASE_URL to a PostgreSQL URI.")
+        if require_database and re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", env_id) is None:
+            raise ValueError("Set SHIFO_ENV_ID to the expected database environment identity (e.g. final-preview).")
         if re.fullmatch(r"[0-9]{1,5}", port) is None or not 1 <= int(port) <= 65535:
             raise ValueError("TELEGRAM_PORT must be between 1 and 65535.")
 
-        return cls(bot_token, webhook_secret, bot_username, app_url, database_url, host, int(port))
+        return cls(bot_token, webhook_secret, bot_username, app_url, database_url, host, int(port), env_id)

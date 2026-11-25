@@ -42,7 +42,7 @@ function requireDatabase() {
 }
 
 export async function assignExercise(actor: ClinicalActor, input: ExercisePlan): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -62,7 +62,7 @@ export async function assignExercise(actor: ClinicalActor, input: ExercisePlan):
 }
 
 export async function readExercisePlan(actor: ClinicalActor) {
-  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return null;
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId) || !actor.patientId) return null;
   const sql = requireDatabase();
   const [row] = await sql`
     SELECT id, movement, target_angle AS "targetAngle", target_reps AS "targetReps", max_shallow AS "maxShallow", pain_color AS "painColor"
@@ -74,7 +74,7 @@ export async function readExercisePlan(actor: ClinicalActor) {
 }
 
 export async function readExerciseAttempts(actor: ClinicalActor) {
-  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return [];
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId) || !actor.patientId) return [];
   const sql = requireDatabase();
   const rows = await sql`
     SELECT attempt.id, attempt.movement, attempt.diagnostics, source, ai_mode AS "aiMode", level, reason, valid_reps AS "validReps", shallow_reps AS "shallowReps",
@@ -207,7 +207,7 @@ export async function saveExercise(actor: ClinicalActor, input: ExerciseInput, m
 }
 
 export async function reviewExerciseAttempt(actor: ClinicalActor, input: ExerciseReview): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const [result] = await requireDatabase()`
     WITH scoped AS (
       SELECT attempt.id FROM public.exercise_attempts AS attempt

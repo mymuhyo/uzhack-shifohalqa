@@ -46,6 +46,48 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await store.claim_pending(chat_id=0)
 
+    async def test_environment_identity_check_requires_non_empty_and_matching_env_id(self):
+        store_empty = TelegramStore("postgresql://localhost/unused")
+        with self.assertRaisesRegex(RuntimeError, "SHIFO_ENV_ID"):
+            await store_empty.verify_environment_identity()
+
+        class FakeCursor:
+            def __init__(self, row):
+                self._row = row
+
+            async def fetchone(self):
+                return self._row
+
+        class FakeConnection:
+            def __init__(self, row):
+                self._row = row
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def execute(self, query):
+                self.last_query = query
+                return FakeCursor(self._row)
+
+        class FakePool:
+            def __init__(self, row):
+                self._row = row
+
+            def connection(self):
+                return FakeConnection(self._row)
+
+        store_mismatch = TelegramStore("postgresql://localhost/unused", expected_env_id="final-preview")
+        store_mismatch._pool = FakePool(("production-main",))
+        with self.assertRaisesRegex(RuntimeError, "mismatch"):
+            await store_mismatch.verify_environment_identity()
+
+        store_ok = TelegramStore("postgresql://localhost/unused", expected_env_id="final-preview")
+        store_ok._pool = FakePool(("final-preview",))
+        await store_ok.verify_environment_identity()
+
     async def test_batches_do_not_retry_ambiguous_results(self):
         sent, unknown, failed, rejected = (notice(i) for i in range(1, 5))
         store = FakeStore([sent, unknown, failed, rejected])

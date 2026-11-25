@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       role: 'patient',
       patientId: workspace.patient.id,
       doctorId: workspace.doctor.id,
+      isDemo: true,
     }, action);
     return result ? Response.json(result, { headers: noStore }) : reject(404);
   } catch {

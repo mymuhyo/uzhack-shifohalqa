@@ -25,7 +25,7 @@ export async function reserveDorimosScan(workspaceId: string): Promise<boolean> 
 }
 
 export async function saveDorimosEvidence(actor: ClinicalActor, taskId: string, input: MedicationBoxEvidence): Promise<MutationResult> {
-  if (!isPatientSideRole(actor.role)) return 'not_found';
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return 'not_found';
   const sql = getDatabase();
   if (!sql) throw new Error('DoriMos database is unavailable');
 

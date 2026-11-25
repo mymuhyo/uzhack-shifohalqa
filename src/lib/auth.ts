@@ -449,7 +449,7 @@ export async function resolveClinicalActor(
       actor: {
         workspaceId: session.workspaceId,
         doctorId: session.actorId,
-        patientId: session.actorId,
+        patientId: null,
         role: 'doctor',
         isDemo: false,
       },

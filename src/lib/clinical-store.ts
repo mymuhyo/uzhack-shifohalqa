@@ -106,7 +106,7 @@ function requireDatabase() {
 }
 
 export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -137,7 +137,7 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
 }
 
 export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalView> {
-  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) {
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId) || !actor.patientId) {
     return { plan: null, tasks: [], flags: [], urgentSymptoms: [], caregiverAck: null };
   }
   const sql = requireDatabase();
@@ -334,7 +334,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
 }
 
 export async function getTaskContext(actor: ClinicalActor, taskId: string): Promise<TaskContext | null> {
-  if (!isPatientSideRole(actor.role)) return null;
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return null;
   const sql = requireDatabase();
   const [row] = await sql`
     SELECT item.type, to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
@@ -373,7 +373,7 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
 }
 
 export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): Promise<MutationResult> {
-  if (!isPatientSideRole(actor.role)) return 'not_found';
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const status = input.payload.kind === 'medication' ? input.payload.status : 'recorded';
   const { color = null, ruleKey = null, ...detail } = input.flag ?? {};
@@ -417,7 +417,7 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
 }
 
 export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -456,7 +456,7 @@ export async function reviewFlag(actor: ClinicalActor, input: ReviewInput): Prom
 }
 
 export async function saveFlagFollowup(actor: ClinicalActor, input: FollowupInput): Promise<MutationResult> {
-  if (!isPatientSideRole(actor.role)) return 'not_found';
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -516,7 +516,7 @@ export async function acknowledgeFlagFollowup(
   actor: ClinicalActor,
   input: FollowupAckInput,
 ): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -569,7 +569,7 @@ export async function acknowledgeFlagFollowup(
 }
 
 export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSymptomInput): Promise<MutationResult> {
-  if (!isPatientSideRole(actor.role)) return 'not_found';
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (
@@ -601,7 +601,7 @@ export async function saveUrgentSymptom(actor: ClinicalActor, input: UrgentSympt
 }
 
 export async function reviewUrgentSymptom(actor: ClinicalActor, input: SymptomReviewInput): Promise<MutationResult> {
-  if (actor.role !== 'doctor' || !actor.doctorId) return 'not_found';
+  if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
   const [row] = await sql`
     WITH scoped AS (

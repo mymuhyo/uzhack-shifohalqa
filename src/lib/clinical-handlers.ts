@@ -455,6 +455,9 @@ export async function handleClinicalStepsPost(request: NextRequest) {
 
     const resolved = await resolveClinicalActor(auth.session);
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+    if (parsed.data.source === 'demo_sim' && resolved.actor.isDemo !== true) {
+      return errorJson('forbidden', 403);
+    }
 
     const result = await saveStepCount(resolved.actor, parsed.data);
     return mutationResponse(result, { count: parsed.data.count });
@@ -650,6 +653,7 @@ export async function handleClinicalCaregiverInviteGet(request: NextRequest) {
 
       const resolved = await resolveClinicalActor(session, { patientId: patientIdParam });
       if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+      if (!resolved.actor.patientId) return errorJson('patient_required', 400);
 
       const rows = await sql`
         SELECT cm.id AS "membershipId",
@@ -734,6 +738,7 @@ export async function handleClinicalCaregiverInvitePost(request: NextRequest) {
 
         const resolved = await resolveClinicalActor(session, { patientId: input.patientId });
         if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+        if (!resolved.actor.patientId) return errorJson('patient_required', 400);
 
         const [revoked] = await sql`
           UPDATE public.clinic_memberships
@@ -758,6 +763,7 @@ export async function handleClinicalCaregiverInvitePost(request: NextRequest) {
 
         const resolved = await resolveClinicalActor(session, { patientId: input.patientId });
         if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+        if (!resolved.actor.patientId) return errorJson('patient_required', 400);
 
         const [targetUser] = await sql`
           SELECT id FROM auth.users WHERE lower(email) = lower(${input.email}) LIMIT 1

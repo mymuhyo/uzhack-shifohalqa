@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     if (!actors) return result('unavailable', 503);
     const saved = await saveExercise({
       workspaceId: session.workspaceId, role: session.role,
-      doctorId: actors.doctor.id, patientId: actors.patient.id,
+      doctorId: actors.doctor.id, patientId: actors.patient.id, isDemo: true,
     }, input.data);
     if (saved.status === 'saved') return Response.json(saved, { headers: { 'Cache-Control': 'no-store' } });
     return result(saved.status, saved.status === 'duplicate' ? 409 : 422);

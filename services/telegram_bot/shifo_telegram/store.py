@@ -58,7 +58,8 @@ class TodaySummary:
 
 
 class TelegramStore:
-    def __init__(self, database_url: str):
+    def __init__(self, database_url: str, *, expected_env_id: str = ""):
+        self._expected_env_id = expected_env_id.strip()
         self._pool = AsyncConnectionPool(
             database_url,
             kwargs={"prepare_threshold": None, "connect_timeout": 5},
@@ -69,8 +70,27 @@ class TelegramStore:
             name="telegram-store",
         )
 
+    async def verify_environment_identity(self) -> None:
+        if not self._expected_env_id:
+            raise RuntimeError("SHIFO_ENV_ID is required before opening TelegramStore.")
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute(
+                "SELECT env_id FROM public.environment_identity WHERE singleton = true LIMIT 1"
+            )
+            row = await cursor.fetchone()
+        actual = row[0].strip() if row and isinstance(row[0], str) else ""
+        if actual != self._expected_env_id:
+            raise RuntimeError(
+                f"Database environment mismatch: expected SHIFO_ENV_ID={self._expected_env_id!r}, got {actual!r}."
+            )
+
     async def open(self) -> None:
         await self._pool.open(wait=True, timeout=12)
+        try:
+            await self.verify_environment_identity()
+        except Exception:
+            await self._pool.close()
+            raise
 
     async def close(self) -> None:
         await self._pool.close()

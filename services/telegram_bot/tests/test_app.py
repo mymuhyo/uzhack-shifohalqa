@@ -350,15 +350,17 @@ class ConfigTests(TestCase):
             "DATABASE_URL": "postgresql://dev:unused@localhost/demo",
             "TELEGRAM_DATABASE_URL": DATABASE_URL,
             "TELEGRAM_PORT": "8090",
+            "SHIFO_ENV_ID": "final-preview",
         }, clear=True):
             config = Config.from_env()
         self.assertEqual(config.app_url, "https://demo.example.test/")
         self.assertEqual(config.database_url, DATABASE_URL)
         self.assertEqual(config.port, 8090)
+        self.assertEqual(config.env_id, "final-preview")
         for secret in [BOT_TOKEN, SECRET, DATABASE_URL]:
             self.assertNotIn(secret, repr(config))
 
-    def test_service_requires_database_while_cli_can_omit_it(self):
+    def test_service_requires_database_and_env_id_while_cli_can_omit_them(self):
         with patch.dict(os.environ, {
             "TELEGRAM_BOT_TOKEN": BOT_TOKEN,
             "TELEGRAM_WEBHOOK_SECRET": SECRET,
@@ -366,8 +368,15 @@ class ConfigTests(TestCase):
             "TELEGRAM_APP_URL": APP_URL,
         }, clear=True):
             self.assertEqual(Config.from_env(require_database=False).database_url, "")
+            self.assertEqual(Config.from_env(require_database=False).env_id, "")
             with self.assertRaisesRegex(ValueError, "TELEGRAM_DATABASE_URL"):
                 Config.from_env()
+            with patch.dict(os.environ, {"TELEGRAM_DATABASE_URL": DATABASE_URL}):
+                with self.assertRaisesRegex(ValueError, "SHIFO_ENV_ID"):
+                    Config.from_env()
+            with patch.dict(os.environ, {"TELEGRAM_DATABASE_URL": DATABASE_URL, "SHIFO_ENV_ID": "bad env!"}):
+                with self.assertRaisesRegex(ValueError, "SHIFO_ENV_ID"):
+                    Config.from_env()
             with patch.dict(os.environ, {"TELEGRAM_APP_URL": "https://username:password@demo.example.test/"}):
                 with self.assertRaisesRegex(ValueError, "HTTPS"):
                     Config.from_env(require_database=False)

@@ -44,7 +44,7 @@ export async function DemoRolePage({ role, result }: { role: 'doctor' | 'patient
     if (workspace) {
       actor = {
         workspaceId: session.workspaceId, role,
-        doctorId: workspace.doctor.id, patientId: workspace.patient.id,
+        doctorId: workspace.doctor.id, patientId: workspace.patient.id, isDemo: true,
       };
       const [clinical, plan, attempts, doctorActivity] = await Promise.all([
         getClinicalView(actor),

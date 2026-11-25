@@ -26,7 +26,7 @@ const activityRow = z.object({
 const mutationRow = z.object({ result: z.enum(['saved', 'already_saved', 'not_found']) });
 
 export async function getActivityDashboard(actor: ClinicalActor) {
-  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId)) return null;
+  if (actor.role === 'caregiver' || (actor.role === 'doctor' && !actor.doctorId) || !actor.patientId) return null;
   const sql = getDatabase();
   if (!sql) return null;
 
@@ -83,17 +83,21 @@ export async function saveStepCount(
   actor: ClinicalActor,
   input: number | { count: number; source?: StepSource },
 ): Promise<MutationResult> {
-  if (!isPatientSideRole(actor.role)) return 'not_found';
-  const sql = getDatabase();
-  if (!sql) throw new Error('Activity database is unavailable');
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return 'not_found';
   const count = stepCountSchema.parse(typeof input === 'number' ? input : input.count);
   const source = stepSourceSchema.parse(typeof input === 'number' ? 'self_report' : (input.source ?? 'self_report'));
+  if (source === 'demo_sim' && actor.isDemo !== true) return 'not_found';
+  const sql = getDatabase();
+  if (!sql) throw new Error('Activity database is unavailable');
 
   const [row] = await sql`
     WITH scoped AS (
-      SELECT workspace_id, id FROM public.patients
-      WHERE workspace_id = ${actor.workspaceId} AND id = ${actor.patientId}
-        AND doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
+      SELECT p.workspace_id, p.id
+      FROM public.patients AS p
+      JOIN public.workspaces AS w ON w.id = p.workspace_id
+      WHERE p.workspace_id = ${actor.workspaceId} AND p.id = ${actor.patientId}
+        AND p.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
+        AND (${source} <> 'demo_sim' OR w.is_demo = true)
     ), saved AS (
       INSERT INTO public.daily_step_counts AS activity (workspace_id, patient_id, activity_date, step_count, source)
       SELECT workspace_id, id, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date, ${count}, ${source}

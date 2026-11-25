@@ -49,6 +49,10 @@ export async function handleDorimosRequest(actor: ClinicalActor, request: Reques
     return { data: { status }, status: status === 'not_found' ? 404 : 200 };
   }
 
+  if (input.action === 'scan' && actor.isDemo !== true) {
+    return { data: { status: 'invalid' }, status: 403 };
+  }
+
   const task = await getTaskContext(actor, input.taskId);
   if (task?.type !== 'medication' || task.date !== localDate.format(new Date())) {
     return { data: { status: 'not_found' }, status: 404 };
@@ -66,6 +70,9 @@ export async function handleDorimosRequest(actor: ClinicalActor, request: Reques
   if (input.action === 'confirm') {
     const confirmed = readBoxConfirmation(input.token, scope, secret);
     if (!confirmed) return { data: { status: 'expired' }, status: 422 };
+    if (confirmed.sampleId !== 'camera_photo' && actor.isDemo !== true) {
+      return { data: { status: 'invalid' }, status: 403 };
+    }
     const status = await saveDorimosEvidence(actor, input.taskId, {
       kind: 'medication_box',
       result: compareMedicationBox(expected, confirmed.reading.label),

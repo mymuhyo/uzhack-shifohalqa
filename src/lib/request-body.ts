@@ -3,9 +3,22 @@ import type { NextRequest } from 'next/server';
 type ReadFailure = { ok: false; status: 400 | 413 };
 
 export function isSameOriginPost(request: NextRequest): boolean {
-  // The App Router can use its internal listen address in nextUrl on self-hosted Node.
-  const host = request.headers.get('host') ?? request.nextUrl.host;
-  return request.headers.get('origin') === `${request.nextUrl.protocol}//${host.toLowerCase()}`;
+  const origin = request.headers.get('origin')?.trim().toLowerCase();
+  if (!origin) return false;
+
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+  const protocol = forwardedProto === 'http' || forwardedProto === 'https'
+    ? `${forwardedProto}:`
+    : request.nextUrl.protocol.toLowerCase();
+
+  // The App Router can use its internal listen address in nextUrl on self-hosted Node,
+  // and reverse proxies (Vercel/Railway) supply x-forwarded-host / x-forwarded-proto.
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim().toLowerCase();
+  const headerHost = request.headers.get('host')?.split(',')[0]?.trim().toLowerCase();
+  const host = forwardedHost || headerHost || request.nextUrl.host.toLowerCase();
+  if (!host) return false;
+
+  return origin === `${protocol}//${host}`;
 }
 
 export async function readRequestText(

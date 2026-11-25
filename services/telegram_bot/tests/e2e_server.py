@@ -53,7 +53,7 @@ class ScopedTestStore(TelegramStore):
 def main():
     config = Config.from_env()
     bot = Bot(token=config.bot_token, session=OfflineTelegramSession())
-    store = ScopedTestStore(config.database_url)
+    store = ScopedTestStore(config.database_url, expected_env_id=config.env_id)
     web.run_app(create_app(config, store, bot), host=config.host, port=config.port, access_log=None)
 
 

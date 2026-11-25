@@ -3,7 +3,10 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/demo/dorimos': ['./public/demo/box-*.png'],
+    '/api/clinical/dorimos': ['./public/demo/box-*.png'],
+    '/api/mobile/v1/dorimos': ['./public/demo/box-*.png'],
     '/api/demo/exercise-analysis': ['./public/demo/pose-cdc-lower-body.mp4', './public/demo/pose-cdc-contact-sheet.jpg'],
+    '/api/mobile/v1/exercise/sample-ai': ['./public/demo/pose-cdc-lower-body.mp4', './public/demo/pose-cdc-contact-sheet.jpg'],
   },
   async headers() {
     return [

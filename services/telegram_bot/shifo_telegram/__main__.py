@@ -16,7 +16,7 @@ def main() -> None:
         sys.exit(str(error))
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    app = create_app(config, TelegramStore(config.database_url), Bot(token=config.bot_token))
+    app = create_app(config, TelegramStore(config.database_url, expected_env_id=config.env_id), Bot(token=config.bot_token))
     web.run_app(app, host=config.host, port=config.port, access_log=None)
 
 

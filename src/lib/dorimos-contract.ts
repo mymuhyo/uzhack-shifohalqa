@@ -15,6 +15,7 @@ export const boxReading = z.object({
 
 export const medicationBoxEvidenceSchema = z.union([
   z.strictObject({ kind: z.literal('medication_box'), result: z.literal('manual') }),
+  z.strictObject({ kind: z.literal('medication_box'), result: z.literal('deferred') }),
   z.strictObject({
     kind: z.literal('medication_box'),
     result: comparison,
@@ -30,12 +31,14 @@ export const dorimosInput = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('scan'), taskId: z.uuid(), sampleId: z.enum(dorimosSampleIds) }),
   z.strictObject({ action: z.literal('confirm'), taskId: z.uuid(), token: z.string().max(2300) }),
   z.strictObject({ action: z.literal('manual'), taskId: z.uuid() }),
+  z.strictObject({ action: z.literal('defer'), taskId: z.uuid() }),
 ]);
 
 export const dorimosResponse = z.discriminatedUnion('status', [
   z.object({ status: z.literal('needs_confirmation'), reading: boxReading, token: z.string() }),
   z.object({ status: z.literal('retake') }),
   z.object({ status: z.literal('manual') }),
+  z.object({ status: z.literal('deferred') }),
   z.object({ status: z.literal('saved') }),
   z.object({ status: z.literal('already_saved') }),
   z.object({ status: z.literal('expired') }),

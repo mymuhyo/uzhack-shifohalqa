@@ -102,7 +102,8 @@ function PatientRecord({
           {payload.systolic !== null && payload.diastolic !== null && <p>{payload.systolic}/{payload.diastolic} mm sim. ust.</p>}
           {payload.chestPain && <p>Ko‘krak og‘rig‘i bildirildi.</p>}
         </>
-      ) : payload.result === 'manual' ? <p>Quti tekshirilmagani qo‘lda qayd etildi.</p> : (
+      ) : payload.result === 'manual' ? <p>Quti tekshirilmagani qo‘lda qayd etildi.</p>
+      : payload.result === 'deferred' ? <p>Quti tekshiruvi keyinroqqa qoldirildi.</p> : (
         <>
           <p>{payload.result === 'match' ? 'Namuna qutisi rejadagi nom va kuchga mos.' : 'Namuna qutisi rejadan farq qiladi. Qayd shifokor navbatiga yuborildi.'}</p>
           <p>Qutidan o‘qildi · {formatBoxLabel(payload.reading.label)}</p>

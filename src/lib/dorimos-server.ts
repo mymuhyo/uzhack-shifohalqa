@@ -3,12 +3,11 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { compareMedicationBox, isMedicationBoxAiConfigured, readMedicationBox } from './ai/dorimos';
 import { medicationBoxLabelSchema } from './ai/medication-box';
-import { getTaskContext } from './clinical-store';
 import type { ClinicalActor } from './clinical-types';
 import { issueBoxConfirmation, readBoxConfirmation } from './dorimos-confirmation';
 import { boxReading, dorimosInput, dorimosResponse } from './dorimos-contract';
 import { dorimosPracticePrescription, dorimosSamples } from './dorimos-samples';
-import { reserveDorimosScan, saveDorimosEvidence } from './dorimos-store';
+import { getDorimosMedicationTarget, reserveDorimosScan, saveDorimosEvidence } from './dorimos-store';
 import { readRequestJson } from './request-body';
 
 const maxJsonBytes = 4096;
@@ -49,19 +48,26 @@ export async function handleDorimosRequest(actor: ClinicalActor, request: Reques
     return { data: { status }, status: status === 'not_found' ? 404 : 200 };
   }
 
+  if (input.action === 'defer') {
+    const status = await saveDorimosEvidence(actor, input.taskId, { kind: 'medication_box', result: 'deferred' });
+    if (status === 'not_found') return { data: { status: 'not_found' }, status: 404 };
+    if (status === 'already_saved') return { data: { status: 'already_saved' }, status: 200 };
+    return { data: { status: 'deferred' }, status: 200 };
+  }
+
   if (input.action === 'scan' && actor.isDemo !== true) {
     return { data: { status: 'invalid' }, status: 403 };
   }
 
-  const task = await getTaskContext(actor, input.taskId);
-  if (task?.type !== 'medication' || task.date !== localDate.format(new Date())) {
+  const target = await getDorimosMedicationTarget(actor, input.taskId);
+  if (!target || target.date !== localDate.format(new Date())) {
     return { data: { status: 'not_found' }, status: 404 };
   }
   const secret = process.env.SESSION_SECRET?.trim();
   const prescription = medicationBoxLabelSchema.safeParse({
-    drugName: task.plan.medicationName,
-    strength: task.plan.medicationStrengthMg,
-    unit: 'mg',
+    drugName: target.drugName,
+    strength: target.strength,
+    unit: target.strengthUnit,
   });
   if (!prescription.success || !secret) return { data: { status: 'manual' }, status: 200 };
   const expected = prescription.data;
@@ -118,15 +124,15 @@ async function handleMultipartScan(actor: ClinicalActor, request: Request): Prom
   const mimeType = detectBoxImageMimeType(bytes);
   if (!mimeType) return { data: { status: 'invalid' }, status: 400 };
 
-  const task = await getTaskContext(actor, parsedTaskId.data);
-  if (task?.type !== 'medication' || task.date !== localDate.format(new Date())) {
+  const target = await getDorimosMedicationTarget(actor, parsedTaskId.data);
+  if (!target || target.date !== localDate.format(new Date())) {
     return { data: { status: 'not_found' }, status: 404 };
   }
   const secret = process.env.SESSION_SECRET?.trim();
   const prescription = medicationBoxLabelSchema.safeParse({
-    drugName: task.plan.medicationName,
-    strength: task.plan.medicationStrengthMg,
-    unit: 'mg',
+    drugName: target.drugName,
+    strength: target.strength,
+    unit: target.strengthUnit,
   });
   if (!prescription.success || !secret || !isMedicationBoxAiConfigured()) {
     return { data: { status: 'manual' }, status: 200 };

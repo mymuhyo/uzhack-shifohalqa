@@ -138,7 +138,7 @@ function flagTitle({ ruleKey, evidence: { payload } }: ClinicalFlag) {
 
 function FlagDetails({ flag }: { flag: ClinicalFlag }) {
   const { evidence } = flag;
-  const box = evidence.payload.kind === 'medication_box' && evidence.payload.result !== 'manual' ? evidence.payload : null;
+  const box = evidence.payload.kind === 'medication_box' && evidence.payload.result !== 'manual' && evidence.payload.result !== 'deferred' ? evidence.payload : null;
   return (
     <dl className={styles.metadata}>
       <div><dt>AI rejimi</dt><dd>{evidence.aiMode === 'live' ? 'Jonli tahlil (live)'
@@ -207,7 +207,7 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
         {payload.kind === 'medication' && payload.status === 'missed' && ruleKey === 'medication_missed_consecutive_days' && (
           <p>{missedReasons[payload.reason]}</p>
         )}
-        {payload.kind === 'medication_box' && payload.result !== 'manual' && (
+        {payload.kind === 'medication_box' && payload.result !== 'manual' && payload.result !== 'deferred' && (
           <>
             <p>Qutidan o‘qildi · {formatBoxLabel(payload.reading.label)}</p>
             <p>Rejada · {formatBoxLabel(payload.expected)}</p>
@@ -215,7 +215,7 @@ function QueueEntry({ flag, targets }: { flag: ClinicalFlag; targets: BloodPress
         )}
         <p className={styles.evidenceLine}>
           {payload.kind === 'medication_box'
-            ? (payload.result !== 'manual' && payload.sampleId === 'camera_photo'
+            ? (payload.result !== 'manual' && payload.result !== 'deferred' && payload.sampleId === 'camera_photo'
               ? 'Kamera rasmi · bemor tasdiqlagan OCR'
               : 'Sintetik quti · bemor tasdiqlagan OCR')
             : 'Bemor kiritgan qayd'} · L{level}

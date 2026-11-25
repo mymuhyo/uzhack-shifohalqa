@@ -14,17 +14,30 @@ export type ClinicalActor = {
   isDemo?: boolean;
 };
 
+export type StrengthUnit = 'mg' | 'mcg' | 'g' | 'iu';
+
+export type MedicationScheduleItem = {
+  name: string;
+  strength: number | null;
+  strengthUnit: StrengthUnit;
+  times: string[];
+};
+
 export type BloodPressureTargets = {
   maxSystolic: number;
   maxDiastolic: number;
   warnSystolic: number;
   warnDiastolic: number;
+  minSystolic?: number;
+  minDiastolic?: number;
 };
 
 export type PlanInput = {
   medicationName: string;
   medicationStrengthMg: number | null;
+  medicationStrengthUnit?: StrengthUnit;
   medicationTime: string;
+  medications?: MedicationScheduleItem[];
   vitalsTime: string;
   targets: BloodPressureTargets;
   supplyFollowUp: boolean;
@@ -36,7 +49,13 @@ export type MissedReason = 'out_of_supply' | 'side_effects' | 'forgot' | 'other'
 export type EvidencePayload =
   | { kind: 'medication'; status: 'taken' }
   | { kind: 'medication'; status: 'missed'; reason: MissedReason }
-  | { kind: 'vitals'; systolic: number | null; diastolic: number | null; chestPain: boolean };
+  | {
+      kind: 'vitals';
+      systolic: number | null;
+      diastolic: number | null;
+      chestPain: boolean;
+      repeatOfEvidenceId?: string;
+    };
 
 export type EvidenceFlag = {
   color: 'red' | 'yellow';
@@ -109,10 +128,13 @@ export type EvidenceView = Pick<EvidenceWrite, 'taskId'> & {
 
 export type ClinicalTask = {
   id: string;
+  planItemId?: string;
   type: EvidencePayload['kind'];
   title: string;
   date: string;
   dueTime: string;
+  strength?: number | null;
+  strengthUnit?: StrengthUnit;
   status: 'pending' | 'taken' | 'missed' | 'recorded';
   evidence: EvidenceView | null;
   boxEvidence: EvidenceView | null;
@@ -130,8 +152,12 @@ export type ClinicalView = {
 };
 
 export type TaskContext = {
+  planItemId?: string;
   type: ClinicalTask['type'];
+  title?: string;
   date: string;
+  strength?: number | null;
+  strengthUnit?: StrengthUnit;
   plan: PlanInput;
   previousMedication: { date: string; status: 'taken' | 'missed' | 'unanswered' } | null;
 };

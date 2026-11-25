@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { BloodPressureTargets } from '../../src/lib/clinical-types';
 import { evaluateRules } from '../../src/lib/rules/evaluate-rules';
 
-const targets = { maxSystolic: 150, maxDiastolic: 95, warnSystolic: 135, warnDiastolic: 85 };
+const targets: BloodPressureTargets = { maxSystolic: 150, maxDiastolic: 95, warnSystolic: 135, warnDiastolic: 85 };
+const targetsWithLow: BloodPressureTargets = { ...targets, minSystolic: 90, minDiastolic: 60 };
 
-const vitals = (systolic: number, diastolic: number) => ({
+const vitals = (systolic: number, diastolic: number, customTargets: BloodPressureTargets = targets) => ({
   kind: 'vitals',
   chest_pain: false,
-  reading: { systolic, diastolic, targets },
+  reading: { systolic, diastolic, targets: customTargets },
 });
 
 describe('vitals rules', () => {
@@ -36,6 +38,49 @@ describe('vitals rules', () => {
     })).toMatchObject({ color: 'yellow', threshold: 130 });
   });
 
+  it('flags severe low BP (hypotension) below clinician-configured minSystolic/minDiastolic as red bp_low', () => {
+    expect(evaluateRules(vitals(90, 60, targetsWithLow))).toBeNull();
+    expect(evaluateRules(vitals(89, 60, targetsWithLow))).toEqual({
+      color: 'red',
+      rule_key: 'bp_low',
+      metric: 'systolic',
+      observed: 89,
+      threshold: 90,
+    });
+    expect(evaluateRules(vitals(100, 59, targetsWithLow))).toEqual({
+      color: 'red',
+      rule_key: 'bp_low',
+      metric: 'diastolic',
+      observed: 59,
+      threshold: 60,
+    });
+    // Red low diastolic takes priority over yellow warning systolic
+    expect(evaluateRules(vitals(138, 55, targetsWithLow))).toEqual({
+      color: 'red',
+      rule_key: 'bp_low',
+      metric: 'diastolic',
+      observed: 55,
+      threshold: 60,
+    });
+  });
+
+  it('enforces physiological blood pressure bounds and systolic > diastolic', () => {
+    expect(() => evaluateRules(vitals(49, 35))).toThrow();
+    expect(() => evaluateRules(vitals(261, 100))).toThrow();
+    expect(() => evaluateRules(vitals(120, 29))).toThrow();
+    expect(() => evaluateRules(vitals(200, 161))).toThrow();
+    expect(() => evaluateRules(vitals(100, 100))).toThrow();
+    expect(() => evaluateRules(vitals(90, 110))).toThrow();
+    expect(evaluateRules(vitals(50, 30, targets))).toBeNull();
+    expect(evaluateRules(vitals(260, 160, targets))).toMatchObject({ color: 'red', rule_key: 'bp_max' });
+  });
+
+  it('rejects invalid low BP target configurations', () => {
+    expect(() => evaluateRules(vitals(120, 80, { ...targets, minSystolic: 135 }))).toThrow();
+    expect(() => evaluateRules(vitals(120, 80, { ...targets, minDiastolic: 85 }))).toThrow();
+    expect(() => evaluateRules(vitals(120, 80, { ...targets, minSystolic: 70, minDiastolic: 70 }))).toThrow();
+  });
+
   it('flags reported chest pain without a measurement', () => {
     expect(evaluateRules({ kind: 'vitals', chest_pain: true })).toEqual({
       color: 'red', rule_key: 'chest_pain',
@@ -44,6 +89,9 @@ describe('vitals rules', () => {
 
   it('prioritizes reported chest pain when the measurement also crosses a red threshold', () => {
     expect(evaluateRules({ ...vitals(190, 100), chest_pain: true })).toEqual({
+      color: 'red', rule_key: 'chest_pain',
+    });
+    expect(evaluateRules({ ...vitals(82, 52, targetsWithLow), chest_pain: true })).toEqual({
       color: 'red', rule_key: 'chest_pain',
     });
   });

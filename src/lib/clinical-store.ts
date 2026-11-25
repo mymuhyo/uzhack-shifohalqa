@@ -6,24 +6,45 @@ import {
   type EvidenceView,
   type EvidenceWrite,
   type FlagFollowup,
+  type MedicationScheduleItem,
   type MutationResult,
   type PlanInput,
   type ReviewInput,
+  type StrengthUnit,
   type TaskContext,
 } from './clinical-types';
 import type { FollowupAckInput, FollowupInput, SymptomReviewInput, UrgentSymptomInput } from './clinical-inputs';
 import { getDatabase } from './db';
 import { medicationBoxEvidenceSchema } from './dorimos-contract';
 
+const strengthUnitSchema = z.enum(['mg', 'mcg', 'g', 'iu']);
+
+const medicationItemRow = z.object({
+  id: z.uuid().optional(),
+  title: z.string(),
+  strength: z.number().positive().nullable(),
+  strengthUnit: strengthUnitSchema.default('mg'),
+  dueTime: z.string(),
+  sortOrder: z.number().int().optional(),
+});
+
+const targetsRow = z.object({
+  maxSystolic: z.number(),
+  maxDiastolic: z.number(),
+  warnSystolic: z.number(),
+  warnDiastolic: z.number(),
+  minSystolic: z.number().optional(),
+  minDiastolic: z.number().optional(),
+});
+
 const planFields = z.object({
   medicationName: z.string(),
   medicationStrengthMg: z.number().positive().nullable(),
+  medicationStrengthUnit: strengthUnitSchema.optional(),
   medicationTime: z.string(),
+  medicationItems: z.array(medicationItemRow).optional(),
   vitalsTime: z.string(),
-  targets: z.object({
-    maxSystolic: z.number(), maxDiastolic: z.number(),
-    warnSystolic: z.number(), warnDiastolic: z.number(),
-  }),
+  targets: targetsRow,
   supplyFollowUp: z.boolean(),
   dailyStepGoal: z.number().int().min(100).max(50000).default(3000),
 });
@@ -46,6 +67,7 @@ const evidenceFields = z.object({
     z.object({
       kind: z.literal('vitals'), chestPain: z.boolean(),
       systolic: z.number().nullable(), diastolic: z.number().nullable(),
+      repeatOfEvidenceId: z.uuid().optional(),
     }),
     medicationBoxEvidenceSchema,
   ]),
@@ -63,14 +85,30 @@ const flagFields = z.object({
 });
 
 const taskFields = z.object({
-  taskId: z.uuid(), type: taskType, title: z.string(),
-  date: z.iso.date(), dueTime: z.string(), status: taskStatus,
-  recent: z.boolean(), evidenceId: z.uuid().nullable(), flagId: z.uuid().nullable(),
+  taskId: z.uuid(),
+  planItemId: z.uuid().optional(),
+  type: taskType,
+  title: z.string(),
+  date: z.iso.date(),
+  dueTime: z.string(),
+  strength: z.number().positive().nullable().optional(),
+  strengthUnit: strengthUnitSchema.optional(),
+  sortOrder: z.number().int().optional(),
+  status: taskStatus,
+  recent: z.boolean(),
+  evidenceId: z.uuid().nullable(),
+  flagId: z.uuid().nullable(),
   decision: decision.nullable(),
 });
 
 const contextFields = planFields.extend({
-  type: taskType, date: z.iso.date(), previousDate: z.iso.date().nullable(),
+  planItemId: z.uuid().optional(),
+  type: taskType,
+  title: z.string().optional(),
+  date: z.iso.date(),
+  strength: z.number().positive().nullable().optional(),
+  strengthUnit: strengthUnitSchema.optional(),
+  previousDate: z.iso.date().nullable(),
   previousStatus: z.enum(['taken', 'missed', 'unanswered']),
 });
 
@@ -105,9 +143,110 @@ function requireDatabase() {
   return database;
 }
 
+function groupMedicationItems(
+  items: readonly z.infer<typeof medicationItemRow>[] | undefined,
+  fallback: {
+    medicationName: string;
+    medicationStrengthMg: number | null;
+    medicationStrengthUnit?: StrengthUnit;
+    medicationTime: string;
+  },
+): MedicationScheduleItem[] {
+  if (!items || items.length === 0) {
+    return [{
+      name: fallback.medicationName,
+      strength: fallback.medicationStrengthMg,
+      strengthUnit: fallback.medicationStrengthUnit ?? 'mg',
+      times: [fallback.medicationTime],
+    }];
+  }
+
+  const grouped = new Map<string, MedicationScheduleItem>();
+  for (const item of items) {
+    const key = item.title.trim().toLowerCase();
+    const existing = grouped.get(key);
+    if (existing) {
+      if (!existing.times.includes(item.dueTime)) {
+        existing.times.push(item.dueTime);
+      }
+    } else {
+      grouped.set(key, {
+        name: item.title,
+        strength: item.strength,
+        strengthUnit: item.strengthUnit,
+        times: [item.dueTime],
+      });
+    }
+  }
+  return [...grouped.values()];
+}
+
+function hydratePlan(raw: z.infer<typeof planFields>): PlanInput {
+  const medications = groupMedicationItems(raw.medicationItems, raw);
+  const primary = medications[0]!;
+  return {
+    medicationName: raw.medicationName,
+    medicationStrengthMg: raw.medicationStrengthMg,
+    medicationStrengthUnit: raw.medicationStrengthUnit ?? primary.strengthUnit,
+    medicationTime: raw.medicationTime,
+    medications,
+    vitalsTime: raw.vitalsTime,
+    targets: raw.targets,
+    supplyFollowUp: raw.supplyFollowUp,
+    dailyStepGoal: raw.dailyStepGoal,
+  };
+}
+
+type PlanItemSeed = {
+  type: 'medication' | 'vitals';
+  title: string;
+  due_time: string;
+  box_strength_mg: number | null;
+  strength_unit: StrengthUnit;
+  sort_order: number;
+};
+
+function buildPlanItemSeeds(input: PlanInput): PlanItemSeed[] {
+  const medications: MedicationScheduleItem[] =
+    input.medications && input.medications.length > 0
+      ? input.medications
+      : [{
+          name: input.medicationName,
+          strength: input.medicationStrengthMg,
+          strengthUnit: input.medicationStrengthUnit ?? 'mg',
+          times: [input.medicationTime],
+        }];
+
+  const rows: PlanItemSeed[] = [];
+  let sortOrder = 0;
+  for (const med of medications) {
+    for (const slotTime of med.times) {
+      rows.push({
+        type: 'medication',
+        title: med.name,
+        due_time: slotTime,
+        box_strength_mg: med.strength,
+        strength_unit: med.strengthUnit,
+        sort_order: sortOrder,
+      });
+      sortOrder += 1;
+    }
+  }
+  rows.push({
+    type: 'vitals',
+    title: 'Qon bosimi',
+    due_time: input.vitalsTime,
+    box_strength_mg: null,
+    strength_unit: 'mg',
+    sort_order: sortOrder,
+  });
+  return rows;
+}
+
 export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promise<MutationResult> {
   if (actor.role !== 'doctor' || !actor.doctorId || !actor.patientId) return 'not_found';
   const sql = requireDatabase();
+  const planItems = buildPlanItemSeeds(input);
   const [row] = await sql`
     WITH scoped AS (
       SELECT workspace_id, id, doctor_id
@@ -120,12 +259,18 @@ export async function assignPlan(actor: ClinicalActor, input: PlanInput): Promis
       ON CONFLICT (workspace_id, patient_id) DO NOTHING
       RETURNING workspace_id, id
     ), items AS (
-      INSERT INTO public.plan_items (workspace_id, plan_id, type, title, due_time, box_strength_mg)
-      SELECT added.workspace_id, added.id, item.type, item.title, item.due_time, item.box_strength_mg
-      FROM added CROSS JOIN (VALUES
-        ('medication', ${input.medicationName}::text, ${input.medicationTime}::time, ${input.medicationStrengthMg}::numeric),
-        ('vitals', 'Qon bosimi', ${input.vitalsTime}::time, NULL)
-      ) AS item(type, title, due_time, box_strength_mg)
+      INSERT INTO public.plan_items (workspace_id, plan_id, type, title, due_time, box_strength_mg, strength_unit, sort_order)
+      SELECT added.workspace_id, added.id, item.type, item.title, item.due_time::time,
+             item.box_strength_mg, item.strength_unit, item.sort_order
+      FROM added
+      CROSS JOIN jsonb_to_recordset(${sql.json(planItems)}::jsonb) AS item(
+        type text,
+        title text,
+        due_time text,
+        box_strength_mg numeric,
+        strength_unit text,
+        sort_order smallint
+      )
     )
     SELECT CASE
       WHEN EXISTS (SELECT 1 FROM added) THEN 'saved'
@@ -143,13 +288,41 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
   const sql = requireDatabase();
   const [plans, , taskRows, followupRows, symptomRows, ackRows] = await sql.transaction((tx) => [
     tx`
-      SELECT medicine.title AS "medicationName", medicine.box_strength_mg::float8 AS "medicationStrengthMg",
-             left(medicine.due_time::text, 5) AS "medicationTime",
-             left(vitals.due_time::text, 5) AS "vitalsTime", plan.vitals_target AS targets,
-             plan.supply_follow_up AS "supplyFollowUp", plan.daily_step_goal AS "dailyStepGoal"
+      SELECT primary_med.title AS "medicationName",
+             primary_med.box_strength_mg::float8 AS "medicationStrengthMg",
+             primary_med.strength_unit AS "medicationStrengthUnit",
+             left(primary_med.due_time::text, 5) AS "medicationTime",
+             left(vitals.due_time::text, 5) AS "vitalsTime",
+             plan.vitals_target AS targets,
+             plan.supply_follow_up AS "supplyFollowUp",
+             plan.daily_step_goal AS "dailyStepGoal",
+             COALESCE((
+               SELECT jsonb_agg(
+                 jsonb_build_object(
+                   'id', med.id,
+                   'title', med.title,
+                   'strength', med.box_strength_mg::float8,
+                   'strengthUnit', med.strength_unit,
+                   'dueTime', left(med.due_time::text, 5),
+                   'sortOrder', med.sort_order
+                 )
+                 ORDER BY med.sort_order ASC, med.due_time ASC, med.title ASC
+               )
+               FROM public.plan_items AS med
+               WHERE med.workspace_id = plan.workspace_id
+                 AND med.plan_id = plan.id
+                 AND med.type = 'medication'
+             ), '[]'::jsonb) AS "medicationItems"
       FROM public.plans AS plan
-      JOIN public.plan_items AS medicine
-        ON medicine.workspace_id = plan.workspace_id AND medicine.plan_id = plan.id AND medicine.type = 'medication'
+      JOIN LATERAL (
+        SELECT med.title, med.box_strength_mg, med.strength_unit, med.due_time
+        FROM public.plan_items AS med
+        WHERE med.workspace_id = plan.workspace_id
+          AND med.plan_id = plan.id
+          AND med.type = 'medication'
+        ORDER BY med.sort_order ASC, med.due_time ASC, med.title ASC
+        LIMIT 1
+      ) AS primary_med ON true
       JOIN public.plan_items AS vitals
         ON vitals.workspace_id = plan.workspace_id AND vitals.plan_id = plan.id AND vitals.type = 'vitals'
       WHERE plan.workspace_id = ${actor.workspaceId} AND plan.patient_id = ${actor.patientId}
@@ -167,8 +340,13 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
     `,
     tx`
       WITH local_date AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date AS today)
-      SELECT task.id AS "taskId", item.type, item.title, to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
-             left(item.due_time::text, 5) AS "dueTime", task.status,
+      SELECT task.id AS "taskId", item.id AS "planItemId", item.type, item.title,
+             to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
+             left(item.due_time::text, 5) AS "dueTime",
+             item.box_strength_mg::float8 AS strength,
+             item.strength_unit AS "strengthUnit",
+             item.sort_order AS "sortOrder",
+             task.status,
              task.scheduled_date >= local_date.today - 6 AS recent,
              evidence.id AS "evidenceId", evidence.level, evidence.source, evidence.ai_mode AS "aiMode",
              evidence.payload, to_char(evidence.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
@@ -216,6 +394,12 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
                             THEN (open_fu.payload->>'systolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnSystolic')::int
                         OR (CASE WHEN (open_fu.payload->>'diastolic') ~ '^[0-9]{1,3}$'
                             THEN (open_fu.payload->>'diastolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnDiastolic')::int
+                        OR (plan.vitals_target ? 'minSystolic'
+                            AND (open_fu.payload->>'systolic') ~ '^[0-9]{1,3}$'
+                            AND (open_fu.payload->>'systolic')::int < (plan.vitals_target->>'minSystolic')::int)
+                        OR (plan.vitals_target ? 'minDiastolic'
+                            AND (open_fu.payload->>'diastolic') ~ '^[0-9]{1,3}$'
+                            AND (open_fu.payload->>'diastolic')::int < (plan.vitals_target->>'minDiastolic')::int)
                       ) AND NOT EXISTS (
                       SELECT 1 FROM public.flag_followups AS newer_fu
                       WHERE newer_fu.workspace_id = open_fu.workspace_id
@@ -232,7 +416,7 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
                   AND recent_ack.flag_id = flag.id
                   AND (recent_ack.acknowledged_at AT TIME ZONE 'Asia/Tashkent')::date BETWEEN local_date.today - 6 AND local_date.today
               )))))
-      ORDER BY task.scheduled_date DESC, item.due_time, item.type
+      ORDER BY task.scheduled_date DESC, item.due_time ASC, item.sort_order ASC, item.type ASC, item.title ASC
     `,
     tx`
       SELECT followup.id, followup.flag_id AS "flagId", followup.kind, followup.payload,
@@ -295,7 +479,8 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
     followupsByFlag.set(parsed.flagId, list);
   }
 
-  const view: ClinicalView = { plan: planFields.parse(plans[0]), tasks: [], flags: [], urgentSymptoms, caregiverAck };
+  const parsedPlan = hydratePlan(planFields.parse(plans[0]));
+  const view: ClinicalView = { plan: parsedPlan, tasks: [], flags: [], urgentSymptoms, caregiverAck };
   const visibleTasks = new Map<string, ClinicalView['tasks'][number]>();
   for (const row of taskRows) {
     const task = taskFields.parse(row);
@@ -311,8 +496,19 @@ export async function getClinicalView(actor: ClinicalActor): Promise<ClinicalVie
     if (task.recent || (isPatientSideRole(actor.role) && evidence?.review)) {
       let item = visibleTasks.get(task.taskId);
       if (!item) {
-        item = { id: task.taskId, type: task.type, title: task.title, date: task.date,
-          dueTime: task.dueTime, status: task.status, evidence: null, boxEvidence: null };
+        item = {
+          id: task.taskId,
+          ...(task.planItemId ? { planItemId: task.planItemId } : {}),
+          type: task.type,
+          title: task.title,
+          date: task.date,
+          dueTime: task.dueTime,
+          ...(task.strength !== undefined ? { strength: task.strength } : {}),
+          ...(task.strengthUnit !== undefined ? { strengthUnit: task.strengthUnit } : {}),
+          status: task.status,
+          evidence: null,
+          boxEvidence: null,
+        };
         if (!task.recent) item.lateReview = true;
         visibleTasks.set(task.taskId, item);
       }
@@ -337,19 +533,52 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
   if (!isPatientSideRole(actor.role) || !actor.patientId) return null;
   const sql = requireDatabase();
   const [row] = await sql`
-    SELECT item.type, to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
-           medicine.title AS "medicationName", medicine.box_strength_mg::float8 AS "medicationStrengthMg",
-           left(medicine.due_time::text, 5) AS "medicationTime",
-           left(vitals.due_time::text, 5) AS "vitalsTime", plan.vitals_target AS targets,
-           plan.supply_follow_up AS "supplyFollowUp", plan.daily_step_goal AS "dailyStepGoal",
+    SELECT item.id AS "planItemId",
+           item.type,
+           item.title,
+           item.box_strength_mg::float8 AS strength,
+           item.strength_unit AS "strengthUnit",
+           to_char(task.scheduled_date, 'YYYY-MM-DD') AS date,
+           primary_med.title AS "medicationName",
+           primary_med.box_strength_mg::float8 AS "medicationStrengthMg",
+           primary_med.strength_unit AS "medicationStrengthUnit",
+           left(primary_med.due_time::text, 5) AS "medicationTime",
+           left(vitals.due_time::text, 5) AS "vitalsTime",
+           plan.vitals_target AS targets,
+           plan.supply_follow_up AS "supplyFollowUp",
+           plan.daily_step_goal AS "dailyStepGoal",
+           COALESCE((
+             SELECT jsonb_agg(
+               jsonb_build_object(
+                 'id', med.id,
+                 'title', med.title,
+                 'strength', med.box_strength_mg::float8,
+                 'strengthUnit', med.strength_unit,
+                 'dueTime', left(med.due_time::text, 5),
+                 'sortOrder', med.sort_order
+               )
+               ORDER BY med.sort_order ASC, med.due_time ASC, med.title ASC
+             )
+             FROM public.plan_items AS med
+             WHERE med.workspace_id = plan.workspace_id
+               AND med.plan_id = plan.id
+               AND med.type = 'medication'
+           ), '[]'::jsonb) AS "medicationItems",
            CASE WHEN item.type = 'medication' AND plan.start_date < task.scheduled_date
                 THEN to_char(task.scheduled_date - 1, 'YYYY-MM-DD') END AS "previousDate",
            CASE WHEN previous_evidence.id IS NULL THEN 'unanswered' ELSE prior.status END AS "previousStatus"
     FROM public.task_instances AS task
     JOIN public.plan_items AS item ON item.workspace_id = task.workspace_id AND item.id = task.plan_item_id
     JOIN public.plans AS plan ON plan.workspace_id = item.workspace_id AND plan.id = item.plan_id
-    JOIN public.plan_items AS medicine
-      ON medicine.workspace_id = plan.workspace_id AND medicine.plan_id = plan.id AND medicine.type = 'medication'
+    JOIN LATERAL (
+      SELECT med.title, med.box_strength_mg, med.strength_unit, med.due_time
+      FROM public.plan_items AS med
+      WHERE med.workspace_id = plan.workspace_id
+        AND med.plan_id = plan.id
+        AND med.type = 'medication'
+      ORDER BY med.sort_order ASC, med.due_time ASC, med.title ASC
+      LIMIT 1
+    ) AS primary_med ON true
     JOIN public.plan_items AS vitals
       ON vitals.workspace_id = plan.workspace_id AND vitals.plan_id = plan.id AND vitals.type = 'vitals'
     LEFT JOIN public.task_instances AS prior
@@ -363,10 +592,16 @@ export async function getTaskContext(actor: ClinicalActor, taskId: string): Prom
       AND (task.scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date OR task.status <> 'pending')
   `;
   if (!row) return null;
-  const { type, date, previousDate, previousStatus, ...plan } = contextFields.parse(row);
+  const parsed = contextFields.parse(row);
+  const { planItemId, type, title, date, strength, strengthUnit, previousDate, previousStatus, ...rawPlan } = parsed;
+  const plan = hydratePlan(rawPlan);
   return {
+    ...(planItemId ? { planItemId } : {}),
     type,
+    ...(title !== undefined ? { title } : {}),
     date,
+    ...(strength !== undefined ? { strength } : {}),
+    ...(strengthUnit !== undefined ? { strengthUnit } : {}),
     plan,
     previousMedication: previousDate ? { date: previousDate, status: previousStatus } : null,
   };
@@ -377,6 +612,8 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
   const sql = requireDatabase();
   const status = input.payload.kind === 'medication' ? input.payload.status : 'recorded';
   const { color = null, ruleKey = null, ...detail } = input.flag ?? {};
+  const repeatOfEvidenceId =
+    input.payload.kind === 'vitals' ? (input.payload.repeatOfEvidenceId ?? null) : null;
   const [row] = await sql`
     WITH scoped AS (
       SELECT task.id, task.workspace_id, task.scheduled_date, task.status
@@ -386,6 +623,20 @@ export async function saveEvidence(actor: ClinicalActor, input: EvidenceWrite): 
       WHERE task.workspace_id = ${actor.workspaceId} AND task.id = ${input.taskId}
         AND plan.patient_id = ${actor.patientId} AND plan.doctor_id IS NOT DISTINCT FROM ${actor.doctorId}::uuid
         AND item.type = ${input.payload.kind}
+        AND (${repeatOfEvidenceId}::uuid IS NULL OR EXISTS (
+          SELECT 1
+          FROM public.evidence_logs AS prev_ev
+          JOIN public.task_instances AS prev_task
+            ON prev_task.workspace_id = prev_ev.workspace_id AND prev_task.id = prev_ev.task_instance_id
+          JOIN public.plan_items AS prev_item
+            ON prev_item.workspace_id = prev_task.workspace_id AND prev_item.id = prev_task.plan_item_id
+          JOIN public.plans AS prev_plan
+            ON prev_plan.workspace_id = prev_item.workspace_id AND prev_plan.id = prev_item.plan_id
+          WHERE prev_ev.workspace_id = plan.workspace_id
+            AND prev_ev.id = ${repeatOfEvidenceId}::uuid
+            AND prev_plan.patient_id = plan.patient_id
+            AND prev_item.type = 'vitals'
+        ))
     ), added AS (
       INSERT INTO public.evidence_logs (workspace_id, task_instance_id, level, source, ai_mode, payload)
       SELECT workspace_id, id, 0, 'self_report', ${input.aiMode}, ${sql.json(input.payload)}::jsonb
@@ -543,6 +794,12 @@ export async function acknowledgeFlagFollowup(
                 THEN (followup.payload->>'systolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnSystolic')::int
             OR (CASE WHEN (followup.payload->>'diastolic') ~ '^[0-9]{1,3}$'
                 THEN (followup.payload->>'diastolic')::int ELSE 0 END) >= (plan.vitals_target->>'warnDiastolic')::int
+            OR (plan.vitals_target ? 'minSystolic'
+                AND (followup.payload->>'systolic') ~ '^[0-9]{1,3}$'
+                AND (followup.payload->>'systolic')::int < (plan.vitals_target->>'minSystolic')::int)
+            OR (plan.vitals_target ? 'minDiastolic'
+                AND (followup.payload->>'diastolic') ~ '^[0-9]{1,3}$'
+                AND (followup.payload->>'diastolic')::int < (plan.vitals_target->>'minDiastolic')::int)
           ))
         )
     ), updated AS (

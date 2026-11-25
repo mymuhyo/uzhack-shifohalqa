@@ -1,73 +1,136 @@
-# ShifoHalqa Grand Final interaction & motion design
+---
+version: 2.0
+name: ShifoHalqa Precision Clinical
+description: "Crisp tonal-layered clinical interface blending Context.dev hairline geometry, OpenCode monospace telemetry, ArtCraft studio media framing, and high-legibility medical accessibility in Light & Obsidian Dark modes."
+colors:
+  light:
+    background: "#FFFFFF"
+    surface: "#FFFFFF"
+    surface-low: "#F7F8FA"
+    surface-container: "#F1F5F9"
+    on-surface: "#09090B"
+    on-surface-variant: "#3F3F46"
+    on-surface-muted: "#64748B"
+    outline: "#09090B17"
+    outline-strong: "#CBD5E1"
+    primary: "#2563EB"
+    primary-hover: "#1D4ED8"
+    on-primary: "#FFFFFF"
+    primary-tint: "#EFF6FF"
+    urgent: "#DC2626"
+    urgent-bg: "#FEF2F2"
+    warn: "#B45309"
+    warn-bg: "#FFFBEB"
+    ok: "#047857"
+    ok-bg: "#ECFDF5"
+  dark:
+    background: "#090A0D"
+    surface: "#111318"
+    surface-low: "#14171F"
+    surface-container: "#181B22"
+    on-surface: "#FAFAFA"
+    on-surface-variant: "#CBD5E1"
+    on-surface-muted: "#94A3B8"
+    outline: "#FFFFFF17"
+    outline-strong: "#FFFFFF2E"
+    primary: "#3B82F6"
+    primary-hover: "#60A5FA"
+    on-primary: "#FFFFFF"
+    primary-tint: "#3B82F61F"
+    urgent: "#FB7185"
+    urgent-bg: "#E11D4829"
+    warn: "#FBBF24"
+    warn-bg: "#F59E0B26"
+    ok: "#34D399"
+    ok-bg: "#10B98124"
+typography:
+  headline-display:
+    fontFamily: Inter Variable
+    fontSize: clamp(2.25rem, 4.4vw, 3.85rem)
+    fontWeight: 600
+    lineHeight: 1.06
+    letterSpacing: -0.04em
+  headline-lg:
+    fontFamily: Inter Variable
+    fontSize: clamp(1.35rem, 2.2vw, 1.75rem)
+    fontWeight: 600
+    lineHeight: 1.18
+    letterSpacing: -0.03em
+  title-md:
+    fontFamily: Inter Variable
+    fontSize: 1.0625rem
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: -0.02em
+  body-md:
+    fontFamily: Inter Variable
+    fontSize: 1rem
+    fontWeight: 400
+    lineHeight: 1.55
+  mono-telemetry:
+    fontFamily: JetBrains Mono
+    fontSize: 0.8125rem
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: -0.02em
+rounded:
+  sm: 8px
+  md: 12px
+  lg: 16px
+  full: 9999px
+motion:
+  micro: 150ms cubic-bezier(0.23, 1, 0.32, 1)
+  reveal: 200ms cubic-bezier(0.23, 1, 0.32, 1)
+  reducedMotion: "MotionConfig reducedMotion='user'"
+---
 
-> **Living design contract.** This document guides Grand Final UI craft and animations across Web, Telegram Mini App, and Android, and stays open to iterative refinement through Grand Final and v2. [DECISIONS](DECISIONS.md) owns product scope; [PLAN](PLAN.md) owns milestones; [ROADMAP_V2](ROADMAP_V2.md) owns post-final evolution.
+# ShifoHalqa Precision Clinical Design System
 
-## Visual identity — Clinical Ledger, elevated
+> **Living design contract.** Guides Web, Telegram Mini App, and Android craft for Grand Final and v2. [DECISIONS](DECISIONS.md) owns product scope; [PLAN](PLAN.md) owns milestones; [ROADMAP_V2](ROADMAP_V2.md) owns post-final evolution.
 
-- **Aesthetic direction:** Calm, authoritative **Clinical Ledger** — warm paper surfaces (`--paper: #f6f4ec`), crisp elevated cards (`--card: #fffef9`), deep forest ink (`--ink: #19312a`), high-contrast semantic clinical accents (`--action`, `--urgent`, `--warn`, `--ok`), self-hosted **`Literata`** display headings paired with **`Golos Text`** UI body and tabular numerals (`tabular-nums`) for every dose time, BP reading, angle, and count.
-- **Component & motion stack (Web + Mini App):** Build on **`shadcn/ui`** primitives (`Dialog`, `Drawer`/`Sheet`, `Tabs`, `Select`, `Switch`, `Badge`, `Toast`) styled strictly with Clinical Ledger CSS tokens, crisp **`Lucide`** icons (1.75–2px stroke, paired with text labels), and **`Motion`** wrapped in `<MotionConfig reducedMotion="user">`.
-- **Motion philosophy (tactile, purposeful, never sluggish):**
-  - Keep micro-interactions fast (`140–220ms`, `--ease-out` / crisp spring physics with zero excessive bounce) and strictly GPU-composited (`transform`, `opacity`).
-  - Use motion to communicate clinical state transitions: optimistic `Saqlanmoqda → Yuborildi` checkmarks, smooth tab/panel reveals, priority queue expansion, and timeline marker focus on the doctor video player.
-  - Honor `prefers-reduced-motion: reduce` everywhere; zero decorative looping animations that distract elderly patients or doctors scanning urgent alerts.
-- **Accessibility & Uzbek readability:** Short Uzbek Latin copy, ≥48px tap targets on mobile patient controls, visible keyboard focus rings (`--focus`), large-text scale toggle (`html[data-text-scale='large']`), full light/dark mode parity (Web + Android `ShifoTheme.kt`), and spoken + text severity labels paired with every color.
+## Overview & Visual Direction
 
-## Information hierarchy — Two stories, zero clutter
+ShifoHalqa merges **clinical calm and authority** with modern software craft:
 
-| Surface | Primary job |
+- **Context.dev tonal precision:** Crisp white (`#FFFFFF`) and cool slate (`#F7F8FA` / `#F1F5F9`) layers separated by `1px` hairline borders (`rgba(9, 9, 11, 0.09)`), sharp `-0.04em` `Inter Variable` headlines, and electric clinical blue (`#2563EB`) strictly reserved for primary actions and active focus.
+- **OpenCode telemetry discipline:** Every BP reading (`158/98 mmHg`), scheduled Toshkent dose time (`08:00`), CV joint angle (`89.8°`), evidence tier (`L0–L4`), and clickable DB citation (`id`) renders in `JetBrains Mono` with `tabular-nums` so doctors scan numbers without eye strain.
+- **ArtCraft studio media framing:** Exercise CV viewports and doctor video review players sit inside an obsidian darkroom stage (`#090A0D` / `#111318`) with crisp keyframe thumbnails and clickable flagged-cycle markers.
+- **Medical accessibility non-negotiables:** Body text ≥ `16px`, ≥ `44–48px` touch targets, visible keyboard focus rings, `A+ Katta shrift` scale toggle (`html[data-text-scale='large']`), `<meta name="color-scheme">` instant light/dark mode without FOUC, and semantic red/amber/emerald indicators always paired with Uzbek Latin labels.
+
+## Colors & Tokens (`src/app/globals.css`)
+
+| Role | Light | Dark (Obsidian Studio) | Usage |
+|---|---|---|---|
+| Canvas (`--paper`) | `#FFFFFF` | `#090A0D` | Page canvas + sticky translucent header |
+| Surface (`--card`) | `#FFFFFF` | `#111318` | Primary interactive cards with hairline ring |
+| Tonal Low (`--panel`) | `#F7F8FA` | `#181B22` | Secondary wells, KPI strips, nested telemetry rows |
+| Primary Ink (`--ink`) | `#09090B` | `#FAFAFA` | Headings, core values, clinical text |
+| Muted Ink (`--muted`) | `#64748B` | `#94A3B8` | Hints, timestamps, metadata labels |
+| Primary Action (`--action`) | `#2563EB` | `#3B82F6` | Primary CTAs, active tabs, selected patient pills |
+| Urgent (`--urgent` / `--urgent-bg`) | `#DC2626` / `#FEF2F2` | `#FB7185` / `rgba(225,29,72,0.16)` | Red BP thresholds, chest pain, `103` emergency |
+| Warn (`--warn` / `--warn-bg`) | `#B45309` / `#FFFBEB` | `#FBBF24` / `rgba(245,158,11,0.15)` | Monitoring queue, out-of-supply follow-up |
+| OK (`--ok` / `--ok-bg`) | `#047857` / `#ECFDF5` | `#34D399` / `rgba(16,185,129,0.14)` | Normal BP, L4 doctor approval, goal met |
+
+## Page Layouts & Information Architecture
+
+| Surface | Structural Layout |
 |---|---|
-| Landing (`/`) | Lead with **Story 1** (Dori → Shifokor javobi → 7-kunlik AI hisobot) and **Story 2** (3 ta mashq CV + video ko‘rik), offering instant **1-klik Demo** alongside a compact **«Klinika hisobiga kirish»** option |
-| Doctor Web (`/doctor`) | Multi-patient switcher (in clinic mode), urgency-sorted queue (`red` → `yellow`), Supervised AI 7-day brief card with inline edit & L4 approval, and full-video player with clickable flagged-cycle timestamps |
-| Patient Web (`/patient`) | Time-grouped daily medication cards, DoriMos verification sheet, manual BP (high + low zone feedback), 7-day step trend (`Telefon sensori` vs `Qo‘lda`), compact Teach-Back, doctor replies, `Yaqinim` 24h link, and persistent `103` + `Og‘riq bor` |
-| Native Android | Same daily clinical rhythm with native Compose transitions, dark mode parity, on-device MediaPipe CV (**`Full`** default + user-selectable **`Heavy`** accuracy toggle in settings), and consented video upload |
-| Telegram Mini App (`/tg`) | Shared patient Web components adapted to Telegram safe areas, `MainButton`/`BackButton`, haptics, and Bearer auth (no broken iframe cookies) |
-| Telegram Bot | Clean chat commands, opt-in privacy control, styled `primary`/`success`/`danger` inline dose actions, and direct deep links into the exact Mini App record |
-| Yaqinim (`/caregiver/[token]`) | Calm read-only daily aggregate card with Fergana & Kuala Lumpur clocks and one-tap help acknowledgment |
+| Landing (`/`) | Split architectural hero (ambient radial cobalt accent, bold `Inter` display title, Story 1 & 2 bento telemetry showcase below fold) + elevated **Launch Console** (`1-klik Judge Demo` + collapsible **«Klinika hisobiga kirish»** Supabase Auth). |
+| Doctor (`/doctor`) | **Clinical Command Center**: Multi-patient triage switcher cards (`red -> yellow` with initials & mono counters), 4-tile telemetry KPI strip, Supervised AI 7-day workbench (metrics + BP bars + clickable DB citations + editable L4 reply), and asymmetric **2-column desktop workspace** (Left: Triage Queue + Studio Exercise Review; Right: Assigned Plan + Dual-Source Steps + Integrations). |
+| Patient (`/patient`) | **Mobile-first 2-column Daily Companion**: Persistent crimson `103` + `Og‘riq bor` action bar; Left primary stream (Toshkent time-grouped medications + `Icha olmadim` bottom `Sheet` + DoriMos + High/Low BP + Teach-Back + Urgent symptoms); Right rail (L4 weekly doctor reply + adherence ring/bars + 7-day step trend + `Yaqinim` 24h link). |
+| Exercise (`/patient/exercise`, `/demo/mashq/*`) | **Studio CV Viewport**: Segmented movement pills (`chair_stand`, `elbow_bend`, `seated_knee_ext`), obsidian darkroom player stage with overlay telemetry, prepared-sample primary CTA, flagged-cycle AI keyframe cards, and consented full-attempt upload (`<= 60 s / <= 20 MiB`). |
+| Caregiver (`/caregiver/[token]`) | Serene centered read-only status card with monospace daily counters, status badge, help-ack action, and `Farg‘ona · Kuala Lumpur` dual clocks (`no-store`, `noindex`, `no-referrer`). |
 
-Always keep synthetic demo / sample-media disclosure visible yet unobtrusive (subtle header badge, never faking real patient telemetry).
+## Do's, Don'ts & Motion
 
-## Patient daily workflows (Story 1)
+- **Do** keep card elevation to `1px` hairline rings + tonal surfaces (`#FFFFFF` ↔ `#F7F8FA` / `#111318` ↔ `#181B22`) and soft ambient shadows.
+- **Do** format every numerical reading, dose time, angle, L0–L4 tier, and ID in `JetBrains Mono` (`tabular-nums`).
+- **Don't** sacrifice touch target height (`>= 44px`) or semantic status clarity (`text + icon + badge`) for minimalism.
+- **Don't** run decorative infinite animations or transitions slower than `220ms`; wrap the root tree in `<MotionConfig reducedMotion="user">` (`src/components/providers.tsx`).
+- **Dark mode mechanism:** Managed declaratively via `<meta name="color-scheme">` (`light dark`, `light`, `dark`), an inline FOUC-prevention head script in `src/app/layout.tsx`, and `Sonner` meta observer — never relying on `.dark` JS classes alone.
 
-1. **Bugun (ko‘p dori va vaqtlar):** Group doses by scheduled Toshkent time (`08:00`, `20:00`, etc.) showing each drug name, strength/unit, and status. `Ichdim` and `Icha olmadim` act directly on that exact dose; ask missed reason (`Dori tugadi`, `Nojo‘ya ta’sir`, `Unutdim`, `Boshqa`) in a clean bottom sheet/drawer only when `Icha olmadim` is chosen.
-2. **DoriMos (yangi quti):** Offer box verification cleanly per medication item with synthetic sample picker (demo only) or camera photo, clear confirmation sheet (`Nom · Kuch · Birlik`), and `Keyinroq` / `Qayta oling` / `Qo‘lda qayd` fallbacks.
-3. **Rejani tushunish (ixcham Teach-Back):** Present the doctor's instruction with 1–2 quick Uzbek check questions and immediate gentle feedback.
-4. **Qon bosimi (yuqori + past chegara):** Labeled manual systolic/diastolic inputs with instant physiological validation (e.g., rejecting `systolic <= diastolic` or impossible values), symptom checkboxes, clear High / Low / Normal zone badges, deterministic emergency guidance, and optional linked repeat reading.
-5. **Qadamlar:** Daily goal ring/bar + 7-day trend showing per-day source badge (`Telefon sensori` vs `Qo‘lda kiritilgan`) and explicit empty state for missing days.
-6. **Haftalik hisobot va shifokor javoblari:** Per-medication counts (`rejalashtirilgan · ichilgan · o‘tkazilgan · javobsiz`), separate BP/steps/exercise cards, and highlighted doctor-approved replies.
+## Clinical Domains (Preserved Contracts)
 
-### Shared interaction states
-
-| State | Patient-facing feedback |
-|---|---|
-| Submitting | Inline `Saqlanmoqda` spinner beside the exact control; prevent double-tap |
-| Confirmed | Animated check + `Yuborildi` badge once server acknowledges |
-| Offline / saved on phone | `Internet aloqasi yo‘q. Qayd telefonda saqlandi, hali yuborilmadi` (plus explicit note that AI and video upload need internet) |
-| Under review | `Shifokor ko‘rigida` badge linked to the flagged record |
-| Doctor replied | `Shifokor javobi tayyor` card opening directly to the approved reply |
-| AI unavailable / fallback | Seamless deterministic Uzbek summary or guidance with clear retry option — never a dead-end error screen |
-
-## Exercise CV & complete-attempt doctor review (Story 2)
-
-- **Three polished movements everywhere:** `O‘tirib-turish` (`chair_stand`), `Tirsak bukish` (`elbow_bend`), and `O‘tirgan holda oyoqni tekislash` (`seated_knee_ext`).
-- **Prepared video first, live camera optional:** Present the prepared public sample as the zero-friction demo entry with clear sample disclosure and real-time progress bar; offer live camera and local file picker where supported. Keep MediaPipe/Mediabunny lazy-loaded until the patient opens an exercise.
-- **Android CV accuracy setting:** Show a clear toggle in Android exercise/app settings: **`Tezkor (Full)`** (recommended default for all phones) vs **`Yuqori aniqlik (Heavy)`** (opt-in for recorded video on high-end devices, noting slower processing).
-- **Flagged-cycle AI cards:** Display each AI observation beside its exact cycle number, time range, extracted keyframes, and CV measurements, with honest uncertainty wording (e.g., `3-takror · 00:12–00:16 · tizza qisman to‘silgan`) and one-tap seek to that timestamp.
-- **Consented full-attempt upload:** Preview the full attempt before sharing; require explicit action **`Shu urinish videosini shifokorga yuborish`** explaining scope, ≤60 s / ≤20 MiB limit, and expiry (`shifokor javobidan 7 kun yoki yuklangandan 30 kun`). Show smooth upload progress, cancel, and retry states.
-- **Doctor timestamp player:** Side-by-side (desktop) or stacked (mobile) full video player + clickable flagged-cycle markers + CV/AI evidence cards + single doctor reply composer. If media has expired, show a calm expired-media placeholder while keeping all measured metrics and clinician replies intact.
-
-## Doctor queue & Supervised AI Brief
-
-- Put urgent (`red`) items first, then warning (`yellow`), oldest first within each tier. Every row clearly displays patient name, alert type, affected drug/dose or exercise, channel badge (`Android` / `Telegram` / `Web`), and timestamps.
-- In the **7-kunlik AI xulosa** card, visually separate: (1) deterministic metrics, (2) AI-generated Uzbek summary with clickable chips linking to exact source DB records, (3) editable doctor reply draft (`Tahrirlash va L4 tasdiqlash`), and (4) private internal `Shifokor izohi` clearly marked as never shown to patients or caregivers.
-
-## Telegram ergonomics
-
-- **Chat:** Keep messages scannable with styled `primary` / `success` / `danger` inline buttons (`✓ Ichdim`, `Dori tugadi`, `Mini App’da ochish`). Update the message immediately after server acknowledgment so stale buttons disappear.
-- **Privacy opt-in:** Default notices show generic text (`ShifoHalqada yangi shifokor javobi bor`) + Mini App button; provide a clear `/sozlamalar` or inline opt-in prompt explaining lock-screen preview tradeoffs before displaying drug names or approved replies directly in chat.
-- **Mini App:** Respect `--tg-theme-*` chrome and safe-area insets while preserving Clinical Ledger semantic contrast (`--urgent`, `--warn`, `--ok`) so clinical alerts remain unmistakable in any Telegram theme.
-
-## Implemented Web architecture refinements (M3)
-
-- **Tailwind v4 + Clinical Ledger token bridge (`src/app/globals.css`, `components.json`):** `shadcn/ui` primitives (`radix-nova` style) bind via `@theme inline` onto `--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn`, `--ok`. Semantic text muted (`--muted: #52645b`) maps to `--color-muted-foreground`, while surface muted (`--muted-bg: var(--panel)`) maps to `--color-muted`, keeping CSS Modules and Tailwind utilities harmonious in light and dark modes.
-- **No-FOUC `<meta name="color-scheme">` theme toggle (`src/app/layout.tsx`, `src/components/accessibility-controls.tsx`, `src/components/ui/sonner.tsx`):** `ThemeToggle` switches between explicit `light` / `dark` and system `light dark` via `<meta name="color-scheme">` + inline pre-paint script (no `.dark` class flash), while `Sonner` toast notifications observe `<meta name="color-scheme">` directly.
-- **Tactile controls & form semantics (`src/components/ui/button.tsx`, `src/components/ui/native-select.tsx`, `src/components/ui/sheet.tsx`, `src/components/providers.tsx`):** `MotionConfig reducedMotion="user"` wraps the root tree; buttons use crisp `150ms` `active:not-aria-[haspopup]:scale-[0.97]` feedback; `NativeSelect` preserves accessible mobile/keyboard selection alongside the `Icha olmadim` bottom `Sheet` (`pr-12` close-button clearance); card headers embed semantic `<h2>` inside `<CardTitle>` to preserve landmark navigation.
+1. **Story 1 (Patient daily loop):** 1–3 drugs × 1–2 fixed Toshkent times (`Ichdim` / `Icha olmadim` bottom `Sheet` + `Dori tugadi`), DoriMos `mg`/`mcg`/`g`/`iu` + `Keyinroq`, compact Teach-Back, High + Low BP physiological validation + linked retake, dual-source steps (`Telefon sensori` vs `Qo‘lda`), and doctor-approved 7-day reply (`L4`).
+2. **Story 2 (3-Movement CV & video review):** Lazy-loaded MediaPipe/Mediabunny for `chair_stand`, `elbow_bend`, and `seated_knee_ext`, prepared clip first, flagged-cycle AI observation cards with uncertainty copy, consented upload progress/cancel, and doctor side-by-side timestamp player (with calm `410` expired-media fallback keeping metrics intact).
+3. **Android & Telegram:** Android Compose Dark Mode parity (`ShifoTheme.kt`) + `Full`/`Heavy` CV accuracy setting; Telegram styled inline actions + opt-in privacy controls + `--tg-theme-*` Mini App using shared Precision Clinical contrast tokens.

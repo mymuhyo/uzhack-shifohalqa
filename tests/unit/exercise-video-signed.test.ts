@@ -49,6 +49,10 @@ vi.mock('../../src/lib/supabase/admin', () => ({
 }));
 
 import {
+  readExerciseAttempts,
+  reviewExerciseAttempt,
+} from '../../src/lib/exercise-store';
+import {
   EXERCISE_VIDEO_BUCKET,
   MAX_VIDEO_DURATION_SEC,
   MAX_VIDEO_SIZE_BYTES,
@@ -431,5 +435,63 @@ describe('signed full-attempt exercise video upload, finalize & playback (M2.4)'
       toMs: 16_000,
       severity: 'yellow',
     });
+  });
+
+  it('readExerciseAttempts exposes hasVideo/videoDurationSec/videoExpiresAt/videoExpired without video_storage_path, and reviewExerciseAttempt shortens video_expires_at to 7 days', async () => {
+    queuedResults = [
+      [
+        {
+          id: attemptId,
+          movement: 'seated_knee_ext',
+          diagnostics: null,
+          source: 'uploaded_video',
+          aiMode: 'live',
+          level: 2,
+          reason: 'measured',
+          validReps: 6,
+          shallowReps: 1,
+          minAngle: 158,
+          confidence: 0.91,
+          primary: true,
+          sample: false,
+          similarMotion: false,
+          flagColor: 'yellow',
+          scheduledDate: '2026-11-25',
+          createdAt: '2026-11-25T08:00:00.000Z',
+          hasVideo: true,
+          videoDurationSec: 28,
+          videoExpiresAt: '2026-12-02T08:00:00.000Z',
+          videoExpired: false,
+          android: false,
+          review: null,
+        },
+      ],
+    ];
+
+    const attempts = await readExerciseAttempts(doctorActor);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({
+      id: attemptId,
+      hasVideo: true,
+      videoDurationSec: 28,
+      videoExpiresAt: '2026-12-02T08:00:00.000Z',
+      videoExpired: false,
+    });
+    expect(JSON.stringify(attempts[0])).not.toContain('video_storage_path');
+    expect(JSON.stringify(attempts[0])).not.toContain('videoStoragePath');
+    expect(capturedCalls[0]?.sqlText).toContain('AS "hasVideo"');
+    expect(capturedCalls[0]?.sqlText).toContain('AS "videoDurationSec"');
+    expect(capturedCalls[0]?.sqlText).toContain('AS "videoExpiresAt"');
+    expect(capturedCalls[0]?.sqlText).toContain('AS "videoExpired"');
+
+    queuedResults = [[{ status: 'saved' }]];
+    const reviewed = await reviewExerciseAttempt(doctorActor, {
+      attemptId,
+      decision: 'reviewed',
+      reply: 'Tizza yozilishi yaxshi, 3-takror biroz chala qolgan.',
+    });
+    expect(reviewed).toBe('saved');
+    expect(capturedCalls[1]?.sqlText).toContain('video_expires_at = CASE');
+    expect(capturedCalls[1]?.sqlText).toContain("CURRENT_TIMESTAMP + interval '7 days'");
   });
 });

@@ -109,7 +109,7 @@ describe('seated_knee_ext cleared public sample asset', () => {
     expect(bytes.byteLength).toBeGreaterThan(10_000);
     expect(bytes.byteLength).toBeLessThan(1_000_000);
     expect(digest).toBe(seatedKneeSample.sha256);
-    expect(seatedKneeSample.source).toContain('wikimedia.org');
+    expect(seatedKneeSample.source).toContain('archive.org');
 
     const prescriptionId = '66666666-6666-4666-8666-666666666666';
     // Rejected if submitted under chair_stand
@@ -257,6 +257,13 @@ describe('exercise keyframe visual observation (M2.4)', () => {
     process.env.AI_GATEWAY_API_KEY = 'vercel-test-key';
     process.env.CLOUDFLARE_ACCOUNT_ID = 'cf-acct';
     process.env.CLOUDFLARE_API_TOKEN = 'cf-token';
+    // reserveAiRequestQuota runs 2 DB quota upserts per external AI review
+    queuedResults = [
+      [{ requests: 1 }],
+      [{ requests: 1 }],
+      [{ requests: 1 }],
+      [{ requests: 1 }],
+    ];
 
     const calls: string[] = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -325,9 +332,15 @@ describe('exercise keyframe visual observation (M2.4)', () => {
 
   it('rejects AI output containing medical diagnosis claims and falls back safely', async () => {
     process.env.AI_GATEWAY_API_KEY = 'vercel-test-key';
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({
-        model: 'alibaba/qwen3.6-35b-a3b',
+    process.env.VERCEL_AI_VISION_MODEL = 'alibaba/qwen3.6-custom-vl';
+    queuedResults = [[{ requests: 1 }], [{ requests: 1 }]];
+    let seenModel: unknown;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === 'string') {
+        seenModel = (JSON.parse(init.body) as { model?: unknown }).model;
+      }
+      return Response.json({
+        model: 'alibaba/qwen3.6-custom-vl',
         choices: [
           {
             message: {
@@ -340,8 +353,8 @@ describe('exercise keyframe visual observation (M2.4)', () => {
             },
           },
         ],
-      }),
-    ) as typeof fetch;
+      });
+    }) as typeof fetch;
 
     const outcome = await reviewExerciseKeyframes(
       {
@@ -356,10 +369,38 @@ describe('exercise keyframe visual observation (M2.4)', () => {
       patientActor,
     );
 
+    expect(seenModel).toBe('alibaba/qwen3.6-custom-vl');
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
       expect(outcome.data.sourceMode).toBe('deterministic_fallback');
       expect(outcome.data.observationUz.toLowerCase()).not.toContain('artroz');
+    }
+  });
+
+  it('skips external AI providers when DB rate limiter denies quota', async () => {
+    process.env.AI_GATEWAY_API_KEY = 'vercel-test-key';
+    queuedResults = [[]]; // workspace quota exceeded
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const outcome = await reviewExerciseKeyframes(
+      {
+        movement: 'seated_knee_ext',
+        cycleIndex: 1,
+        fromMs: 4_000,
+        toMs: 7_000,
+        peakAngleDeg: 132,
+        errorCodes: ['shallow_range'],
+        keyframes: makeKeyframes(3),
+      },
+      patientActor,
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.data.sourceMode).toBe('deterministic_fallback');
+      expect(outcome.data.provider).toBe('deterministic');
     }
   });
 

@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { resolveClinicalActor, resolveWebSessionContext } from '../../../../lib/auth';
-import { isPatientSideRole } from '../../../../lib/clinical-types';
-import { isSameOriginPost, readRequestJson } from '../../../../lib/request-body';
+import { resolveClinicalRequestActor } from '../../../../lib/auth';
+import { readRequestJson } from '../../../../lib/request-body';
 import {
   getTeachBackStatus,
   submitTeachBackAttempt,
@@ -21,10 +20,6 @@ function errorJson(error: string, status: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401);
-    if (session.role === 'caregiver') return errorJson('forbidden', 403);
-
     const rawPatientId = request.nextUrl.searchParams.get('patientId')?.trim();
     let patientId: string | undefined;
     if (rawPatientId) {
@@ -35,7 +30,11 @@ export async function GET(request: NextRequest) {
 
     const simplifyWithAi = request.nextUrl.searchParams.get('simplify') === '1';
 
-    const resolved = await resolveClinicalActor(session, { patientId });
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      patientId,
+    });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const status = await getTeachBackStatus(resolved.actor, { simplifyWithAi });
@@ -48,11 +47,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isSameOriginPost(request)) return errorJson('forbidden', 403);
-
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401);
-    if (!isPatientSideRole(session.role)) return errorJson('forbidden', 403);
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const body = await readRequestJson(request, 4096);
     if (!body.ok) {
@@ -60,9 +60,6 @@ export async function POST(request: NextRequest) {
     }
     const parsed = teachBackSubmissionSchema.safeParse(body.body);
     if (!parsed.success) return errorJson('invalid', 400);
-
-    const resolved = await resolveClinicalActor(session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const result = await submitTeachBackAttempt(resolved.actor, parsed.data);
     if (!result.ok) return errorJson(result.error, result.status);

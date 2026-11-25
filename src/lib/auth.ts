@@ -11,6 +11,7 @@ import type { AppRole, ClinicalActor } from './clinical-types';
 import { getDatabase } from './db';
 import { getDemoSession } from './demo-session';
 import { androidPatient, isAndroidDemoEnabled } from './mobile-demo';
+import { isSameOriginPost } from './request-body';
 import { ensureDemoWorkspace } from './seed';
 import { createSupabaseAdminClient } from './supabase/admin';
 import type { Database } from './supabase/database.types';
@@ -493,8 +494,9 @@ export type ResolveMobilePatientResult =
   | { ok: false; status: 401 | 403 | 404 | 503; error: string };
 
 export async function resolveMobilePatientActor(request: Request): Promise<ResolveMobilePatientResult> {
-  const authorization = request.headers.get('authorization');
-  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  const authorization = request.headers.get('authorization')?.trim() ?? '';
+  const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
+  const token = bearerMatch ? bearerMatch[1].trim() : '';
   if (!token) return { ok: false, status: 401, error: 'unauthorized' };
 
   if (demoBearerPattern.test(token)) {
@@ -586,4 +588,61 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
   }
 
   return { ok: false, status: 403, error: 'forbidden' };
+}
+
+export type ResolveClinicalRequestActorOptions = ResolveClinicalActorOptions & {
+  allowBearer?: boolean;
+  requireSameOrigin?: boolean;
+  allowRoles?: readonly AppRole[];
+};
+
+export type ResolveClinicalRequestActorResult =
+  | { ok: true; actor: ClinicalActor; authMode: 'bearer' | 'cookie' }
+  | { ok: false; status: 400 | 401 | 403 | 404 | 503; error: string };
+
+/**
+ * Resolves a clinical actor from either an `Authorization: Bearer <token>` header
+ * (for M4 Android / M5 Telegram Mini App) or a web session cookie.
+ * Never falls back to cookies when a Bearer header is present, and always
+ * enforces `isSameOriginPost` on cookie-authenticated mutations when `requireSameOrigin` is set.
+ */
+export async function resolveClinicalRequestActor(
+  request: NextRequest,
+  options: ResolveClinicalRequestActorOptions = {},
+): Promise<ResolveClinicalRequestActorResult> {
+  const authorization = request.headers.get('authorization')?.trim() ?? '';
+  if (/^Bearer(?:\s+|$)/i.test(authorization)) {
+    if (!options.allowBearer) {
+      return { ok: false, status: 401, error: 'unauthorized' };
+    }
+    const auth = await resolveMobilePatientActor(request);
+    if (!auth.ok) {
+      return { ok: false, status: auth.status, error: auth.error };
+    }
+    if (options.allowRoles && !options.allowRoles.includes(auth.actor.role)) {
+      return { ok: false, status: 403, error: 'forbidden' };
+    }
+    if (options.patientId && options.patientId !== auth.actor.patientId) {
+      return { ok: false, status: 404, error: 'not_found' };
+    }
+    return { ok: true, actor: auth.actor, authMode: 'bearer' };
+  }
+
+  if (options.requireSameOrigin && !isSameOriginPost(request)) {
+    return { ok: false, status: 403, error: 'forbidden' };
+  }
+
+  const session = await resolveWebSessionContext(request);
+  if (!session) {
+    return { ok: false, status: 401, error: 'unauthorized' };
+  }
+  if (options.allowRoles && !options.allowRoles.includes(session.role)) {
+    return { ok: false, status: 403, error: 'forbidden' };
+  }
+
+  const resolved = await resolveClinicalActor(session, options);
+  if (!resolved.ok) {
+    return resolved;
+  }
+  return { ok: true, actor: resolved.actor, authMode: 'cookie' };
 }

@@ -12,7 +12,7 @@ export const elbowSample = {
 
 export const seatedKneeSample = {
   path: '/demo/pose-cdc-seated-knee.webm',
-  sha256: '1d6dd992d4d52415145ecbc3ec9cf63e62fa963db0396fa9e69fbfb96591029d',
-  source: 'https://commons.wikimedia.org/wiki/File:30-Second_Chair_Stand_Test.webm',
-  attribution: 'Public-domain CDC lower-body demonstration clip trimmed for seated knee extension testing.',
+  sha256: 'f5355729eefb252fed79078fc86a8cf40cbc43702181e4bd3cb0fe0e668e3a20',
+  source: 'https://archive.org/details/jccva-Fitness_in_5_Episode_1_-_Chair_Exercises',
+  attribution: 'James City County Parks & Recreation (Fitness in 5, Episode 1 — Seated Knee Extension segment, 4:05–4:25), silent 360p WebM.',
 } as const;

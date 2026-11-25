@@ -6,8 +6,8 @@ import {
   generateClinicalBrief,
   readLatestClinicalBrief,
 } from '../../../../lib/ai/clinical-brief-ai';
-import { resolveClinicalActor, resolveWebSessionContext } from '../../../../lib/auth';
-import { isSameOriginPost, readRequestJson } from '../../../../lib/request-body';
+import { resolveClinicalRequestActor } from '../../../../lib/auth';
+import { readRequestJson } from '../../../../lib/request-body';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
 
@@ -21,10 +21,6 @@ function errorJson(error: string, status: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401);
-    if (session.role === 'caregiver') return errorJson('forbidden', 403);
-
     const rawPatientId = request.nextUrl.searchParams.get('patientId')?.trim();
     let patientId: string | undefined;
     if (rawPatientId) {
@@ -33,7 +29,11 @@ export async function GET(request: NextRequest) {
       patientId = parsedId.data;
     }
 
-    const resolved = await resolveClinicalActor(session, { patientId });
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      patientId,
+    });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const brief = await readLatestClinicalBrief(resolved.actor);
@@ -45,11 +45,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isSameOriginPost(request)) return errorJson('forbidden', 403);
-
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401);
-    if (session.role !== 'doctor') return errorJson('forbidden', 403);
+    const authCheck = await resolveClinicalRequestActor(request, {
+      allowBearer: false,
+      requireSameOrigin: true,
+      allowRoles: ['doctor'],
+      allowDoctorWithoutPatient: true,
+    });
+    if (!authCheck.ok) return errorJson(authCheck.error, authCheck.status);
 
     const body = await readRequestJson(request, 8192);
     if (!body.ok) {
@@ -58,7 +60,12 @@ export async function POST(request: NextRequest) {
     const parsed = clinicalBriefPostSchema.safeParse(body.body);
     if (!parsed.success) return errorJson('invalid', 400);
 
-    const resolved = await resolveClinicalActor(session, { patientId: parsed.data.patientId });
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: false,
+      requireSameOrigin: true,
+      allowRoles: ['doctor'],
+      patientId: parsed.data.patientId,
+    });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     if (parsed.data.action === 'generate') {

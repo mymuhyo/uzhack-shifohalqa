@@ -23,6 +23,10 @@ const attemptRow = z.object({
   primary: z.boolean(), sample: z.boolean(), similarMotion: z.boolean(), flagColor: z.enum(['red', 'yellow']).nullable(),
   createdAt: z.iso.datetime(), scheduledDate: z.iso.date(), android: z.boolean(),
   movement: movementId, diagnostics: exerciseDiagnosticsSchema.nullable(), review: reviewRow.nullable(),
+  hasVideo: z.boolean().default(false),
+  videoDurationSec: z.coerce.number().int().nullable().default(null),
+  videoExpiresAt: z.iso.datetime().nullable().default(null),
+  videoExpired: z.boolean().default(false),
 });
 const receiptRow = z.object({
   id: z.uuid(), level: z.number(), primary: z.boolean(), similarMotion: z.boolean(),
@@ -82,6 +86,30 @@ export async function readExerciseAttempts(actor: ClinicalActor) {
       COALESCE(attempt.file_sha256 IN (${exerciseSample.sha256}, ${elbowSample.sha256}, ${seatedKneeSample.sha256}), false) AS sample,
       attempt.client_attempt_id IS NOT NULL AS android, attempt.scheduled_date::text AS "scheduledDate",
       to_char(attempt.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
+      (attempt.video_storage_path IS NOT NULL AND attempt.video_consented = true) AS "hasVideo",
+      CASE WHEN attempt.video_storage_path IS NOT NULL AND attempt.video_consented = true
+        THEN attempt.video_duration_sec END AS "videoDurationSec",
+      CASE WHEN attempt.video_storage_path IS NOT NULL AND attempt.video_consented = true THEN
+        to_char(
+          LEAST(
+            COALESCE(attempt.video_expires_at, COALESCE(attempt.video_uploaded_at, attempt.created_at) + interval '30 days'),
+            CASE WHEN attempt.reviewed_at IS NOT NULL
+              THEN attempt.reviewed_at + interval '7 days'
+              ELSE COALESCE(attempt.video_uploaded_at, attempt.created_at) + interval '30 days'
+            END
+          ) AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+      END AS "videoExpiresAt",
+      CASE WHEN attempt.video_storage_path IS NOT NULL AND attempt.video_consented = true THEN
+        LEAST(
+          COALESCE(attempt.video_expires_at, COALESCE(attempt.video_uploaded_at, attempt.created_at) + interval '30 days'),
+          CASE WHEN attempt.reviewed_at IS NOT NULL
+            THEN attempt.reviewed_at + interval '7 days'
+            ELSE COALESCE(attempt.video_uploaded_at, attempt.created_at) + interval '30 days'
+          END
+        ) <= CURRENT_TIMESTAMP
+      ELSE false END AS "videoExpired",
       CASE WHEN attempt.review_decision IS NOT NULL THEN jsonb_build_object(
         'decision', attempt.review_decision, 'body', attempt.review_reply,
         'reviewedAt', to_char(attempt.reviewed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
@@ -224,7 +252,17 @@ export async function reviewExerciseAttempt(actor: ClinicalActor, input: Exercis
         AND plan.doctor_id = ${actor.doctorId} AND attempt.id = ${input.attemptId}
     ), reviewed AS (
       UPDATE public.exercise_attempts AS attempt
-      SET review_decision = ${input.decision}, review_reply = ${input.reply}, reviewed_at = CURRENT_TIMESTAMP
+      SET review_decision = ${input.decision},
+          review_reply = ${input.reply},
+          reviewed_at = CURRENT_TIMESTAMP,
+          video_expires_at = CASE
+            WHEN attempt.video_storage_path IS NOT NULL THEN
+              LEAST(
+                COALESCE(attempt.video_expires_at, COALESCE(attempt.video_uploaded_at, attempt.created_at) + interval '30 days'),
+                CURRENT_TIMESTAMP + interval '7 days'
+              )
+            ELSE attempt.video_expires_at
+          END
       FROM scoped WHERE attempt.id = scoped.id AND attempt.review_decision IS NULL RETURNING attempt.id
     )
     SELECT CASE WHEN EXISTS (SELECT FROM reviewed) THEN 'saved'

@@ -159,8 +159,9 @@ export type Database = {
         Row: {
           action: string
           actor_id: string
+          brief_id: string | null
           created_at: string
-          evidence_log_id: string
+          evidence_log_id: string | null
           id: string
           metadata: Json
           workspace_id: string
@@ -168,8 +169,9 @@ export type Database = {
         Insert: {
           action: string
           actor_id: string
+          brief_id?: string | null
           created_at?: string
-          evidence_log_id: string
+          evidence_log_id?: string | null
           id?: string
           metadata?: Json
           workspace_id: string
@@ -177,13 +179,21 @@ export type Database = {
         Update: {
           action?: string
           actor_id?: string
+          brief_id?: string | null
           created_at?: string
-          evidence_log_id?: string
+          evidence_log_id?: string | null
           id?: string
           metadata?: Json
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "audit_events_workspace_brief_fkey"
+            columns: ["workspace_id", "brief_id"]
+            isOneToOne: false
+            referencedRelation: "ai_clinical_briefs"
+            referencedColumns: ["workspace_id", "id"]
+          },
           {
             foreignKeyName: "audit_events_workspace_id_evidence_log_id_fkey"
             columns: ["workspace_id", "evidence_log_id"]

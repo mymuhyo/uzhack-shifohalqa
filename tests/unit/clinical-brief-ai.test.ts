@@ -540,6 +540,8 @@ describe('7-day clinical brief generation, caching, L4 approval, and privacy', (
     expect(approved.brief.level).toBe(4);
     expect(approved.brief.approvedReplyUz).toBe('Assalomu alaykum, shifokor tasdiqlagan yakuniy javob.');
     expect(approved.brief.approvedByDoctorId).toBe(doctorId);
+    expect(approveMock.calls[0]?.sql).toContain('INSERT INTO public.audit_events');
+    expect(approveMock.calls[0]?.sql).toContain("'approve_clinical_brief'");
 
     // Patient reads before approval (DB returns no level=4 rows) -> null (no draft leaked)
     const unapprovedPatientSql = createMockSql((sqlText) => {

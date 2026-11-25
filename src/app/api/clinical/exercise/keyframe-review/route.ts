@@ -1,23 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { keyframeReviewInputSchema, reviewExerciseKeyframes } from '../../../../../lib/ai/exercise-video-review';
-import { resolveClinicalActor, resolveWebSessionContext } from '../../../../../lib/auth';
-import { isSameOriginPost, readRequestJson } from '../../../../../lib/request-body';
+import { resolveClinicalRequestActor } from '../../../../../lib/auth';
+import { readRequestJson } from '../../../../../lib/request-body';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
 const MAX_KEYFRAME_REQUEST_BYTES = 4 * 1024 * 1024; // up to 5 bounded base64 keyframes + metadata
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isSameOriginPost(request)) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
-    }
-
-    const session = await resolveWebSessionContext(request);
-    if (!session) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
-    }
-    if (session.role === 'caregiver') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
+    const authCheck = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      allowDoctorWithoutPatient: true,
+    });
+    if (!authCheck.ok) {
+      return NextResponse.json({ error: authCheck.error }, { status: authCheck.status, headers: noStore });
     }
 
     const body = await readRequestJson(request, MAX_KEYFRAME_REQUEST_BYTES);
@@ -33,12 +31,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'invalid' }, { status: 400, headers: noStore });
     }
 
-    const resolved = await resolveClinicalActor(session, {
-      ...(parsed.data.attemptId && session.role === 'doctor'
-        ? { entityCheck: { kind: 'exercise_attempt' as const, id: parsed.data.attemptId } }
-        : {}),
-      ...(session.role === 'doctor' && !parsed.data.attemptId ? { allowDoctorWithoutPatient: true } : {}),
-    });
+    const resolved = authCheck.authMode === 'cookie' && authCheck.actor.role === 'doctor' && parsed.data.attemptId
+      ? await resolveClinicalRequestActor(request, {
+          allowBearer: false,
+          requireSameOrigin: true,
+          allowRoles: ['doctor'],
+          entityCheck: { kind: 'exercise_attempt', id: parsed.data.attemptId },
+        })
+      : authCheck;
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status, headers: noStore });
     }

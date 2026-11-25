@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { resolveClinicalActor, resolveWebSessionContext } from '../../../../../../lib/auth';
+import { resolveClinicalRequestActor } from '../../../../../../lib/auth';
 import { getExerciseVideoPlayback } from '../../../../../../lib/exercise-video-store';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
@@ -10,26 +10,17 @@ export async function GET(
   context: { params: Promise<{ attemptId: string }> },
 ) {
   try {
-    const session = await resolveWebSessionContext(request);
-    if (!session) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
-    }
-    if (session.role === 'caregiver') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
-    }
-
     const { attemptId } = await context.params;
     const parsedId = z.uuid().safeParse(attemptId);
     if (!parsedId.success) {
       return NextResponse.json({ error: 'invalid' }, { status: 400, headers: noStore });
     }
 
-    const resolved = await resolveClinicalActor(
-      session,
-      session.role === 'doctor'
-        ? { entityCheck: { kind: 'exercise_attempt', id: parsedId.data } }
-        : {},
-    );
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      entityCheck: { kind: 'exercise_attempt', id: parsedId.data },
+    });
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status, headers: noStore });
     }

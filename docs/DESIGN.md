@@ -1,67 +1,67 @@
-# ShifoHalqa Grand Final interaction design
+# ShifoHalqa Grand Final interaction & motion design
 
-[DECISIONS](DECISIONS.md) defines clinical and platform scope. [PLAN](PLAN.md) defines acceptance.
+> **Living design contract.** This document guides Grand Final UI craft and animations across Web, Telegram Mini App, and Android, and stays open to iterative refinement through Grand Final and v2. [DECISIONS](DECISIONS.md) owns product scope; [PLAN](PLAN.md) owns milestones; [ROADMAP_V2](ROADMAP_V2.md) owns post-final evolution.
 
-## One patient record across channels
+## Visual identity — Clinical Ledger, elevated
 
-| Surface | Role in the journey |
+- **Aesthetic direction:** Calm, authoritative **Clinical Ledger** — warm paper surfaces (`--paper: #f6f4ec`), crisp elevated cards (`--card: #fffef9`), deep forest ink (`--ink: #19312a`), high-contrast semantic clinical accents (`--action`, `--urgent`, `--warn`, `--ok`), self-hosted **`Literata`** display headings paired with **`Golos Text`** UI body and tabular numerals (`tabular-nums`) for every dose time, BP reading, angle, and count.
+- **Component & motion stack (Web + Mini App):** Build on **`shadcn/ui`** primitives (`Dialog`, `Drawer`/`Sheet`, `Tabs`, `Select`, `Switch`, `Badge`, `Toast`) styled strictly with Clinical Ledger CSS tokens, crisp **`Lucide`** icons (1.75–2px stroke, paired with text labels), and **`Motion`** wrapped in `<MotionConfig reducedMotion="user">`.
+- **Motion philosophy (tactile, purposeful, never sluggish):**
+  - Keep micro-interactions fast (`140–220ms`, `--ease-out` / crisp spring physics with zero excessive bounce) and strictly GPU-composited (`transform`, `opacity`).
+  - Use motion to communicate clinical state transitions: optimistic `Saqlanmoqda → Yuborildi` checkmarks, smooth tab/panel reveals, priority queue expansion, and timeline marker focus on the doctor video player.
+  - Honor `prefers-reduced-motion: reduce` everywhere; zero decorative looping animations that distract elderly patients or doctors scanning urgent alerts.
+- **Accessibility & Uzbek readability:** Short Uzbek Latin copy, ≥48px tap targets on mobile patient controls, visible keyboard focus rings (`--focus`), large-text scale toggle (`html[data-text-scale='large']`), full light/dark mode parity (Web + Android `ShifoTheme.kt`), and spoken + text severity labels paired with every color.
+
+## Information hierarchy — Two stories, zero clutter
+
+| Surface | Primary job |
 |---|---|
-| Native Android | Main patient experience, with device steps, local CV, reminders and offline entries |
-| Telegram bot | Direct chat actions, short reports, reminders, approved replies and links to exact records |
-| Telegram Mini App | Full patient workflows and five prepared-video exercise flows inside Telegram |
-| Patient Web | Patient workflows and chair stand, elbow bend and seated knee extension |
-| Doctor Web | Assigned-patient queue, history, reports, media from all five movements and replies |
-| Yaqinim | Short daily summary and a limited help acknowledgment through a patient-issued link |
+| Landing (`/`) | Lead with **Story 1** (Dori → Shifokor javobi → 7-kunlik AI hisobot) and **Story 2** (3 ta mashq CV + video ko‘rik), offering instant **1-klik Demo** alongside a compact **«Klinika hisobiga kirish»** option |
+| Doctor Web (`/doctor`) | Multi-patient switcher (in clinic mode), urgency-sorted queue (`red` → `yellow`), Supervised AI 7-day brief card with inline edit & L4 approval, and full-video player with clickable flagged-cycle timestamps |
+| Patient Web (`/patient`) | Time-grouped daily medication cards, DoriMos verification sheet, manual BP (high + low zone feedback), 7-day step trend (`Telefon sensori` vs `Qo‘lda`), compact Teach-Back, doctor replies, `Yaqinim` 24h link, and persistent `103` + `Og‘riq bor` |
+| Native Android | Same daily clinical rhythm with native Compose transitions, dark mode parity, on-device MediaPipe CV (**`Full`** default + user-selectable **`Heavy`** accuracy toggle in settings), and consented video upload |
+| Telegram Mini App (`/tg`) | Shared patient Web components adapted to Telegram safe areas, `MainButton`/`BackButton`, haptics, and Bearer auth (no broken iframe cookies) |
+| Telegram Bot | Clean chat commands, opt-in privacy control, styled `primary`/`success`/`danger` inline dose actions, and direct deep links into the exact Mini App record |
+| Yaqinim (`/caregiver/[token]`) | Calm read-only daily aggregate card with Fergana & Kuala Lumpur clocks and one-tap help acknowledgment |
 
-Show where the user is before asking them to enroll or link a device. Display the clinic in the confirmation step. Provide the Android invite code field and the Telegram one-time invite entry independently. In either active account, show the secondary-channel linking and disconnect actions. Make the synthetic Judge Demo and sample-media status visible throughout that journey.
+Always keep synthetic demo / sample-media disclosure visible yet unobtrusive (subtle header badge, never faking real patient telemetry).
 
-## Clinical Ledger
+## Patient daily workflows (Story 1)
 
-- Use the existing Clinical Ledger tokens for both themes. Keep Uzbek Latin patient copy short, with strong text contrast, large tap targets and text labels for status and source. Use `--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn` and `--ok` consistently.
-- Pair every severity color with a spoken and visible label. Show a visible focus indicator, predictable keyboard and screen-reader order, large-text support, and a reduced-motion path.
-- Keep `103` and `Og‘riq bor` reachable in the applicable patient flow. Show the local guidance immediately for urgent symptoms. Show the actual receipt state of any accompanying report.
-- For Telegram, respect the client theme, safe areas, keyboard and Back button. Use the Main button for the action currently shown on the screen. Apply haptics to confirmed, actionable states. Keep primary actions clear when host features vary.
-- Make results fast to scan. Load heavy Web/Mini App pose and decoder resources when the user opens capture or selects the sample.
-
-## Patient's daily plan and reporting
-
-1. **Bugun.** Group by scheduled time and show each drug, time and status. «Ichdim» and «Icha olmadim» apply to the named dose. Ask for a reason only as needed. Offer «Dori tugadi» and «Yordam kerak» in context.
-2. **Yangi quti.** Offer DoriMos at a package change or a changed drug/strength. Show the read label with name, strength and unit for patient confirmation. Give «Keyinroq», «Qayta oling» or manual review where applicable.
-3. **Rejani tushunish.** Show the doctor's own instruction, a short example and 1–2 questions when relevant. Attach the contextual question-and-answer action to the specific plan item. Show the instruction behind an AI explanation. Route new clinical advice to the doctor's queue.
-4. **Bosim.** Use labeled manual systolic and diastolic fields and symptom options. Show the result, approved next step and repeat-measurement action. Link the repeat to the original reading. Personal explanations use the patient's verified context with a doctor review state.
-5. **Qadamlar.** Show today's goal and source. Label `Telefon sensori` and `Qo‘lda kiritilgan`. Keep manually entered values visible to the doctor alongside sensor values. Show a seven-day plot with the source of the selected total for each day and an explicit state for missing data.
-6. **Haftalik hisobot.** Group counts by drug and scheduled dose. Display reported taken, reported missed, and unanswered separately. Keep BP, steps and exercise in their own sections. Show corrections and clarified entries as events. Include the doctor's latest approved advice, prior revisions, send status and open requests.
-
-**Example weekly report.** «7 ta qabul vaqti · 5 ta “Ichdim” · 1 ta “Dori tugadi” · 1 ta javobsiz. Seshanba kungi javob keyin to‘ldirildi. Ta’minot bo‘yicha murojaat ochiq». The doctor can open the exact rows behind the summary. Show doctor-only drafts and internal annotations in the protected doctor view.
+1. **Bugun (ko‘p dori va vaqtlar):** Group doses by scheduled Toshkent time (`08:00`, `20:00`, etc.) showing each drug name, strength/unit, and status. `Ichdim` and `Icha olmadim` act directly on that exact dose; ask missed reason (`Dori tugadi`, `Nojo‘ya ta’sir`, `Unutdim`, `Boshqa`) in a clean bottom sheet/drawer only when `Icha olmadim` is chosen.
+2. **DoriMos (yangi quti):** Offer box verification cleanly per medication item with synthetic sample picker (demo only) or camera photo, clear confirmation sheet (`Nom · Kuch · Birlik`), and `Keyinroq` / `Qayta oling` / `Qo‘lda qayd` fallbacks.
+3. **Rejani tushunish (ixcham Teach-Back):** Present the doctor's instruction with 1–2 quick Uzbek check questions and immediate gentle feedback.
+4. **Qon bosimi (yuqori + past chegara):** Labeled manual systolic/diastolic inputs with instant physiological validation (e.g., rejecting `systolic <= diastolic` or impossible values), symptom checkboxes, clear High / Low / Normal zone badges, deterministic emergency guidance, and optional linked repeat reading.
+5. **Qadamlar:** Daily goal ring/bar + 7-day trend showing per-day source badge (`Telefon sensori` vs `Qo‘lda kiritilgan`) and explicit empty state for missing days.
+6. **Haftalik hisobot va shifokor javoblari:** Per-medication counts (`rejalashtirilgan · ichilgan · o‘tkazilgan · javobsiz`), separate BP/steps/exercise cards, and highlighted doctor-approved replies.
 
 ### Shared interaction states
 
-| State | Patient-facing behavior |
+| State | Patient-facing feedback |
 |---|---|
-| Input submitted | Show `Saqlanmoqda` beside the exact dose or report and protect against duplicate taps. |
-| Saved on phone | Show `Internet aloqasi yo‘q. Qayd telefonda saqlandi, hali yuborilmadi`. Explain that cloud AI and video sending need an internet connection. |
-| Server confirmation | Show `Yuborildi` and update the status across linked channels. |
-| Conflicting replies | Show both replies and their channels. Ask the patient which is correct. The report displays the current server answer until the patient resolves the conflict. |
-| Waiting for clinician | Show `Shifokor ko‘rigida` with the linked request. |
-| Clinician replied | Show `Shifokor javobi tayyor` and link to the exact approved answer. |
-| Clinician amended reply | Show `Shifokor avvalgi javobni yangiladi` and show the new current answer. |
-| Source is incomplete or AI is unavailable | Show the deterministic report or the approved guidance, and explain the needed input or retry action in the affected section. |
+| Submitting | Inline `Saqlanmoqda` spinner beside the exact control; prevent double-tap |
+| Confirmed | Animated check + `Yuborildi` badge once server acknowledges |
+| Offline / saved on phone | `Internet aloqasi yo‘q. Qayd telefonda saqlandi, hali yuborilmadi` (plus explicit note that AI and video upload need internet) |
+| Under review | `Shifokor ko‘rigida` badge linked to the flagged record |
+| Doctor replied | `Shifokor javobi tayyor` card opening directly to the approved reply |
+| AI unavailable / fallback | Seamless deterministic Uzbek summary or guidance with clear retry option — never a dead-end error screen |
 
-## Exercise and doctor review
+## Exercise CV & complete-attempt doctor review (Story 2)
 
-- Present the prepared video as the primary entry. Label sample inputs and show visible measurement progress. Offer live capture where supported. Give clear permission, poor-quality, retry and manual states.
-- Put each AI observation beside a specific cycle, time range, related frames and CV facts. Use uncertainty text when the view is insufficient. Example `3-takror · 00:12–00:16 · tizza qisman to‘silgan`. Show how to open the marked spot.
-- When a doctor review is requested, show a preview of the complete attempt. Use `Shu urinish videosini shifokorga yuborish` for the consent action. Show sharing scope, upload progress, failure or cancellation, and the submitted status. Describe when the attachment will expire.
-- Put the duration, flagged cycle markers and CV/AI evidence beside the full player for the assigned doctor. Allow one detailed response with references to several repetitions. Display the response against the original attempt, with short links to the marked times. Preserve the evidence source and measured values.
-- If a video has expired, keep the measured history and clinician response visible with a clear expired-media state.
+- **Three polished movements everywhere:** `O‘tirib-turish` (`chair_stand`), `Tirsak bukish` (`elbow_bend`), and `O‘tirgan holda oyoqni tekislash` (`seated_knee_ext`).
+- **Prepared video first, live camera optional:** Present the prepared public sample as the zero-friction demo entry with clear sample disclosure and real-time progress bar; offer live camera and local file picker where supported. Keep MediaPipe/Mediabunny lazy-loaded until the patient opens an exercise.
+- **Android CV accuracy setting:** Show a clear toggle in Android exercise/app settings: **`Tezkor (Full)`** (recommended default for all phones) vs **`Yuqori aniqlik (Heavy)`** (opt-in for recorded video on high-end devices, noting slower processing).
+- **Flagged-cycle AI cards:** Display each AI observation beside its exact cycle number, time range, extracted keyframes, and CV measurements, with honest uncertainty wording (e.g., `3-takror · 00:12–00:16 · tizza qisman to‘silgan`) and one-tap seek to that timestamp.
+- **Consented full-attempt upload:** Preview the full attempt before sharing; require explicit action **`Shu urinish videosini shifokorga yuborish`** explaining scope, ≤60 s / ≤20 MiB limit, and expiry (`shifokor javobidan 7 kun yoki yuklangandan 30 kun`). Show smooth upload progress, cancel, and retry states.
+- **Doctor timestamp player:** Side-by-side (desktop) or stacked (mobile) full video player + clickable flagged-cycle markers + CV/AI evidence cards + single doctor reply composer. If media has expired, show a calm expired-media placeholder while keeping all measured metrics and clinician replies intact.
 
-## Doctor queue
+## Doctor queue & Supervised AI Brief
 
-Each row identifies patient, request type, affected drug/dose or exercise, channel, submitted time and server receipt time. Put actionable and urgent items first. Open directly to the selected report. Keep unrelated history out of the initial scan path. Let the doctor inspect source records, edit an AI draft, approve a response and correct an earlier approved response with audit history.
+- Put urgent (`red`) items first, then warning (`yellow`), oldest first within each tier. Every row clearly displays patient name, alert type, affected drug/dose or exercise, channel badge (`Android` / `Telegram` / `Web`), and timestamps.
+- In the **7-kunlik AI xulosa** card, visually separate: (1) deterministic metrics, (2) AI-generated Uzbek summary with clickable chips linking to exact source DB records, (3) editable doctor reply draft (`Tahrirlash va L4 tasdiqlash`), and (4) private internal `Shifokor izohi` clearly marked as never shown to patients or caregivers.
 
-## Telegram chat
+## Telegram ergonomics
 
-- Use the menu and ordinary commands for entry, today's schedule, status, exercises, reminder preferences, report and stop. Make enroll, help and unlink understandable in chat without requiring Android.
-- Show one clearly labeled row for each due dose. Use action text with styled `primary`, `success` and `danger` buttons where appropriate. Update a message after the server records the action. Clear old actionable state and handle repeated callbacks idempotently.
-- Prompt for detail opt-in before sending medication names, times, short weekly summaries or approved doctor replies into chat. Use a generic notice by default. Open the exact authorized item from a button.
-- Use rich messages and private chat widgets to improve the same brief, status and action flows on compatible clients. Provide readable text and ordinary keyboards if a renderer is unavailable. Use the Mini App for the full exercise, playback and detailed report interactions.
+- **Chat:** Keep messages scannable with styled `primary` / `success` / `danger` inline buttons (`✓ Ichdim`, `Dori tugadi`, `Mini App’da ochish`). Update the message immediately after server acknowledgment so stale buttons disappear.
+- **Privacy opt-in:** Default notices show generic text (`ShifoHalqada yangi shifokor javobi bor`) + Mini App button; provide a clear `/sozlamalar` or inline opt-in prompt explaining lock-screen preview tradeoffs before displaying drug names or approved replies directly in chat.
+- **Mini App:** Respect `--tg-theme-*` chrome and safe-area insets while preserving Clinical Ledger semantic contrast (`--urgent`, `--warn`, `--ok`) so clinical alerts remain unmistakable in any Telegram theme.

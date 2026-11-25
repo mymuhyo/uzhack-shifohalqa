@@ -8,8 +8,10 @@ This repository is structured for seamless cross-harness continuity across **Cod
 
 | Document | Purpose |
 |---|---|
-| [PLAN](docs/PLAN.md) | Active M1–M6 roadmap (`[ ]` / `[~]` / `[x]`), exact file targets, acceptance criteria, and verification commands |
-| [DECISIONS](docs/DECISIONS.md) | Architecture Decision Records (`ADR-001` through `ADR-006`) for Web, Supabase, Auth, Android, Telegram, and AI/CV |
+| [PLAN](docs/PLAN.md) | Active Lean Grand Final M1–M6 roadmap (`[ ]` / `[~]` / `[x]`), exact file targets, acceptance criteria, and verification commands |
+| [DECISIONS](docs/DECISIONS.md) | Architecture Decision Records (`ADR-001` through `ADR-008`) for Grand Final scope, DB lockdown, Auth, Android, Telegram, AI/CV, and clinical workflows |
+| [DESIGN](docs/DESIGN.md) | Living interaction and motion design contract (`Clinical Ledger` + `shadcn/ui` + `Motion` + `Lucide`, Android Dark Mode, Telegram UX) |
+| [ROADMAP_V2](docs/ROADMAP_V2.md) | Post-Grand-Final production clinical pilot, security hardening, offline conflict sync, and Fully Agentic architecture blueprint |
 | [PROGRESS](docs/PROGRESS.md) | Append-only cross-harness handoff log (commit SHAs, commands run, observed outputs, blockers, next concrete task) |
 | [SPEC](docs/SPEC.md) | Product contract, roles, four clinical pillars, L0–L4 evidence ladder, and the Golden Rule |
 | [INTERFACES](docs/INTERFACES.md) | Zod-validated engine, DB, API, Android, and Telegram contracts |
@@ -34,12 +36,12 @@ This repository is structured for seamless cross-harness continuity across **Cod
 
 | Change | Files and constraints |
 |---|---|
-| Supabase & data layer | `supabase/migrations/*.sql` (33 tables in `public`, `SECURITY DEFINER` helpers & triggers in unexposed `private`), `src/lib/supabase/{client,server,admin,middleware,database.types}.ts`, `src/lib/db.ts` (`postgres.js` pooled adapter), `src/proxy.ts` (`/caregiver/:path*` `405` guard + `@supabase/ssr` session refresh), `next.config.ts` CSP. |
-| Dual auth & sessions | `src/lib/auth.ts`, `src/lib/auth-types.ts`, `src/app/api/auth/**` (Supabase Auth for `doctor`, `patient`, `caregiver`, `individual`) alongside isolated 1-click Judge Demo (`src/lib/demo-session.ts`, `src/lib/seed.ts`, `src/app/api/demo/**`) enforced by `workspaces.is_demo` + RLS. |
-| Clinical tasks & rules | `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts`, `src/lib/clinical-store.ts`, `src/lib/rules/`, `src/lib/parq.ts`, `src/lib/teach-back-store.ts`, `src/lib/caregiver-store.ts`. Scope SQL by workspace/patient/doctor; use `Asia/Tashkent` scheduled days; distinguish completed, reported missed, and unanswered; keep internal `doctor_note` and `acknowledged_note` out of patient/caregiver DTOs and client `select(...)` lists. |
-| AI, OCR & deep CV | `src/lib/pose/` (`createPoseTracker`, `analyzeExerciseDiagnostics`, per-cycle suspicious segments), `src/lib/anticheat/`, `src/lib/ai/` (`dorimos.ts`, `tonometr.ts`, `clinical-brief-ai.ts`, `exercise-video-review.ts`, `exercise-coach.ts`). Keep patient confirmation & manual/deterministic fallbacks; keep heavy MediaPipe/Mediabunny bundles lazy-loaded. |
-| Web UI/UX | `components.json`, `src/components/ui/` (shadcn/ui), `src/components/{auth,doctor,patient,exercise,caregiver,telegram}/`, `src/app/**`. Use Clinical Ledger tokens + Tailwind v4 + Motion (`reducedMotion="user"`) + Lucide + optimistic JSON mutations. |
-| Android & Telegram | Android clean rewrite in `android/app/src/main/java/uz/shifohalqa/android/{data,domain,ui,cv,sync}/` calling `/api/mobile/v1/*` + Supabase Auth. Interactive Mini App at `src/app/tg/` (`POST /api/telegram/auth` `initData` HMAC verification) + Python `aiogram` worker in `services/telegram_bot/`. |
+| Supabase & data layer | `supabase/migrations/*.sql` (33 tables in `public`, `SECURITY DEFINER` helpers & triggers in unexposed `private`, Next.js API sole clinical access wall after M1.1 lockdown), `src/lib/supabase/{client,server,admin,middleware,database.types}.ts`, `src/lib/db.ts` (`postgres.js` pooled adapter), `src/proxy.ts` (`/caregiver/:path*` `405` guard + `@supabase/ssr` session refresh), `next.config.ts` CSP & `outputFileTracingIncludes`. |
+| Dual auth & sessions | `src/lib/auth.ts`, `src/lib/auth-types.ts`, `src/app/api/auth/**` (pre-seeded clinic Supabase Auth login; public signup gated) alongside isolated 1-click Judge Demo (`src/lib/demo-session.ts`, `src/lib/seed.ts`, `src/app/api/demo/**`) enforced by `workspaces.is_demo`. |
+| Clinical tasks & rules | `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts`, `src/lib/clinical-store.ts`, `src/lib/rules/`, `src/lib/teach-back-store.ts`, `src/lib/caregiver-store.ts`. Scope SQL by workspace/patient/doctor; use `Asia/Tashkent` scheduled days; support 1–3 drugs & 1–2 fixed times, high+low BP thresholds, source-specific steps; keep internal `doctor_note` and `acknowledged_note` out of patient/caregiver DTOs. |
+| AI, OCR & CV | `src/lib/pose/` (`createPoseTracker`, `analyzeExerciseDiagnostics`, 3 polished movements `chair_stand`/`elbow_bend`/`seated_knee_ext`), `src/lib/anticheat/`, `src/lib/ai/` (**Vercel AI Gateway** primary → **Cloudflare Workers AI** fallback → deterministic fallback; `dorimos.ts`, `clinical-brief-ai.ts`, `exercise-video-review.ts`, `exercise-coach.ts`). Enforce patient confirmation, DB-ID citation checks, and lazy-loaded MediaPipe/Mediabunny bundles. |
+| Web UI/UX | `components.json`, `src/components/ui/` (`shadcn/ui`), `src/components/{auth,doctor,patient,exercise,caregiver,telegram}/`, `src/app/**`. Use Clinical Ledger tokens + Tailwind v4 + `Motion` (`reducedMotion="user"`) + `Lucide` + optimistic JSON mutations. |
+| Android & Telegram | Incremental Kotlin Compose evolution in `android/app/src/main/java/uz/shifohalqa/android/` (`Full` default CV model + user-selectable `Heavy` setting, Dark Mode parity) calling `/api/mobile/v1/*`. Interactive Mini App at `src/app/tg/` (`POST /api/telegram/auth` `initData` HMAC → scoped Bearer token) + Python `aiogram` worker in `services/telegram_bot/`. |
 
 ## Definition of done
 

@@ -1,93 +1,121 @@
-# ShifoHalqa Grand Final execution plan
+# ShifoHalqa Grand Final execution plan (Lean Demo)
 
 **Branch** — `final`. The Task 2 judge demo on `main` is frozen at `bc27a09`, tagged `v1-task2-demo`.
 
-**Target** — An isolated `final` preview using `shifohalqa-final` (`byswnhfcqxjvnallggxj`), private Storage, and a separate Telegram bot and webhook.
+**Target** — Isolated `final` preview on Vercel + Supabase `shifohalqa-final` (`byswnhfcqxjvnallggxj`), private Storage, and a separate preview Telegram bot/worker guarded by `SHIFO_ENV_ID=final-preview`.
 
 **Status** — `[ ]` planned, `[~]` open or in progress, `[x]` verified for the stated scope.
 
-[DECISIONS](DECISIONS.md) is the owner-approved scope. [DESIGN](DESIGN.md) defines the interface behavior. [PROGRESS](PROGRESS.md) records earlier checks and subsequent work. Grand Final uses synthetic clinical records and public or cleared samples.
+[DECISIONS](DECISIONS.md) is the owner-approved Lean Grand Final scope. [DESIGN](DESIGN.md) is the living interaction and animation contract (`shadcn/ui` + `Motion` + `Lucide`). [ROADMAP_V2](ROADMAP_V2.md) holds the post-Grand-Final clinical pilot and **Fully Agentic** architecture plan. [PROGRESS](PROGRESS.md) records prior M1a/M1b checks and session handoffs.
 
 | Milestone | Scope | Gate |
 |---|---|---|
-| M1 | Close the reopened clinical access, data integrity and environment gate | [~] |
-| M2 | Shared API and end-to-end clinical workflows, starting with medication | [ ] |
-| M3 | Doctor Web and three patient Web exercises | [ ] |
-| M4 | Primary native Android patient experience and five exercises | [ ] |
-| M5 | Standalone Telegram bot and Mini App with five exercises | [ ] |
-| E2E | Contract and integration track across M1–M5 | [ ] |
-| M6 | Verify the complete package on the isolated judge preview | [ ] |
+| M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [~] |
+| M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [ ] |
+| M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [ ] |
+| M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
+| M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [ ] |
+| M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [ ] |
 
-Start M1 closure before M2. Within M2, freeze dose, report, consent, and review interfaces before building their consumers. M3–M5 can use the same contracts as they stabilize. Prioritize the Android patient loop and the Web doctor screens needed to close it. Build the Telegram-only loop against that same clinical API.
+Close M1 before starting M2. Keep changes atomic and verifiable. Move any enterprise, multi-clinic onboarding, conflict-resolution, or autonomous longitudinal agent work strictly to [ROADMAP_V2](ROADMAP_V2.md).
 
-## M1 — Reopened foundation gate
+---
 
-M1a and M1b were committed in `140860d`, `12cdfde`, `3c6cf8c` and `6dd8083`. The existing seven migrations, generated types, stores, handlers and prior test results are recorded in [PROGRESS](PROGRESS.md). Their verification covered the original scope. The audit identified additional required checks and changes.
+## M1 — Close the 5 P0 foundation patches
 
-- [ ] **M1.1 Clinical reads and writes.** Review `supabase/migrations/*00400*` and `*00600*`, `src/lib/db.ts` and `src/lib/clinical-handlers.ts`. Add forward migrations to close direct clinical-table grants and raw clinical Realtime access. Verify that authenticated and anonymous users only see authorized DTOs, including when a patient previously received a relevant flag. Prove direct clients cannot read internal notes, set evidence level/decision, mutate a task directly or forge its audit event. Verify normal reads and atomic server writes.
-- [ ] **M1.2 Identity and tenant isolation.** Update `src/lib/auth.ts`, `src/app/api/auth/**`, `src/lib/seed.ts`, `src/lib/mobile-demo.ts` and membership constraints. Prove role enrollment, account verification, active assignment, one-time invite consumption and revocation, and isolation among distinct real test accounts and synthetic judge sessions. Cover multiple authorized contexts, expired credentials, and signup recovery after partial failure.
-- [ ] **M1.3 Clinical source and media integrity.** Scope sample OCR and simulated steps to synthetic demo sessions. Define honest L2/L3 provenance for device-reported CV. Protect uploaded evidence from direct replacement, unscoped access, unbounded writes and lifetime drift. Correct the composite foreign-key `ON DELETE SET NULL` behavior in `*00300*` using a forward migration. Prove safe deletion with dependent rows, upload quotas, cleanup and permission rechecks.
-- [ ] **M1.4 Telegram role and environment isolation.** Provision an explicit worker credential and queue permissions. Test the worker with that credential. Wire clinical bot operations to the authorized API. Correct `README.md` and `.env.example` as part of implementation and require a positive environment identity check before app, bot or E2E writes. Exercise an isolated preview and webhook using a separate bot. Keep production Task 2 credentials and services outside this path.
+M1a and M1b were committed in `140860d`, `12cdfde`, `3c6cf8c`, and `6dd8083`. Before M2, close the 5 concrete P0 blockers identified in the audit:
 
-**Gate checks.** Run `npm run verify` and the Telegram test command below. Verify project identity, applied migrations, generated types and advisors via `supabase_mcp`. Run tests with actual anonymous, patient, caregiver, doctor, app and worker identities as applicable. Exercise the application and direct privilege-denial paths with isolated test data. Record results and reopen any failing item.
+- [ ] **M1.1 Direct DB & Realtime lockdown.** Add a forward migration (`20261125000100_lockdown_direct_access_and_fk_fixes.sql`) that:
+  - revokes `anon` and `authenticated` table privileges on clinical `public.*` tables (`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated`) and drops permissive direct-client policies on clinical tables so Next.js API (`postgres.js`) is the sole clinical data wall;
+  - removes raw clinical tables from `supabase_realtime` publication (closing `doctor_note`/`acknowledged_note` CDC leakage);
+  - fixes the 4 composite FKs in `000300` (`teach_back_attempts`, `vitals_ocr_scans`, `evidence_logs`, `ai_clinical_briefs`) to `ON DELETE SET NULL (<nullable_col>)`;
+  - removes direct patient `UPDATE` and `DELETE` policies on `storage.objects` (`ocr-scans`, `exercise-segments`) so uploaded evidence is immutable after submission.
+- [ ] **M1.2 Environment identity guard & deploy tracing.**
+  - Add `public.environment_identity` table/row (`final-preview`) and require matching `SHIFO_ENV_ID` before app, bot, or E2E database writes (blocking accidental writes to Task 2 Neon `main`).
+  - Add `/api/clinical/dorimos`, `/api/mobile/v1/dorimos`, and `/api/mobile/v1/exercise/sample-ai` to `outputFileTracingIncludes` in `next.config.ts`; fix `isSameOriginPost` in `src/lib/request-body.ts` for reverse-proxy `x-forwarded-proto`.
+  - Update `.env.example` and `README.md` to reference Supabase `shifohalqa-final` and `supabase/migrations/` (removing stale Neon/`schema.sql` setup pointers on `final`).
+- [ ] **M1.3 Auth hardening & clinical source honesty.**
+  - Gate public `POST /api/auth/signup` behind `AUTH_SIGNUP_ENABLED=false` (never trusting client-supplied `role: 'doctor'`); fix `allowDoctorWithoutPatient` in `src/lib/auth.ts` so `patientId` is `null` instead of the doctor UUID; add a seed script (`scripts/seed-clinic-demo.ts`) for 1 pre-seeded synthetic clinic doctor + 2–3 patients (`is_demo = false`).
+  - Scope DoriMos synthetic `sampleId` scans (`src/lib/dorimos-server.ts`) and `demo_sim` steps (`src/lib/activity-store.ts`) strictly to `isDemo === true` sessions.
 
-## M2 — Clinical vertical slices and API contracts
+**M1 Gate checks.** Apply migration via `supabase_mcp` on `byswnhfcqxjvnallggxj`, regenerate `src/lib/supabase/database.types.ts`, verify `get_advisors` (`0` security lints), run `npm run verify`, and verify with a test that an ordinary authenticated Supabase JWT gets `permission denied` on direct clinical table reads/writes and Storage overwrite/delete, while Next.js API flows succeed.
 
-- [ ] **M2.1 Medication plan and dose ledger.** Extend `supabase/migrations/**`, `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts` and `src/lib/clinical-store.ts` for one or more medications, multiple fixed daily times, and dated plan versions. Verify two medications sharing a time, one medication with two times, a plan change, and preservation of Task 2 data contracts as applicable. Each due dose has a unique identity and the correct historical plan through the Toshkent day boundary.
-- [ ] **M2.2 Patient response and help loop.** Share mutation semantics between `src/app/api/clinical/**`, `src/app/api/mobile/v1/**` and Telegram. Record original scheduled time, patient entry time, server receipt, actor and channel. Verify `taken`, `missed` with reason and `unanswered`, seven-day late entry/correction, same-answer deduplication and conflicting-answer resolution. Verify new supply/help alerts and reopening of a reviewed record on correction. Add per-channel reminder preferences and suppress repeat reminders for answered doses.
-- [ ] **M2.3 DoriMos at package change.** Extend `src/lib/dorimos-server.ts` and `src/lib/dorimos-store.ts` to tie offered verification to the changed plan item or package and preserve a deferred state. Use a synthetic OCR sample with patient confirmation, retake or manual handling. Separate product name and strength comparison from dose intake. Verify same-day packages for different drugs, duplicate confirmation and mismatch routing.
-- [ ] **M2.4 Manual BP and source-specific steps.** Extend `src/lib/rules/**`, `src/lib/activity-store.ts`, `src/lib/adherence.ts` and the shared routes. Verify high and low clinician-configured BP thresholds, symptoms, linked repeat, malformed readings and fallback copy. Store manual and sensor steps separately, allow Android/Telegram manual input, and retain origin day after offline sync. Prove one aggregate value per day in the seven-day trend, with sensor preferred when available and manual otherwise. Show both values to the doctor on a day with both, and distinguish missing and simulated values.
-- [ ] **M2.5 Deterministic report and clinician responses.** Extend `src/lib/clinical-brief.ts`, the report API, doctor queue and audit data. Verify due counts per medication and scheduled dose, with BP, steps and exercises in their own sections. Include late reports, corrections, related issues, drafts in the doctor view, approved replies, amendments and notice outcomes. Test that a notice opens the exact updated answer and that patient responses exclude internal clinical notes.
-- [ ] **M2.6 Embedded AI and Teach-Back.** Add `src/lib/teach-back-store.ts`, `src/lib/ai/clinical-brief-ai.ts` and the task-specific AI contracts. Implement a validated, current patient context and versioned prompt per purpose. Add an example and 1–2 questions grounded in the new or changed plan, contextual questions and answers, BP response drafts, and evidence-linked report explanations. Verify context refresh after correction, rejection of unsupported facts, clinic/patient scoping, provider timeout and deterministic fallback. Apply bounded input, output, concurrency and cost. Clinical advice reaches the patient after assigned-doctor approval.
-- [ ] **M2.7 Five-movement CV and complete-attempt review.** Extend `src/lib/pose/**`, `src/lib/exercise-store.ts`, the media routes and `src/lib/ai/exercise-video-review.ts`. Prepare reproducible sample clips containing useful form observations for each movement. Validate CV timestamps and 3–5 keyframes per flagged cycle with test fixtures and grounded AI outputs. Pick the upload transport, limits and codecs against preview platform constraints, then test interrupted, rejected and successful uploads. Verify online consent and private playback of the full attempt, timestamp navigation, one doctor response covering specific repetitions and the 7-day-after-response/30-day maximum expiry. Capture L2/L3 provenance without inferring higher evidence from model output.
-- [ ] **M2.8 Publish client contracts.** Update `docs/INTERFACES.md` and applicable `docs/SPEC.md` sections as each slice lands. Document versioning, error and empty states, permissions, idempotency, consent, source metadata and fixtures. Test shared contracts from Web, Android and Telegram. Keep repo setup instructions current.
+---
 
-**First AI increment.** Start in the doctor's seven-day report. Use a synthetic week with one unanswered dose and one supply issue. Generate a draft that links both observations to the correct records. Let the doctor edit and approve it, then open the published response from the patient's notice. Repeat after a correction and with the provider unavailable. Use that context, provenance and approval pattern for the remaining AI workflows.
+## M2 — Clinical vertical slices, Supervised AI, and signed video API
 
-**Checkpoint.** Demonstrate a synthetic medication report → supply issue → doctor response → corrected seven-day report over the API. Confirm both clients can exercise the same contract with isolated test identities. Run `npm run verify`, DB-backed contract tests, and coverage for media expiry and AI failure paths.
+Freeze shared Zod contracts in `src/lib/*` and update `docs/INTERFACES.md` as each slice lands.
 
-## M3 — Web doctor and patient surfaces
+- [ ] **M2.1 Multi-medication schedule & units.** Forward migration relaxing `plan_items` single-medication constraint to support 1–3 distinct medications, 1–2 fixed daily times (`Asia/Tashkent`), and `strength_unit` (`mg`, `mcg`, `g`, `iu`). Update `src/lib/clinical-types.ts`, `src/lib/clinical-inputs.ts`, `src/lib/clinical-store.ts`, and `/api/mobile/v1/today` while keeping existing `/api/demo/*` smoke contracts passing.
+- [ ] **M2.2 Manual BP (high + low) & source-specific steps.**
+  - Extend `src/lib/rules/evaluate-rules.ts` and `src/lib/clinical-inputs.ts` with clinician-configured **low BP (hypotension)** thresholds (`minSystolic`, `minDiastolic`), physiological bounds (`systolic > diastolic`, 50–260 / 30–160 mmHg), and optional linked repeat reading.
+  - Migrate `daily_step_counts` PK to `(workspace_id, patient_id, activity_date, source)` so `device_sensor` and `self_report` (manual) coexist per day; compute 7-day trend preferring `device_sensor` when available and exposing both values to the doctor.
+- [ ] **M2.3 Supervised AI core (Vercel AI Gateway + Cloudflare fallback).**
+  - Consolidate `src/lib/ai/provider-config.ts` and `src/lib/ai/completion-fallback.ts` around **Vercel AI Gateway** (primary) → **Cloudflare Workers AI** (fallback) → deterministic Uzbek fallback. Add DB-backed per-workspace AI rate limits and `prompt_hash` response caching.
+  - **First AI increment — 7-day clinical brief & cited draft (`src/lib/ai/clinical-brief-ai.ts`):** Gather scoped patient context (per-drug adherence, BP trend, steps, exercises, open issues), generate a plain Uzbek summary + doctor reply draft citing exact DB record IDs (validated programmatically before persistence), let the doctor edit and approve (`L4`), and expose the approved reply on Web, Android, and Telegram.
+  - **Compact Teach-Back (`src/lib/teach-back-store.ts`):** Persist 1–2 plan-grounded Uzbek comprehension questions per assigned plan with deterministic fallback.
+  - **DoriMos update (`src/lib/dorimos-server.ts`):** Match `mg`/`mcg`/`IU` against the selected medication item and support a clear deferred state.
+- [ ] **M2.4 Three-movement CV, keyframe AI & signed full-attempt video.**
+  - Add 1 cleared public sample video for `seated_knee_ext` alongside `chair_stand` and `elbow_bend` (`public/demo/` + `src/lib/exercise-sample.ts`).
+  - Extract 3–5 keyframes + timestamps per flagged cycle and run grounded AI visual observation (`src/lib/ai/exercise-video-review.ts`) with uncertainty phrasing and deterministic fallback.
+  - Implement server-authorized **signed upload URL** (`POST /api/clinical/exercise/video-upload` + `/api/mobile/v1/exercise/video-upload`) and **finalize** endpoint enforcing `≤ 60 s`, `≤ 20 MiB` (MP4/WebM), per-workspace quota, explicit consent flag, and immutable binding to `exercise_attempts`.
+  - Implement authorized short-lived **signed playback URL** (`GET /api/clinical/exercise/[attemptId]/video`) enforcing assigned-doctor/patient scope and lazy expiry (`7 days after doctor response` or `30 days after upload`, whichever comes first).
 
-- [ ] **M3.1 Multi-patient doctor queue.** Build the assigned-patient queue in `src/app/doctor/**` and `src/components/doctor/**`. Show patient, exact record, responsible clinician, reported time, received time, source and history. Open the specific item from a deep link. Cover reply, amendment, report and full-video review with timestamp navigation.
-- [ ] **M3.2 Patient flows.** Update `src/app/patient/**`, patient components and shared auth screens. Show dose schedules, report, contextual AI, Teach-Back, manual BP/steps, doctor replies and caregiver sharing. Implement chair stand, elbow bend and seated knee extension using the shared components. Show outcomes after server acknowledgment and preserve fallback states when AI or optional motion data are unavailable.
-- [ ] **M3.3 Design and performance.** Apply [DESIGN](DESIGN.md) to shared primitives, Clinical Ledger theme, keyboard focus, dark mode and reduced motion. Keep pose and decoding off the initial route. Check at narrow widths and with increased text size. Measure critical path and sample analysis on the isolated preview.
+**M2 Checkpoint.** `npm run verify` + unit/integration tests for multi-drug adherence, high/low BP + invalid reading rejection, dual-source steps, AI citation validation + deterministic fallback on provider outage, and signed video upload/finalize/expiry bounds.
 
-**Checks.** `npm run verify` and `npm run e2e`. Run the full isolated DB-backed suite for clinical and privacy paths.
+---
 
-## M4 — Primary Android patient experience
+## M3 — High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`)
 
-- [ ] **M4.1 Independent entry.** Use the native app link or code to accept a clinic invitation, show the correct plan, link a second channel, unlink and recover sessions. Cover fresh install and Android-only use. Demonstrate the separate Judge Demo and synthetic Auth path.
-- [ ] **M4.2 Daily workflows.** Implement the multi-medication plan, reminder channel settings, dose responses, manual BP, sensor/manual steps, contextual AI, reports and replies. Check missing sensor/permission and the full seven-day graph. Retain existing distinctions between measured, reported and simulated values.
-- [ ] **M4.3 Offline and reconnect.** Extend the existing Room/WorkManager queue. Check offline input, app/process restart, replay, midnight, identity change and a Telegram conflict. Show specific offline copy for pending records, AI and video. Require an online share action for full media.
-- [ ] **M4.4 All five movements.** Wire the Kotlin movement definitions, CameraX/MediaPipe, prepared samples, contextual AI, file picker, and consent to the corresponding assigned exercise. Run device capture and video decode against known fixtures and confirm the doctor gets the exact associated attempt.
+Iterate freely on [DESIGN](DESIGN.md) to deliver judge-ready visual craft, tactile animations, and clinical clarity.
 
-**Checks.** From `android/` run `./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest` and inspect changed Compose previews. Prove the independent Android path on a physical phone, including offline/resume and slow-network analysis. Record device and OS. When possible include a lower-cost phone so the documented limits reflect intended users.
+- [ ] **M3.1 Design system & motion setup.** Install `lucide-react`, `motion`, and initialize `shadcn/ui` (`components.json`, `src/components/ui/`) mapped directly onto Clinical Ledger light/dark CSS tokens (`--paper`, `--card`, `--ink`, `--action`, `--urgent`, `--warn`, `--ok`). Wrap with `<MotionConfig reducedMotion="user">`.
+- [ ] **M3.2 Entry, Auth & Multi-Patient Doctor surface (`src/app/page.tsx`, `src/app/doctor/**`).**
+  - Refocus `/` around Story 1 (Medication → Doctor Reply → 7-day Report) + Story 2 (3-movement Exercise CV), with 1-click Judge Demo AND compact **«Klinika hisobiga kirish»** Supabase login.
+  - Upgrade `/doctor` to support both Judge Demo and real Supabase clinic sessions: assigned-patient list/switcher, priority queue (`red` → `yellow`), 7-day Supervised AI Brief card (source-record links, edit & L4 approve), and complete-attempt video player with clickable flagged-cycle timestamp markers + single review reply.
+- [ ] **M3.3 Patient & Caregiver surfaces (`src/app/patient/**`, `src/app/caregiver/**`).**
+  - Upgrade `/patient` to support both Demo and Supabase sessions: multi-medication time-grouped schedule (`Ichdim`/`Icha olmadim`/`Dori tugadi`), DoriMos check, compact Teach-Back, manual BP with high/low feedback, 7-day step trend (`Telefon sensori` vs `Qo‘lda`), doctor replies, `Yaqinim` 24-hour share link, and always-reachable `103` + `Og‘riq bor`.
+  - Upgrade `/patient/exercise` for all **3 polished movements** (`chair_stand`, `elbow_bend`, `seated_knee_ext`) with lazy-loaded MediaPipe/Mediabunny, prepared-video primary entry, flagged-cycle AI observations, and explicit consent (`Shu urinish videosini shifokorga yuborish`) with upload progress and error/cancel states.
 
-## M5 — Telegram bot and Mini App
+**M3 Checks.** `npm run verify`, `npm run e2e`, responsive check at `360px` & `1280px`, large-text toggle, dark mode, keyboard focus, and reduced-motion verification.
 
-- [ ] **M5.1 Telegram-only entry and permissions.** Add `src/app/api/telegram/auth/route.ts` and update `src/app/tg/**` for verified `initData`, scoped sessions, one-time invitations and account binding. Exercise opening the exact authorized record. Verify expired or replayed inputs, unlink and isolated bot behavior.
-- [ ] **M5.2 In-chat workflow.** Extend `services/telegram_bot/shifo_telegram/**` for commands, reminder controls, correct per-dose actions, seven-day summary and approved replies. Verify explicit detail opt-in and generic fallback copy. Update messages after confirmed actions. Style buttons, support contextual deep links, and verify rich-message and private widget enhancements with readable classic fallbacks.
-- [ ] **M5.3 Mini App workflow.** Reuse the patient Web components with Telegram-specific theme, safe areas and controls. Show the full patient daily workflow and all five prepared exercise videos with AI and review. Test inside an actual Telegram client, including narrow viewport, session renewal, interrupted network, keyboard and camera/file fallback. Exercise a complete Telegram-only patient scenario.
-- [ ] **M5.4 Delivery operations.** Verify the restricted worker, delayed retry and detectable delivery-unknown states. Test exact replies, updates and stop behavior. Verify the distinct preview bot, token context and webhook before enabling test notices.
+---
 
-**Checks.** `npm run verify` and `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests`. Include the isolated E2E bot with mock transport for repeatability and a real Telegram preview smoke for the client and webhook.
+## M4 — Native Android patient polish
 
-## E2E — Shared verification track
+Evolve existing `android/` Kotlin Compose code incrementally.
 
-- [ ] **Tier 1, entry and isolation.** Judge demo, synthetic clinic auth, wrong actor/workspace, expired and replayed invitations, caregiver token expiry/revoke, separate Telegram and Android entry, and wrong environment rejection.
-- [ ] **Tier 2, medication and report.** Multiple drugs and times, late response, revision, offline conflict, supply alert, clinician response and amendment, per-drug counts, manual BP, both step sources, and privacy of notes.
-- [ ] **Tier 3, exercise and AI.** Five movement fixtures, three Web patient catalog entries, native capture, uncertain observations, a full video with per-attempt consent, authenticated playback/expiry, fallback when providers fail, and exact review reply.
-- [ ] **Tier 4, real clients and accessibility.** Full Android-only and Telegram-only workflows, narrow Web and Mini App layout, reduced motion, keyboard, TalkBack where supported, large text, and degraded/offline connectivity.
-- [ ] **Tier 5, adversarial boundaries.** Ordinary JWT access to private clinical columns and derived fields, cross-tenant direct API and Storage access, repeated uploads, forged identity, replayed bot link/session, duplicate/late events, and invalid AI output or source references.
+- [ ] **M4.1 Theme, Auth & Daily workflows.**
+  - Add Dark Mode color scheme parity to `ShifoTheme.kt`.
+  - Support existing 1-time demo pairing code AND pre-seeded Supabase Bearer login (reusing `resolveMobilePatientActor`).
+  - Upgrade `MobileApi.kt` & patient screens for multi-medication daily doses, manual BP (high + low zone feedback), dual-source steps (`Telefon sensori` + `Qo‘lda`) with 7-day trend, DoriMos, and 7-day report/doctor replies.
+- [ ] **M4.2 Three movements, `Full`/`Heavy` selector & consented video upload.**
+  - Wire `chair_stand`, `elbow_bend`, and `seated_knee_ext` to prepared samples (downloaded/cached on demand to keep APK lean), live camera, and file picker.
+  - Default on-device MediaPipe Pose to **`Full`** everywhere, and add a clear settings toggle (**«Aniqlik rejimi: Tezkor (Full) / Yuqori aniqlik (Heavy)»**) for recorded video analysis.
+  - Display flagged-cycle AI observations and wire explicit patient consent (`Shu urinish videosini shifokorga yuborish`) to the signed Storage URL upload + finalize flow (with progress, cancel, and offline message).
 
-Use `npm run e2e` for smoke and `SHIFO_E2E_DATABASE_URL=... npm run e2e` with the approved isolated URL for full DB-backed coverage. Use fixture IDs and report only synthetic logs. Capture the verified test selection and any supported limitations in `TEST_READY.md`.
+**M4 Checks.** `cd android && ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest`, inspect changed Compose `@Preview`s, and test Story 1 + Story 2 (including `Full` vs `Heavy` timing) on a physical Android phone.
 
-## M6 — Grand Final acceptance
+---
 
-- [ ] M1 audit gate and all mandatory M2–M5 and E2E checks above pass on the isolated preview. Required capabilities have working, independently checked demonstrations.
-- [ ] Android-only and Telegram-only patients each complete the primary medication story, including sign-in, help request, assigned doctor reply and seven-day report with corrections/replies. Confirm records and timestamps match across surfaces.
-- [ ] Exercise demos pass for five movements on Android and Telegram and three on patient Web. Doctor Web can review all five, receive the consented full attempt, jump to flagged cycles and send a response. Verify real-device usability and record sample identity, analysis latency, accuracy limits and media behavior in [BENCHMARK](BENCHMARK.md).
-- [ ] Verify deterministic and manual fallbacks, accessible status messages, and clear disclosure of synthetic histories and approved public media. Check `main` resolves to `bc27a09` and the preview uses its own DB, Storage and Telegram webhook.
-- [ ] Record exact commands, device/Telegram client details, results and limitations in [PROGRESS](PROGRESS.md) and [BENCHMARK](BENCHMARK.md).
+## M5 — Telegram Mini App (Bearer auth) and chat polish
 
-**Deferred scope.** Clinical team access, authenticated caregivers, independent exercise and the full PAR-Q+ pathway, selected weekdays or as-needed schedules, wider longitudinal AI and official pharmacy integration. Short-clip AI is an optional addition after the mandatory work and tests pass. See [DECISIONS](DECISIONS.md).
+- [ ] **M5.1 Iframe-safe Mini App auth (`src/app/api/telegram/auth/route.ts`, `src/app/tg/**`).**
+  - Verify Telegram `initData` HMAC, freshness, and binding server-side; return a **scoped short-lived Bearer token** (no `SameSite=Lax` cookie dependency in Telegram Web/Desktop iframes).
+  - Reuse the upgraded M3 patient components inside `/tg` with Telegram theme/safe-area tokens, `MainButton`/`BackButton`, haptics, and all **3 polished prepared-video exercises** with camera/file fallback.
+- [ ] **M5.2 Chat privacy opt-in, styled actions & API bridge (`services/telegram_bot/**`).**
+  - Add per-patient detail opt-in setting: default notifications stay generic with a deep link to the exact Mini App record; opted-in chats receive drug names, short 7-day summary, and approved doctor replies.
+  - Style inline buttons (`primary`/`success`/`danger`), update messages after confirmed actions, and route **new** M2/M5 clinical actions (multi-dose status, manual BP/steps, 7-day summary) to Next.js API via a shared bot-service secret instead of adding direct Python SQL.
+  - Add `SHIFO_ENV_ID` startup check to `services/telegram_bot/shifo_telegram/config.py`.
+
+**M5 Checks.** `npm run verify`, `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests`, and real Telegram client smoke on the isolated preview bot.
+
+---
+
+## M6 — Isolated preview deploy and Grand Final acceptance
+
+- [ ] **M6.1 Isolated preview setup.** Configure Vercel Preview for `final` (`shifohalqa-final` Supabase, Vercel AI Gateway + Cloudflare keys, `SHIFO_ENV_ID=final-preview`), a separate preview Telegram bot, and a separate Railway worker service. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
+- [ ] **M6.2 End-to-end judge walkthrough.** Verify both Story 1 and Story 2 end-to-end on the isolated preview across Web (1-click Demo + pre-seeded clinic login), a physical Android phone, and a real Telegram client.
+- [ ] **M6.3 Honest disclosure & evidence.** Verify deterministic fallbacks when AI is disabled/unavailable, confirm zero `doctor_note` leakage, update `docs/BENCHMARK.md` with real measured latency/APK/CV numbers (including Android `Full` vs `Heavy`), and log final verification commands in `docs/PROGRESS.md`.
+
+**Deferred to [ROADMAP_V2](ROADMAP_V2.md):** Open clinic self-signup & one-time patient enrollment codes, emailsiz Android-only/Telegram-only onboarding & recovery, authenticated caregivers & clinic teams, `individual`/PAR-Q+, dated `plan_versions` & 7-day retroactive edits/conflict UI, doctor amendment revision threads, per-channel reminder schedulers, full 5-movement fixture pack, automated cron Storage expiry cleanup, experimental Telegram chat widgets, DMED/Asl Belgisi, and the **Fully Agentic Clinical Assistant**.

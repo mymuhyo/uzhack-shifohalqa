@@ -58,13 +58,53 @@ export async function GET(request: Request) {
         }
       : null;
 
+    const vitalsReplies = view.tasks.flatMap((task) => {
+      if (task.type !== 'vitals') return [];
+      const record = vitalsRecord(task);
+      return record?.reply
+        ? [{ recordId: record.id, taskTitle: task.title, date: task.date, ...record.reply }]
+        : [];
+    });
+    const replies = [...base.replies, ...vitalsReplies].sort(
+      (a, b) => Date.parse(b.reviewedAt) - Date.parse(a.reviewedAt),
+    );
+    const bpHistory = view.tasks
+      .flatMap((task) => {
+        if (task.type !== 'vitals') return [];
+        const entry = task.evidence;
+        if (!entry || entry.payload.kind !== 'vitals') return [];
+        return [{
+          id: entry.id,
+          date: task.date,
+          createdAt: entry.createdAt,
+          systolic: entry.payload.systolic,
+          diastolic: entry.payload.diastolic,
+          chestPain: entry.payload.chestPain,
+          level: entry.level,
+          reviewed: entry.review !== null,
+        }];
+      })
+      .sort((a, b) => a.date.localeCompare(b.date) || Date.parse(a.createdAt) - Date.parse(b.createdAt))
+      .map((point) => ({
+        id: point.id,
+        date: point.date,
+        systolic: point.systolic,
+        diastolic: point.diastolic,
+        chestPain: point.chestPain,
+        level: point.level,
+        reviewed: point.reviewed,
+      }));
+
     return mobileJson({
       ...base,
+      isDemo: auth.actor.isDemo === true,
+      replies,
       tasks,
       medications: view.plan?.medications ?? [],
       medicationAdherence: activity?.medicationAdherence ?? [],
       bpTargets: view.plan?.targets ?? null,
       vitalsTask,
+      bpHistory,
       steps: {
         ...base.steps,
         bySource: activity?.todayStepsBySource ?? {

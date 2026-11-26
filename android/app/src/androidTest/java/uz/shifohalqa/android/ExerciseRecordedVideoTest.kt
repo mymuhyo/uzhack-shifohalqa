@@ -17,7 +17,13 @@ import java.util.UUID
 class ExerciseRecordedVideoTest {
     @Test
     @SdkSuppress(minSdkVersion = 29)
-    fun heavyCountsTwoCyclesFromASelectedVideoWithoutAProvider() = runBlocking {
+    fun fullCountsTwoCyclesFromASelectedVideoWithoutAProvider() = checkRecordedClip(PoseAccuracy.Full)
+
+    @Test
+    @SdkSuppress(minSdkVersion = 29)
+    fun heavyCountsTwoCyclesFromASelectedVideoWithoutAProvider() = checkRecordedClip(PoseAccuracy.Heavy)
+
+    private fun checkRecordedClip(accuracy: PoseAccuracy) = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val resolver = context.contentResolver
         val content = ContentValues().apply {
@@ -31,9 +37,9 @@ class ExerciseRecordedVideoTest {
                 context.assets.open("pose-cdc-sample.webm").use { it.copyTo(output) }
             }
             val started = System.nanoTime()
-            val result = analyzeExerciseVideo(context, ExerciseClip.fromPicker(uri), 100, accuracy = PoseAccuracy.Heavy)
-            println("Heavy recorded clip: ${(System.nanoTime() - started) / 1_000_000} ms, ${result.measurement}")
-            assertTrue("Heavy clip gives a usable measurement", result.measurement.savable)
+            val result = analyzeExerciseVideo(context, ExerciseClip.fromPicker(uri), 100, accuracy = accuracy)
+            println("${accuracy.name} recorded clip: ${(System.nanoTime() - started) / 1_000_000} ms, ${result.measurement}")
+            assertTrue("${accuracy.name} clip gives a usable measurement", result.measurement.savable)
             assertEquals(2, result.measurement.validReps)
             assertEquals(0, result.measurement.shallowReps)
             assertEquals(2, result.cycles.size)

@@ -69,12 +69,13 @@ test('starts a clean demo workspace from the judge information page', async ({ p
   expect(await workspace()).not.toBe(originalWorkspace);
 });
 
-test('opens the Telegram Mini App route cleanly on a narrow screen', async ({ page }) => {
+test('guides unsigned Telegram launches to the bot or browser demo on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/tg');
-  await expect(page.getByRole('heading', { name: 'ShifoHalqa · Telegram' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Bemor vazifalarini ochish/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Shifokor navbatini ochish/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Telegram Mini App' })).toBeVisible();
+  await expect(page.getByText(/Telegram botidagi Mini App tugmasidan foydalaning/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Brauzerda demo ochish' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Bemor vazifalarini ochish|Shifokor navbatini ochish/ })).toHaveCount(0);
   expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(360);
 });
 

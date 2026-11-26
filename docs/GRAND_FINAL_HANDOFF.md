@@ -1,6 +1,6 @@
 # ShifoHalqa Grand Final handoff
 
-The Grand Final preview uses a synthetic clinic and demo workspaces. Use the dedicated preview URL, preview bot, and ARM64 debug APK supplied with this handoff. The home page offers one-click patient and doctor roles. The clinic sign-in opens the separate seeded clinic with three synthetic patients. Share clinic access through the approved private channel.
+The Grand Final preview uses a synthetic clinic and demo workspaces. The home page offers one-click patient and doctor roles. The clinic sign-in opens the separate seeded clinic with three synthetic patients. Share clinic access through the approved private channel. [Open the Grand Final preview](https://shifohalqa-final-telegram-preview.vercel.app)
 
 ## Medication and clinical review
 
@@ -19,6 +19,7 @@ The Grand Final preview uses a synthetic clinic and demo workspaces. Use the ded
 ## Verification
 
 - The deployed Singapore preview passed the medication reply and privacy check, the recorded exercise journey, Android pairing and record visibility, and the unsigned Telegram entry check.
+- The refreshed preview passed the desktop checks for caregiver link creation, rotation, revocation and expiry, adherence, accessibility, DoriMos fallback, and the prepared chair-stand and elbow samples. [Verification log](PROGRESS.md)
 - The Galaxy S24 Ultra passed eight instrumentation checks and a separate live Android round trip that saved a dose, pressure, and steps and read the doctor's approved seven-day report. [Benchmarks](BENCHMARK.md)
 - The dedicated Telegram worker has a healthy HTTPS webhook. Telegram Android verified pairing, opened the signed Mini App, and showed the three scheduled doses. The worker delivered a doctor-approved synthetic reply. The remaining phone checks are deferred to a later session. [Verification log](PROGRESS.md)
 - Vercel AI Gateway generated a live supervised report. Deterministic generation and doctor approval also ran successfully. The isolated preview still needs a Cloudflare runtime credential to verify Workers AI as its live fallback. [Milestone status](PLAN.md)

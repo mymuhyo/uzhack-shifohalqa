@@ -1,5 +1,6 @@
 package uz.shifohalqa.android
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,8 +25,12 @@ internal enum class SampleAiProvider(val value: String, val label: String) {
 
 internal sealed interface SampleAiReport {
     val model: String
-    data class Observation(override val model: String, val view: String, val seatedAtSeconds: List<Double>,
-        val usesSampleFrames: Boolean = false) : SampleAiReport
+    data class Observation(
+        override val model: String,
+        val view: String,
+        val seatedAtSeconds: List<Double>,
+        val usesSampleFrames: Boolean = false,
+    ) : SampleAiReport
     data class Explanation(override val model: String, val summary: String) : SampleAiReport
 }
 
@@ -42,6 +47,7 @@ internal fun compareSampleObservations(cycles: List<ExerciseCycle>, observation:
 
 @Composable
 internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<ExerciseCycle>?) {
+    val colors = ShifoThemeTokens.colors
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var observation by remember { mutableStateOf<SampleAiReport.Observation?>(null) }
@@ -49,11 +55,11 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
     var advice by remember { mutableStateOf<PublicExerciseAdvice?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
 
-    PatientCard {
+    ShifoCard {
         SectionTitle("AI tahlilchi · CDC namunasi")
-        Text("Mustaqil AI kuzatuvi faqat ommaviy CDC videosiga ishlatiladi.")
+        Text("Mustaqil AI kuzatuvi faqat ommaviy CDC videosiga ishlatiladi.", color = colors.inkVariant)
         if (mobile == null) {
-            Text("AI tahlili uchun veb-panelga ulang.")
+            Text("AI tahlili uchun veb-panelga ulang.", color = colors.inkMuted)
         } else {
             TextButton(enabled = !busy, onClick = {
                 busy = true
@@ -99,22 +105,28 @@ internal fun ExerciseSampleAi(mobile: MobileWorkspaceModel?, cycles: List<Exerci
             }
         }
         advice?.let {
-            Text(if (it.source == "deterministic_coach") "Qoidaviy murabbiy" else "AI murabbiy · ommaviy namuna")
-            Text(it.text)
-            Text(it.cue)
+            Text(
+                if (it.source == "deterministic_coach") "Qoidaviy murabbiy" else "AI murabbiy · ommaviy namuna",
+                color = colors.primary,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(it.text, color = colors.ink)
+            Text(it.cue, color = colors.inkMuted)
         }
-        if (busy) PatientNotice("AI namunani tahlil qilmoqda…")
+        if (busy) PatientNotice("AI namunani tahlil qilmoqda…", tone = ShifoTone.Accent)
         observation?.let {
-            Text(it.model)
-            if (it.usesSampleFrames) Text("Ommaviy namunadan 9 kadr")
-            if (it.view == "unclear") Text("Video modeli harakatni yetarli ko‘rmadi.")
-            else Text("Topilgan sikllar · ${it.seatedAtSeconds.size}")
-            if (it.seatedAtSeconds.isNotEmpty()) Text("Taxminiy o‘tirish vaqtlari · ${it.seatedAtSeconds.joinToString { time -> "$time s" }}")
+            Text(it.model, color = colors.inkMuted)
+            if (it.usesSampleFrames) Text("Ommaviy namunadan 9 kadr", color = colors.inkMuted)
+            if (it.view == "unclear") Text("Video modeli harakatni yetarli ko‘rmadi.", color = colors.inkVariant)
+            else Text("Topilgan sikllar · ${it.seatedAtSeconds.size}", color = colors.ink)
+            if (it.seatedAtSeconds.isNotEmpty()) {
+                Text("Taxminiy o‘tirish vaqtlari · ${it.seatedAtSeconds.joinToString { time -> "$time s" }}", color = colors.inkVariant)
+            }
         }
         explanation?.let {
-            Text(it.model)
-            Text(it.summary)
+            Text(it.model, color = colors.inkMuted)
+            Text(it.summary, color = colors.ink)
         }
-        notice?.let { PatientNotice(it) }
+        notice?.let { PatientNotice(it, tone = ShifoTone.Warn) }
     }
 }

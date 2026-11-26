@@ -26,40 +26,78 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal data class ExercisePlan(
-    val id: String, val targetAngle: Int, val targetReps: Int,
-    val movement: PoseMovement = PoseMovement.ChairStand, val maxShallow: Int = 1,
+    val id: String,
+    val targetAngle: Int,
+    val targetReps: Int,
+    val movement: PoseMovement = PoseMovement.ChairStand,
+    val maxShallow: Int = 1,
 )
+
 internal data class ExerciseReview(val body: String, val retake: Boolean)
+
 internal data class ExerciseAttempt(
-    val id: String, val date: String, val title: String, val reps: Int?, val shallow: Int?, val level: Int,
+    val id: String,
+    val date: String,
+    val title: String,
+    val reps: Int?,
+    val shallow: Int?,
+    val level: Int,
     val review: ExerciseReview?,
     val movement: PoseMovement = PoseMovement.ChairStand,
+    val hasVideo: Boolean = false,
+    val videoDurationSec: Int? = null,
+    val videoExpired: Boolean = false,
+    val doctorSummaryUz: String? = null,
+    val patientCoachingUz: String? = null,
+    val formScore: Int? = null,
 )
 
 internal data class ExerciseView(val plan: ExercisePlan?, val attempts: List<ExerciseAttempt>, val json: String) {
     companion object {
         fun parse(data: JSONObject): ExerciseView {
             val plan = data.optJSONObject("plan")?.let {
-                ExercisePlan(it.getString("id"), it.getInt("targetAngle"), it.getInt("targetReps"),
-                    PoseMovement.fromApiKey(it.optString("movement")), it.optInt("maxShallow", 1))
+                ExercisePlan(
+                    id = it.getString("id"),
+                    targetAngle = it.getInt("targetAngle"),
+                    targetReps = it.getInt("targetReps"),
+                    movement = PoseMovement.fromApiKey(it.optString("movement")),
+                    maxShallow = it.optInt("maxShallow", 1),
+                )
             }
             val attempts = data.getJSONArray("attempts")
             val history = List(attempts.length()) { index ->
                 val entry = attempts.getJSONObject(index)
                 val level = entry.getInt("level")
+                val reason = entry.optString("reason")
                 val title = when {
-                    entry.getBoolean("sample") -> "CDC namuna videosi"
-                    entry.getString("reason") == "pain" -> "Og‘riq xabari"
-                    entry.getString("reason") == "manual" -> "Qo‘lda qayd"
+                    entry.optBoolean("sample", false) -> "Namuna videosi"
+                    reason == "pain" -> "Og‘riq xabari"
+                    reason == "manual" -> "Qo‘lda qayd"
                     level == 2 -> "Video o‘lchovi"
                     else -> "Kamera o‘lchovi"
                 }
                 val review = entry.optJSONObject("review")?.let {
                     ExerciseReview(it.getString("body"), it.getString("decision") == "retake")
                 }
-                ExerciseAttempt(entry.getString("id"), entry.getString("scheduledDate"), title,
-                    entry.optInt("validReps", -1).takeIf { it >= 0 },
-                    entry.optInt("shallowReps", -1).takeIf { it >= 0 }, level, review, PoseMovement.fromApiKey(entry.optString("movement")))
+                val diagnostics = entry.optJSONObject("diagnostics")
+                ExerciseAttempt(
+                    id = entry.getString("id"),
+                    date = entry.getString("scheduledDate"),
+                    title = title,
+                    reps = entry.optInt("validReps", -1).takeIf { it >= 0 },
+                    shallow = entry.optInt("shallowReps", -1).takeIf { it >= 0 },
+                    level = level,
+                    review = review,
+                    movement = PoseMovement.fromApiKey(entry.optString("movement")),
+                    hasVideo = entry.optBoolean("hasVideo", false),
+                    videoDurationSec = if (entry.has("videoDurationSec") && !entry.isNull("videoDurationSec")) {
+                        entry.optInt("videoDurationSec")
+                    } else null,
+                    videoExpired = entry.optBoolean("videoExpired", false),
+                    doctorSummaryUz = diagnostics?.optString("doctorSummaryUz")?.takeIf { it.isNotBlank() && it != "null" },
+                    patientCoachingUz = diagnostics?.optString("patientCoachingUz")?.takeIf { it.isNotBlank() && it != "null" },
+                    formScore = diagnostics?.let { if (it.has("formScore") && !it.isNull("formScore")) it.optInt("formScore") else null },
+                )
             }
             return ExerciseView(plan, history, data.toString())
         }
@@ -140,6 +178,42 @@ internal class ExerciseRepository(context: Context) {
             .put("scheduledDate", date.toString()).put("evidence", evidence)
         dao.queue(ExerciseOutbox(id, connection.scope, payload.toString(), label, System.currentTimeMillis()))
         schedule(id)
+    }
+
+    /**
+     * Persists in Room outbox first, then immediately tries online submission so the
+     * caller gets the canonical server attemptId for keyframe AI persistence and video upload.
+     * Falls back to WorkManager if offline or temporarily unavailable.
+     */
+    suspend fun submitOnlineOrQueue(
+        connection: DemoConnection,
+        plan: ExercisePlan,
+        evidence: JSONObject,
+        label: String,
+        date: LocalDate,
+    ): String? {
+        val id = UUID.randomUUID().toString()
+        val payload = JSONObject().put("clientAttemptId", id).put("prescriptionId", plan.id)
+            .put("scheduledDate", date.toString()).put("evidence", evidence)
+        dao.queue(ExerciseOutbox(id, connection.scope, payload.toString(), label, System.currentTimeMillis()))
+        return try {
+            val serverId = connection.api.sendExercise(connection.token, payload)
+            dao.finish(id, "sent", serverId)
+            runCatching { refresh(connection) }
+            serverId
+        } catch (failure: MobileFailure) {
+            when (failure.kind) {
+                MobileFailureKind.NotFound, MobileFailureKind.Rejected -> {
+                    dao.finish(id, "rejected")
+                    throw failure
+                }
+                MobileFailureKind.Expired -> throw failure
+                else -> {
+                    schedule(id)
+                    null
+                }
+            }
+        }
     }
 
     suspend fun resume(connection: DemoConnection) {

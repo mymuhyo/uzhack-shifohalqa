@@ -116,7 +116,7 @@ internal fun ExerciseCamera(
                 val landmarker = detector ?: PoseLandmarker.createFromOptions(
                     context.applicationContext,
                     PoseLandmarker.PoseLandmarkerOptions.builder()
-                        .setBaseOptions(BaseOptions.builder().setModelAssetPath("pose_landmarker_full.task").build())
+                        .setBaseOptions(BaseOptions.builder().setModelAssetPath(PoseModelMode.Full.assetName).build())
                         .setRunningMode(RunningMode.VIDEO)
                         .setNumPoses(1)
                         .build(),
@@ -207,14 +207,14 @@ private fun PoseSkeletonOverlay(
             val shoulder = mapPoint(torso[0])
             val hip = mapPoint(torso[1])
             drawLine(
-                color = Color(0x73DBFFEE),
+                color = Color(0x88E9EFFD),
                 start = hip,
                 end = Offset(hip.x, shoulder.y),
                 strokeWidth = max(2f, radius * 0.4f),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f)),
             )
             drawLine(
-                color = if (current.formWarning == PoseFormWarning.TrunkLean) Color(0xFFFF7A70) else Color(0xBF83F4C2),
+                color = if (current.formWarning == PoseFormWarning.TrunkLean) Color(0xFFFB7185) else Color(0xFF60A5FA),
                 start = shoulder,
                 end = hip,
                 strokeWidth = radius * 0.65f,
@@ -228,9 +228,9 @@ private fun PoseSkeletonOverlay(
             current.angle <= plan.targetAngle
         }
         val lineColor = when {
-            current.formWarning != null -> Color(0xFFFF7A70)
-            reached -> Color(0xFF4CF2A3)
-            else -> Color(0xFF83F4C2)
+            current.formWarning != null -> Color(0xFFFB7185)
+            reached -> Color(0xFF34D399)
+            else -> Color(0xFF60A5FA)
         }
         val pts = current.joints.map(::mapPoint)
         val limbPath = androidx.compose.ui.graphics.Path().apply {
@@ -240,7 +240,7 @@ private fun PoseSkeletonOverlay(
         }
         drawPath(
             limbPath,
-            color = Color(0xFF08231E),
+            color = Color(0xFF090A0D),
             style = Stroke(width = radius * 1.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
         drawPath(
@@ -248,7 +248,7 @@ private fun PoseSkeletonOverlay(
             color = lineColor,
             style = Stroke(width = radius * 0.8f, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
-        val dotColor = if (current.formWarning != null) Color(0xFFFFD6D1) else Color(0xFFDBFFEE)
+        val dotColor = if (current.formWarning != null) Color(0xFFFEE2E2) else Color(0xFFFFFFFF)
         pts.forEach { drawCircle(dotColor, radius = radius, center = it) }
 
         current.angle?.let { angle ->
@@ -262,7 +262,7 @@ private fun PoseSkeletonOverlay(
             val boxX = min(size.width - boxW - 8f, max(8f, pts[1].x + radius * 1.8f))
             val boxY = max(8f, min(size.height - boxH - 8f, pts[1].y - boxH / 2f))
             drawRoundRect(
-                color = Color(0xD108231E),
+                color = Color(0xD9090A0D),
                 topLeft = Offset(boxX, boxY),
                 size = ComposeSize(boxW, boxH),
                 cornerRadius = CornerRadius(10f, 10f),

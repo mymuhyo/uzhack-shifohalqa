@@ -23,7 +23,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -65,9 +64,11 @@ private val dorimosSampleOptions = listOf(
 @Composable
 internal fun DorimosSheet(
     task: MobileTask,
+    isDemo: Boolean,
     mobile: MobileWorkspaceModel,
     onDismiss: () -> Unit,
 ) {
+    val colors = ShifoThemeTokens.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -91,7 +92,7 @@ internal fun DorimosSheet(
                 confirmation = null
                 statusMessage = if (isManual) "Qo‘lda qayd saqlanmadi." else "AI tekshiruvi vaqtincha ishlamadi. Qo‘lda qayd etishingiz mumkin."
             }
-            DorimosOutcome.Saved, DorimosOutcome.AlreadySaved -> {
+            DorimosOutcome.Deferred, DorimosOutcome.Saved, DorimosOutcome.AlreadySaved -> {
                 scope.launch {
                     sheetState.hide()
                     onDismiss()
@@ -143,7 +144,7 @@ internal fun DorimosSheet(
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) launchCamera()
-        else statusMessage = "Kameraga ruxsat berilmadi. Galereyadan rasm tanlang yoki demo namunani sinang."
+        else statusMessage = "Kameraga ruxsat berilmadi. Galereyadan rasm tanlang."
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -155,16 +156,25 @@ internal fun DorimosSheet(
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !busy, shouldDismissOnClickOutside = !busy),
         sheetState = sheetState,
         sheetGesturesEnabled = !busy,
-        containerColor = Card,
-        contentColor = Ink,
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        containerColor = colors.surface,
+        contentColor = colors.ink,
+        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
     ) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 20.dp),
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            val strengthText = formatStrength(task.strength, task.strengthUnit)
+            val fullTitle = if (strengthText.isNotEmpty()) "${task.title} ($strengthText)" else task.title
             SectionTitle("DoriMos · qutini tekshirish")
-            Text("${task.title} qutisini real kamera bilan rasmga oling yoki tayyor demo namunani tanlang.", color = Muted)
+            Text(
+                "$fullTitle qutisini kamera bilan rasmga oling yoki galereyadan tanlang.",
+                color = colors.inkVariant,
+                style = MaterialTheme.typography.bodyLarge,
+            )
             PrimaryAction("Kamera bilan rasmga olish", enabled = !busy) {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                     launchCamera()
@@ -172,26 +182,29 @@ internal fun DorimosSheet(
                     cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                 }
             }
-            OutlinedButton(
-                onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            ShifoOutlineButton(
+                label = "Galereyadan rasm tanlash",
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Galereyadan rasm tanlash")
-            }
+                onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            )
             previewBitmap?.let { bmp ->
                 Image(
                     bitmap = bmp,
                     contentDescription = "Tanlangan dori qutisi",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp).clip(RoundedCornerShape(ShifoRadiusMd)),
                 )
             }
-            Text("Yoki tayyor demo qutilar:", color = Muted, style = MaterialTheme.typography.labelLarge)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                dorimosSampleOptions.take(2).forEach { sample ->
-                    OutlinedButton(
-                        onClick = {
+
+            if (isDemo) {
+                Text("Demo namuna qutilar (sintetik):", color = colors.inkMuted, style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dorimosSampleOptions.take(2).forEach { sample ->
+                        ShifoOutlineButton(
+                            label = sample.label,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) {
                             busy = true
                             confirmation = null
                             statusMessage = "${sample.label} tekshirilmoqda…"
@@ -204,16 +217,16 @@ internal fun DorimosSheet(
                                     busy = false
                                 }
                             }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(sample.label) }
+                        }
+                    }
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                dorimosSampleOptions.drop(2).forEach { sample ->
-                    OutlinedButton(
-                        onClick = {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dorimosSampleOptions.drop(2).forEach { sample ->
+                        ShifoOutlineButton(
+                            label = sample.label,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) {
                             busy = true
                             confirmation = null
                             statusMessage = "${sample.label} tekshirilmoqda…"
@@ -226,21 +239,23 @@ internal fun DorimosSheet(
                                     busy = false
                                 }
                             }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(sample.label) }
+                        }
+                    }
                 }
             }
 
-            statusMessage?.let { PatientNotice(it) }
+            statusMessage?.let { PatientNotice(it, tone = if (confirmation != null) ShifoTone.Accent else ShifoTone.Warn) }
 
             confirmation?.let { item ->
-                PatientCard {
-                    Badge("Ishonch: ${(item.confidence * 100).roundToInt()}%", Mint, Green)
+                ShifoTonalCard(accent = true) {
+                    ShifoPill("Ishonch: ${(item.confidence * 100).roundToInt()}%", ShifoTone.Ok)
                     SectionTitle("${item.drugName} · ${item.strengthLabel}")
-                    Text("Model: ${item.model} (${item.decisionModel})", color = Muted, style = MaterialTheme.typography.bodyMedium)
-                    PrimaryAction("Qutidagi yozuvni tasdiqlash (L2)", enabled = !busy) {
+                    Text(
+                        "Model: ${item.model} (${item.decisionModel})",
+                        color = colors.inkMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    PrimaryAction("Qutidagi yozuvni tasdiqlash (L2)", enabled = !busy, withHaptic = true) {
                         busy = true
                         statusMessage = "Tasdiqlanmoqda…"
                         scope.launch {
@@ -257,24 +272,43 @@ internal fun DorimosSheet(
                 }
             }
 
-            TextButton(
-                onClick = {
-                    busy = true
-                    statusMessage = "Qo‘lda qayd saqlanmoqda…"
-                    scope.launch {
-                        try {
-                            handleOutcome(mobile.dorimosManual(task.id), isManual = true)
-                        } catch (_: MobileFailure) {
-                            statusMessage = "Saqlab bo‘lmadi."
-                        } finally {
-                            busy = false
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(
+                    onClick = {
+                        busy = true
+                        statusMessage = "Kechiktirilmoqda…"
+                        scope.launch {
+                            try {
+                                handleOutcome(mobile.dorimosDefer(task.id), isManual = true)
+                            } catch (_: MobileFailure) {
+                                statusMessage = "Saqlab bo‘lmadi."
+                            } finally {
+                                busy = false
+                            }
                         }
-                    }
-                },
-                enabled = !busy,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                Text("Tekshirilmaganini qo‘lda qayd etish · L0")
+                    },
+                    enabled = !busy,
+                ) {
+                    Text("Keyinroq tekshiraman")
+                }
+                TextButton(
+                    onClick = {
+                        busy = true
+                        statusMessage = "Qo‘lda qayd saqlanmoqda…"
+                        scope.launch {
+                            try {
+                                handleOutcome(mobile.dorimosManual(task.id), isManual = true)
+                            } catch (_: MobileFailure) {
+                                statusMessage = "Saqlab bo‘lmadi."
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    enabled = !busy,
+                ) {
+                    Text("Qo‘lda qayd · L0")
+                }
             }
             TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text("Yopish")

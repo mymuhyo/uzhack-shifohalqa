@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="dorimos_photos" path="dorimos/" />
+    <cache-path name="exercise_samples" path="exercise-samples/" />
 </paths>

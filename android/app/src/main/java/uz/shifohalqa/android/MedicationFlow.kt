@@ -1,10 +1,10 @@
 package uz.shifohalqa.android
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -51,31 +51,42 @@ internal const val DEMO_MEDICATION_TIME = "08:00"
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RecordSheet(
-    sheet: MedicationSheet, title: String, time: String,
-    onDismiss: () -> Unit, onRecord: suspend (MissedReason?) -> String?,
+    sheet: MedicationSheet,
+    title: String,
+    time: String,
+    onDismiss: () -> Unit,
+    onRecord: suspend (MissedReason?) -> String?,
 ) {
+    val colors = ShifoThemeTokens.colors
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var reason by rememberSaveable { mutableStateOf<MissedReason?>(null) }
     var saving by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     val missed = sheet == MedicationSheet.Missed
+
     ModalBottomSheet(
         onDismissRequest = { if (!saving) onDismiss() },
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving, shouldDismissOnClickOutside = !saving),
         sheetState = state,
         sheetGesturesEnabled = !saving,
-        containerColor = Card,
-        contentColor = Ink,
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        containerColor = colors.surface,
+        contentColor = colors.ink,
+        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
     ) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionTitle(if (missed) "Nega icha olmadingiz?" else "Dori qabulini tasdiqlang")
-            Text(if (missed) "$title uchun bitta sababni tanlang." else "$time dagi $title vazifasi.",
-                color = Muted, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (missed) "$title uchun bitta sababni tanlang." else "$time dagi $title vazifasi.",
+                color = colors.inkVariant,
+                style = MaterialTheme.typography.bodyLarge,
+            )
             if (missed) {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     MissedReason.entries.forEach { option ->
@@ -83,8 +94,12 @@ internal fun RecordSheet(
                     }
                 }
             }
-            failure?.let { PatientNotice(it) }
-            PrimaryAction(if (saving) "Saqlanmoqda…" else "Qaydni saqlash", enabled = !saving && (!missed || reason != null)) {
+            failure?.let { PatientNotice(it, tone = ShifoTone.Urgent) }
+            PrimaryAction(
+                label = if (saving) "Saqlanmoqda…" else "Qaydni saqlash",
+                enabled = !saving && (!missed || reason != null),
+                withHaptic = true,
+            ) {
                 saving = true
                 failure = null
                 scope.launch {
@@ -105,56 +120,62 @@ internal fun RecordSheet(
 
 @Composable
 private fun ReasonOption(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val colors = ShifoThemeTokens.colors
+    val shape = RoundedCornerShape(ShifoRadiusMd)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(shape).background(if (selected) Mint else Paper)
-            .border(1.dp, if (selected) Green else Border, shape)
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 50.dp)
+            .clip(shape)
+            .background(if (selected) colors.surfaceAccent else colors.surfaceLow)
+            .border(1.dp, if (selected) colors.primary else colors.outlineVariant, shape)
             .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
             .padding(horizontal = 13.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         RadioButton(selected = selected, onClick = null, enabled = enabled)
-        Text(label, color = Ink, style = MaterialTheme.typography.bodyLarge)
+        Text(label, color = colors.ink, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
 @Composable
 internal fun ReplyPage(demo: PatientDemo, onReset: () -> Unit) {
+    val colors = ShifoThemeTokens.colors
     var askReset by rememberSaveable { mutableStateOf(false) }
     val entry = demo.entry
     PatientPage {
         SoftReveal(0) { PageTitle("Shifokor javobi") }
         SoftReveal(45) {
-            PatientCard {
-                IconTile(Glyph.Message)
+            ShifoCard {
                 if (entry?.reason == MissedReason.OUT_OF_SUPPLY) {
                     AnimatedContent(
                         targetState = entry.replyShown,
-                        transitionSpec = { fadeIn(tween(220, easing = SettleEasing)) togetherWith fadeOut(tween(120)) },
+                        transitionSpec = { fadeIn(tween(200, easing = SettleEasing)) togetherWith fadeOut(tween(120)) },
                         label = "Doctor reply",
                     ) { reviewed ->
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (reviewed) {
-                                Badge("Namuna javob", Mint, Green)
+                                ShifoPill("Namuna javob", ShifoTone.Ok)
                                 SectionTitle("Shifokor ko‘rib chiqdi")
                                 Text(
                                     "Dori tugagani haqidagi qaydingizni ko‘rdim. Keyingi qadamni kelishish uchun qabulxonaga murojaat qiling.",
-                                    color = Ink, style = MaterialTheme.typography.bodyLarge,
+                                    color = colors.ink,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 )
-                                Text("Dr. Sardor · demo", color = Muted, style = MaterialTheme.typography.labelLarge)
+                                Text("Dr. Sardor · demo", color = colors.inkMuted, style = MaterialTheme.typography.labelLarge)
                             } else {
-                                Badge("Qayd saqlandi", Amber, AmberInk)
+                                ShifoPill("Qayd saqlandi", ShifoTone.Warn)
                                 SectionTitle("Dori tugadi")
-                                Text("Amlodipin 5 mg · 08:00", color = Muted, style = MaterialTheme.typography.bodyLarge)
+                                Text("Amlodipin 5 mg · 08:00", color = colors.inkMuted, style = MaterialTheme.typography.bodyLarge)
                                 PrimaryAction("Namuna javobni ochish", onClick = demo::showSampleReply)
                             }
                         }
                     }
                 } else {
                     SectionTitle("Hozircha javob yo‘q")
-                    Text("Shifokor javobi shu yerda ko‘rinadi.", color = Muted, style = MaterialTheme.typography.bodyLarge)
+                    Text("Shifokor javobi shu yerda ko‘rinadi.", color = colors.inkMuted, style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -165,6 +186,7 @@ internal fun ReplyPage(demo: PatientDemo, onReset: () -> Unit) {
     if (askReset) {
         AlertDialog(
             onDismissRequest = { askReset = false },
+            containerColor = colors.surface,
             title = { Text("Demoni qayta boshlash?") },
             text = { Text("Shu qurilmadagi namuna qaydi o‘chadi.") },
             confirmButton = {

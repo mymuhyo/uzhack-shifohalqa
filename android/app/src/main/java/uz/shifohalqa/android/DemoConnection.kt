@@ -16,14 +16,20 @@ internal data class DemoConnection(val api: MobileApi, val credentials: MobileCr
     val token get() = credentials.token
     val scope get() = "${api.address}/${credentials.workspaceId}"
     val expired get() = !credentials.expiresAt.isAfter(Instant.now())
+    val isDemo get() = credentials.isDemo
 }
 
 internal class DemoConnectionStore(context: Context) {
     private val prefs = context.getSharedPreferences("demo_connection", Context.MODE_PRIVATE)
 
     fun save(connection: DemoConnection): Boolean = runCatching {
-        val json = JSONObject().put("origin", connection.api.address).put("token", connection.token)
-            .put("workspace", connection.credentials.workspaceId).put("expiresAt", connection.credentials.expiresAt.toString())
+        val json = JSONObject()
+            .put("origin", connection.api.address)
+            .put("token", connection.token)
+            .put("workspace", connection.credentials.workspaceId)
+            .put("expiresAt", connection.credentials.expiresAt.toString())
+            .put("isDemo", connection.credentials.isDemo)
+            .put("patientName", connection.credentials.patientName ?: JSONObject.NULL)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
@@ -36,8 +42,16 @@ internal class DemoConnectionStore(context: Context) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
         val json = JSONObject(cipher.doFinal(bytes, 12, bytes.size - 12).toString(Charsets.UTF_8))
-        DemoConnection(MobileApi.forAddress(json.getString("origin")),
-            MobileCredentials(json.getString("token"), Instant.parse(json.getString("expiresAt")), json.getString("workspace")))
+        DemoConnection(
+            MobileApi.forAddress(json.getString("origin")),
+            MobileCredentials(
+                token = json.getString("token"),
+                expiresAt = Instant.parse(json.getString("expiresAt")),
+                workspaceId = json.getString("workspace"),
+                isDemo = json.optBoolean("isDemo", true),
+                patientName = json.optString("patientName").takeIf { it.isNotBlank() && it != "null" },
+            ),
+        )
     }.getOrNull()
 
     fun clear() { prefs.edit().remove("session").apply() }

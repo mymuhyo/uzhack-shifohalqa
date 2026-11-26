@@ -14,7 +14,7 @@
 | M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [x] |
 | M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [x] |
 | M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
-| M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [ ] |
+| M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [~] |
 | M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [ ] |
 
 Close M1 before starting M2. Keep changes atomic and verifiable. Move any enterprise, multi-clinic onboarding, conflict-resolution, or autonomous longitudinal agent work strictly to [ROADMAP_V2](ROADMAP_V2.md).
@@ -100,13 +100,16 @@ Evolve existing `android/` Kotlin Compose code incrementally.
 
 ## M5 — Telegram Mini App (Bearer auth) and chat polish
 
-- [ ] **M5.1 Iframe-safe Mini App auth (`src/app/api/telegram/auth/route.ts`, `src/app/tg/**`).**
+- [~] **M5.1 Iframe-safe Mini App auth (`src/app/api/telegram/auth/route.ts`, `src/app/tg/**`).**
   - Verify Telegram `initData` HMAC, freshness, and binding server-side; return a **scoped short-lived Bearer token** (no `SameSite=Lax` cookie dependency in Telegram Web/Desktop iframes).
   - Reuse the upgraded M3 patient components inside `/tg` with Telegram theme/safe-area tokens, `MainButton`/`BackButton`, haptics, and all **3 polished prepared-video exercises** with camera/file fallback.
-- [ ] **M5.2 Chat privacy opt-in, styled actions & API bridge (`services/telegram_bot/**`).**
+- [~] **M5.2 Chat privacy opt-in, styled actions & API bridge (`services/telegram_bot/**`).**
   - Add per-patient detail opt-in setting: default notifications stay generic with a deep link to the exact Mini App record; opted-in chats receive drug names, short 7-day summary, and approved doctor replies.
   - Style inline buttons (`primary`/`success`/`danger`), update messages after confirmed actions, and route **new** M2/M5 clinical actions (multi-dose status, manual BP/steps, 7-day summary) to Next.js API via a shared bot-service secret instead of adding direct Python SQL.
   - Add `SHIFO_ENV_ID` startup check to `services/telegram_bot/shifo_telegram/config.py`.
+  - Show a dose chooser before the action buttons when several doses are due. Keep the confirmed outcome on the selected card.
+
+- [~] **M5 real client preview.** Use the dedicated `shifohalqa-final` Vercel Preview and Supabase project. Connect a dedicated preview Telegram bot and a separate Railway worker to complete the live Telegram check.
 
 **M5 Checks.** `npm run verify`, `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests`, and real Telegram client smoke on the isolated preview bot.
 
@@ -114,7 +117,7 @@ Evolve existing `android/` Kotlin Compose code incrementally.
 
 ## M6 — Isolated preview deploy and Grand Final acceptance
 
-- [ ] **M6.1 Isolated preview setup.** Configure Vercel Preview for `final` (`shifohalqa-final` Supabase, Vercel AI Gateway + Cloudflare keys, `SHIFO_ENV_ID=final-preview`), a separate preview Telegram bot, and a separate Railway worker service. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
+- [ ] **M6.1 Isolated preview setup.** Confirm the M5 Vercel Preview, dedicated bot and separate Railway worker for the Grand Final build. Configure Vercel AI Gateway and Cloudflare keys against that preview. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
 - [ ] **M6.2 End-to-end judge walkthrough.** Verify both Story 1 and Story 2 end-to-end on the isolated preview across Web (1-click Demo + pre-seeded clinic login), a physical Android phone, and a real Telegram client.
 - [ ] **M6.3 Honest disclosure & evidence.** Verify deterministic fallbacks when AI is disabled/unavailable, confirm zero `doctor_note` leakage, update `docs/BENCHMARK.md` with real measured latency/APK/CV numbers (including Android `Full` vs `Heavy`), and log final verification commands in `docs/PROGRESS.md`.
 

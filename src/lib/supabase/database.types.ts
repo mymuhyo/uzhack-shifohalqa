@@ -1316,6 +1316,7 @@ export type Database = {
         Row: {
           chat_id: number
           connected_at: string
+          details_enabled: boolean
           link_id: string
           paired_message_at: number | null
           paired_update_id: number | null
@@ -1325,6 +1326,7 @@ export type Database = {
         Insert: {
           chat_id: number
           connected_at?: string
+          details_enabled?: boolean
           link_id?: string
           paired_message_at?: number | null
           paired_update_id?: number | null
@@ -1334,6 +1336,7 @@ export type Database = {
         Update: {
           chat_id?: number
           connected_at?: string
+          details_enabled?: boolean
           link_id?: string
           paired_message_at?: number | null
           paired_update_id?: number | null

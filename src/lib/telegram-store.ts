@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { isPatientSideRole, type ClinicalActor } from './clinical-types';
 import { getDatabase } from './db';
+import { isDemoEnabled } from './demo-session';
 
 function digest(code: string) {
   return createHash('sha256').update(code).digest('hex');
@@ -10,6 +12,82 @@ function database() {
   const sql = getDatabase();
   if (!sql) throw new Error('Telegram database is unavailable');
   return sql;
+}
+
+const linkRow = z.object({
+  workspaceId: z.uuid(),
+  patientId: z.uuid(),
+  doctorId: z.uuid().nullable(),
+  patientName: z.string(),
+  roleKind: z.enum(['patient', 'individual']),
+  linkId: z.uuid(),
+  connectedAt: z.number(),
+  isDemo: z.boolean(),
+  detailsEnabled: z.boolean(),
+});
+
+export async function getTelegramPatientLink(chatId: number, linkId: string | null = null) {
+  const sql = database();
+  const [row] = await sql`
+    SELECT link.workspace_id AS "workspaceId", link.patient_id AS "patientId",
+           patient.doctor_id AS "doctorId", patient.name AS "patientName",
+           patient.role_kind AS "roleKind", link.link_id AS "linkId",
+           floor(extract(epoch from link.connected_at))::double precision AS "connectedAt",
+           workspace.is_demo AS "isDemo", link.details_enabled AS "detailsEnabled"
+    FROM public.telegram_patient_links AS link
+    JOIN public.patients AS patient ON patient.workspace_id = link.workspace_id AND patient.id = link.patient_id
+    JOIN public.workspaces AS workspace ON workspace.id = link.workspace_id
+    WHERE link.chat_id = ${chatId}
+      AND (${linkId}::uuid IS NULL OR link.link_id = ${linkId}::uuid)
+  `;
+  if (!row) return null;
+  const data = linkRow.parse(row);
+  if (data.isDemo && !isDemoEnabled()) return null;
+  const actor: ClinicalActor = {
+    workspaceId: data.workspaceId, patientId: data.patientId,
+    doctorId: data.doctorId, role: data.roleKind, isDemo: data.isDemo,
+  };
+  return {
+    actor, chatId, linkId: data.linkId, connectedAt: data.connectedAt,
+    patientName: data.patientName, detailsEnabled: data.detailsEnabled,
+  };
+}
+
+export type TelegramPatientLink = NonNullable<Awaited<ReturnType<typeof getTelegramPatientLink>>>;
+
+export async function setTelegramPatientDetails(link: TelegramPatientLink, enabled: boolean) {
+  const sql = database();
+  const [row] = await sql`
+    UPDATE public.telegram_patient_links SET details_enabled = ${enabled}
+    WHERE workspace_id = ${link.actor.workspaceId} AND patient_id = ${link.actor.patientId}
+      AND chat_id = ${link.chatId} AND link_id = ${link.linkId}
+    RETURNING 1
+  `;
+  return Boolean(row);
+}
+
+export const telegramNoticeKind = z.enum(['doctor_reply', 'exercise_reply', 'brief_reply']);
+export type TelegramNoticeKind = z.infer<typeof telegramNoticeKind>;
+
+export async function readTelegramNoticeReply(link: TelegramPatientLink, kind: TelegramNoticeKind, id: string) {
+  const [row] = await database()`
+    SELECT CASE notice.kind
+      WHEN 'doctor_reply' THEN (
+        SELECT flag.patient_reply FROM public.flags AS flag
+        WHERE flag.workspace_id = notice.workspace_id AND flag.id = notice.ref_id AND flag.decision IS NOT NULL
+      ) WHEN 'exercise_reply' THEN (
+        SELECT attempt.review_reply FROM public.exercise_attempts AS attempt
+        WHERE attempt.workspace_id = notice.workspace_id AND attempt.id = notice.ref_id AND attempt.review_decision IS NOT NULL
+      ) WHEN 'brief_reply' THEN (
+        SELECT brief.approved_reply_uz FROM public.ai_clinical_briefs AS brief
+        WHERE brief.workspace_id = notice.workspace_id AND brief.patient_id = notice.patient_id
+          AND brief.id = notice.ref_id AND brief.level = 4 AND brief.approved_at IS NOT NULL
+      ) END AS body
+    FROM public.telegram_patient_notices AS notice
+    WHERE notice.workspace_id = ${link.actor.workspaceId} AND notice.patient_id = ${link.actor.patientId}
+      AND notice.link_id = ${link.linkId} AND notice.kind = ${kind} AND notice.ref_id = ${id}
+  `;
+  return typeof row?.body === 'string' && row.body ? { id, kind, body: row.body } : null;
 }
 
 export async function getDoctorTelegramStatus(actor: ClinicalActor): Promise<boolean> {

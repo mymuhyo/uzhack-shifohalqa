@@ -9,6 +9,7 @@ import {
   getAuthenticatedSupabaseUser,
   listPendingMembershipInvites,
   resolveClinicalActor,
+  resolveClinicalRequestActor,
   resolveWebSessionContext,
 } from './auth';
 import { caregiverActionSchema } from './caregiver';
@@ -169,6 +170,12 @@ async function requireSameOriginWebSession(
   return { ok: true as const, session };
 }
 
+function resolvePatientRequest(request: NextRequest) {
+  return resolveClinicalRequestActor(request, {
+    allowBearer: true, requireSameOrigin: true, allowRoles: ['patient', 'individual'],
+  });
+}
+
 async function readPostJson<T>(
   request: NextRequest,
   schema: z.ZodType<T>,
@@ -312,18 +319,16 @@ export async function handleClinicalPlanPost(request: NextRequest) {
 
 export async function handleClinicalEvidencePost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const auth = await resolvePatientRequest(request);
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
     const parsed = await readPostJson(request, evidenceJsonInput);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { patientId: parsed.data.patientId });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
-
-    const context = await getTaskContext(resolved.actor, parsed.data.command.taskId);
+    if (parsed.data.patientId && parsed.data.patientId !== auth.actor.patientId) return errorJson('not_found', 404);
+    const context = await getTaskContext(auth.actor, parsed.data.command.taskId);
     const evidence = context ? prepareEvidence(parsed.data.command, context) : null;
-    const result = evidence ? await saveEvidence(resolved.actor, evidence) : 'not_found';
+    const result = evidence ? await saveEvidence(auth.actor, evidence) : 'not_found';
     return mutationResponse(result);
   } catch {
     return errorJson('unavailable', 503);
@@ -400,16 +405,14 @@ export async function handleClinicalFollowupAckPost(request: NextRequest) {
 
 export async function handleClinicalSymptomPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const auth = await resolvePatientRequest(request);
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
     const parsed = await readPostJson(request, urgentSymptomJsonInput);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { patientId: parsed.data.patientId });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
-
-    const result = await saveUrgentSymptom(resolved.actor, {
+    if (parsed.data.patientId && parsed.data.patientId !== auth.actor.patientId) return errorJson('not_found', 404);
+    const result = await saveUrgentSymptom(auth.actor, {
       symptom: parsed.data.symptom,
       note: parsed.data.note,
     });
@@ -447,19 +450,18 @@ export async function handleClinicalSymptomReviewPost(request: NextRequest) {
 
 export async function handleClinicalStepsPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const auth = await resolvePatientRequest(request);
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
     const parsed = await readPostJson(request, stepsJsonInput, 1024);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
-    if (parsed.data.source === 'demo_sim' && resolved.actor.isDemo !== true) {
+    if ((auth.authMode === 'telegram' && parsed.data.source !== 'self_report')
+      || (parsed.data.source === 'demo_sim' && auth.actor.isDemo !== true)) {
       return errorJson('forbidden', 403);
     }
 
-    const result = await saveStepCount(resolved.actor, parsed.data);
+    const result = await saveStepCount(auth.actor, parsed.data);
     return mutationResponse(result, { count: parsed.data.count });
   } catch {
     return errorJson('unavailable', 503);
@@ -468,13 +470,10 @@ export async function handleClinicalStepsPost(request: NextRequest) {
 
 export async function handleClinicalDorimosPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const auth = await resolvePatientRequest(request);
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
-    const resolved = await resolveClinicalActor(auth.session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
-
-    const outcome = await handleDorimosRequest(resolved.actor, request);
+    const outcome = await handleDorimosRequest(auth.actor, request);
     return json(outcome.data, outcome.status);
   } catch {
     return json({ status: 'manual' }, 503);
@@ -507,16 +506,13 @@ export async function handleClinicalExercisePlanPost(request: NextRequest) {
 
 export async function handleClinicalExercisePost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const auth = await resolvePatientRequest(request);
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
     const parsed = await readPostJson(request, exerciseInput, 10_000);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
-
-    const saved = await saveExercise(resolved.actor, parsed.data);
+    const saved = await saveExercise(auth.actor, parsed.data);
     if (saved.status === 'saved') return json(saved, 200);
     if (saved.status === 'duplicate') return json({ status: saved.status }, 409);
     return json({ status: saved.status }, 422);
@@ -552,8 +548,11 @@ export async function handleClinicalExerciseReviewPost(request: NextRequest) {
 
 export async function handleClinicalExerciseCoachPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, (r) => r !== 'caregiver');
-    if (!auth.ok) return auth.response;
+    const auth = await resolveClinicalRequestActor(request, {
+      allowBearer: true, requireSameOrigin: true, allowRoles: ['doctor', 'patient', 'individual'],
+      allowDoctorWithoutPatient: true,
+    });
+    if (!auth.ok) return errorJson(auth.error, auth.status);
 
     const parsed = await readPostJson(request, exerciseCoachInputSchema, 2048);
     if (!parsed.ok) return parsed.response;

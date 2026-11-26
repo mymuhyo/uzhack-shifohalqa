@@ -16,6 +16,7 @@ import { ensureDemoWorkspace } from './seed';
 import { createSupabaseAdminClient } from './supabase/admin';
 import type { Database } from './supabase/database.types';
 import { createSupabaseServerClient } from './supabase/server';
+import { getTelegramPatientForToken, isTelegramAccessToken } from './telegram-auth';
 
 const appRoleSchema = z.enum(['doctor', 'patient', 'caregiver', 'individual']);
 const demoBearerPattern = /^[a-f0-9]{64}$/;
@@ -498,6 +499,7 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
   const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
   const token = bearerMatch ? bearerMatch[1].trim() : '';
   if (!token) return { ok: false, status: 401, error: 'unauthorized' };
+  if (isTelegramAccessToken(token)) return { ok: false, status: 401, error: 'unauthorized' };
 
   if (demoBearerPattern.test(token)) {
     if (!isAndroidDemoEnabled()) return { ok: false, status: 404, error: 'not_found' };
@@ -597,7 +599,7 @@ export type ResolveClinicalRequestActorOptions = ResolveClinicalActorOptions & {
 };
 
 export type ResolveClinicalRequestActorResult =
-  | { ok: true; actor: ClinicalActor; authMode: 'bearer' | 'cookie' }
+  | { ok: true; actor: ClinicalActor; authMode: 'bearer' | 'telegram' | 'cookie' }
   | { ok: false; status: 400 | 401 | 403 | 404 | 503; error: string };
 
 /**
@@ -615,7 +617,13 @@ export async function resolveClinicalRequestActor(
     if (!options.allowBearer) {
       return { ok: false, status: 401, error: 'unauthorized' };
     }
-    const auth = await resolveMobilePatientActor(request);
+    const token = authorization.replace(/^Bearer\s*/i, '');
+    const telegram = isTelegramAccessToken(token);
+    const auth: ResolveMobilePatientResult = telegram
+      ? await getTelegramPatientForToken(token).then((link) => link
+        ? { ok: true, actor: link.actor, patientName: link.patientName }
+        : { ok: false, status: 401, error: 'unauthorized' })
+      : await resolveMobilePatientActor(request);
     if (!auth.ok) {
       return { ok: false, status: auth.status, error: auth.error };
     }
@@ -625,7 +633,7 @@ export async function resolveClinicalRequestActor(
     if (options.patientId && options.patientId !== auth.actor.patientId) {
       return { ok: false, status: 404, error: 'not_found' };
     }
-    return { ok: true, actor: auth.actor, authMode: 'bearer' };
+    return { ok: true, actor: auth.actor, authMode: telegram ? 'telegram' : 'bearer' };
   }
 
   if (options.requireSameOrigin && !isSameOriginPost(request)) {

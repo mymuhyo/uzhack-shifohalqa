@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertOctagon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useClinicalClient, useHydrated } from '@/lib/clinical-client-fetch';
 import type { UrgentSymptomType } from '@/lib/clinical-types';
 import styles from './patient-clinical.module.css';
 
@@ -18,30 +18,34 @@ const symptomLabels: Record<UrgentSymptomType, string> = {
 };
 
 export function PatientUrgentSymptomForm({ isDemo }: { isDemo: boolean }) {
-  const router = useRouter();
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const useJsonApi = !isDemo || client.bearerToken !== null;
   const [symptom, setSymptom] = useState<UrgentSymptomType>('chest_pain');
   const [note, setNote] = useState('');
   const [pending, setPending] = useState(false);
 
   async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     if (pending) return;
     setPending(true);
     try {
-      const response = await fetch('/api/clinical/symptom', {
+      const response = await client.fetchJson('/api/clinical/symptom', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symptom, note: note.trim() }),
       });
       if (!response.ok) {
+        client.hapticNotify('error');
         toast.error('Xabarni yuborib bo‘lmadi.');
         return;
       }
       setNote('');
+      client.hapticNotify('warning');
       toast.success('Shoshilinch simptom shifokorga yuborildi.');
-      router.refresh();
+      client.refresh();
     } catch {
+      client.hapticNotify('error');
       toast.error('Tarmoq xatosi.');
     } finally {
       setPending(false);
@@ -86,7 +90,7 @@ export function PatientUrgentSymptomForm({ isDemo }: { isDemo: boolean }) {
           placeholder="Masalan: kechqurun boshlandi"
         />
 
-        <Button type="submit" size="lg" variant="destructive" className="w-full" disabled={pending}>
+        <Button type="submit" size="lg" variant="destructive" className="w-full" disabled={(useJsonApi && !hydrated) || pending}>
           {pending ? (
             <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />
           ) : (

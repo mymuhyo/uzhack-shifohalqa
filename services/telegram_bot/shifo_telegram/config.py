@@ -23,6 +23,24 @@ def _app_url(value: str) -> str:
     return urlunsplit((url.scheme, url.netloc, path, "", ""))
 
 
+def _api_base_url(value: str, fallback: str) -> str:
+    if not value:
+        return fallback
+    if any(character.isspace() for character in value) or "\\" in value:
+        raise ValueError("TELEGRAM_API_BASE_URL must be a valid HTTP(S) URL.")
+    try:
+        url = urlsplit(value)
+        valid_host = bool(url.hostname) and (url.port is None or 1 <= url.port <= 65535)
+        has_credentials = url.username is not None or url.password is not None
+    except ValueError:
+        raise ValueError("TELEGRAM_API_BASE_URL must be a valid HTTP(S) URL.") from None
+    is_local_http = url.scheme == "http" and url.hostname in ("127.0.0.1", "localhost")
+    if (url.scheme != "https" and not is_local_http) or not valid_host or has_credentials or "?" in value or "#" in value:
+        raise ValueError("TELEGRAM_API_BASE_URL must be HTTPS (or localhost/127.0.0.1 HTTP for tests).")
+    path = f"{url.path.rstrip('/')}/"
+    return urlunsplit((url.scheme, url.netloc, path, "", ""))
+
+
 @dataclass(frozen=True)
 class Config:
     bot_token: str = field(repr=False)
@@ -33,6 +51,8 @@ class Config:
     host: str = "127.0.0.1"
     port: int = 8081
     env_id: str = ""
+    bot_service_secret: str = field(repr=False, default="")
+    api_base_url: str = ""
 
     @classmethod
     def from_env(cls, *, require_database: bool = True) -> "Config":
@@ -44,6 +64,8 @@ class Config:
         host = _env("TELEGRAM_HOST") or "127.0.0.1"
         port = _env("TELEGRAM_PORT") or "8081"
         env_id = _env("SHIFO_ENV_ID")
+        bot_service_secret = _env("TELEGRAM_BOT_SERVICE_SECRET")
+        api_base_url = _api_base_url(_env("TELEGRAM_API_BASE_URL"), app_url)
 
         if re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{30,128}", bot_token) is None:
             raise ValueError("Set a valid TELEGRAM_BOT_TOKEN.")
@@ -55,7 +77,20 @@ class Config:
             raise ValueError("Set TELEGRAM_DATABASE_URL or DATABASE_URL to a PostgreSQL URI.")
         if require_database and re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", env_id) is None:
             raise ValueError("Set SHIFO_ENV_ID to the expected database environment identity (e.g. final-preview).")
+        if require_database and (len(bot_service_secret) < 32 or any(ch.isspace() for ch in bot_service_secret)):
+            raise ValueError("Set TELEGRAM_BOT_SERVICE_SECRET (>= 32 non-whitespace chars).")
         if re.fullmatch(r"[0-9]{1,5}", port) is None or not 1 <= int(port) <= 65535:
             raise ValueError("TELEGRAM_PORT must be between 1 and 65535.")
 
-        return cls(bot_token, webhook_secret, bot_username, app_url, database_url, host, int(port), env_id)
+        return cls(
+            bot_token,
+            webhook_secret,
+            bot_username,
+            app_url,
+            database_url,
+            host,
+            int(port),
+            env_id,
+            bot_service_secret,
+            api_base_url,
+        )

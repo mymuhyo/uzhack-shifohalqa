@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { Loader2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useClinicalClient } from '@/lib/clinical-client-fetch';
 import { exerciseCoachResponseSchema, type ExerciseCoachResponse } from '@/lib/ai/exercise-coach';
 import type { ExerciseProvider } from '@/lib/exercise-analysis';
 import type { ExerciseInput } from '@/lib/exercise-inputs';
@@ -289,6 +290,8 @@ export function ExerciseClient({
   movement?: PoseMovement;
   isDemo?: boolean;
 }) {
+  const client = useClinicalClient();
+  const useClinicalApi = !isDemo || client.bearerToken !== null;
   const copy = exerciseCatalog[movement];
   const analysisProvider = analysisProviders.find((provider) => provider !== 'gemini');
   const example =
@@ -638,20 +641,29 @@ export function ExerciseClient({
     const controller = new AbortController();
     request.current = { controller, report };
     setSaveStatus({ state: 'saving', report, message: 'Yuborilmoqda…' });
-    const endpoint = isDemo ? '/api/demo/exercise' : '/api/clinical/exercise';
+    const endpoint = useClinicalApi ? '/api/clinical/exercise' : '/api/demo/exercise';
     try {
-      const response = await fetch(endpoint, {
+      const response = await client.fetchJson(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
         signal: controller.signal,
       });
       const body: unknown = await response.json();
       if (request.current?.controller === controller) {
-        setSaveStatus(saveMessage(body, response.ok, report));
+        const nextStatus = saveMessage(body, response.ok, report);
+        setSaveStatus(nextStatus);
+        if (nextStatus.state === 'saved') {
+          client.hapticNotify('success');
+          if (client.bearerToken) client.refresh();
+        } else {
+          client.hapticNotify('error');
+        }
       }
     } catch {
-      if (request.current?.controller === controller) setSaveStatus(saveMessage(null, false, report));
+      if (request.current?.controller === controller) {
+        client.hapticNotify('error');
+        setSaveStatus(saveMessage(null, false, report));
+      }
     } finally {
       if (request.current?.controller === controller) request.current = null;
     }
@@ -683,11 +695,10 @@ export function ExerciseClient({
     const controller = new AbortController();
     coachRequest.current = controller;
     setCoachState({ status: 'loading' });
-    const endpoint = isDemo ? '/api/demo/exercise-coach' : '/api/clinical/exercise-coach';
+    const endpoint = useClinicalApi ? '/api/clinical/exercise-coach' : '/api/demo/exercise-coach';
     try {
-      const response = await fetch(endpoint, {
+      const response = await client.fetchJson(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           sample && (movement === 'chair_stand' || movement === 'elbow_bend')
             ? { sample: movement }
@@ -739,9 +750,8 @@ export function ExerciseClient({
           ? saveStatus.attemptId
           : undefined;
 
-      const response = await fetch('/api/clinical/exercise/keyframe-review', {
+      const response = await client.fetchJson('/api/clinical/exercise/keyframe-review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(attemptId ? { attemptId } : {}),
           movement,

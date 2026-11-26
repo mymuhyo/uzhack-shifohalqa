@@ -8,9 +8,13 @@ import {
   createTelegramPairing,
   disconnectDoctorTelegram,
   disconnectPatientTelegram,
+  setPatientTelegramDetails,
 } from '@/lib/telegram-store';
 
-const actionSchema = z.strictObject({ action: z.enum(['pair', 'disconnect']) });
+const actionSchema = z.union([
+  z.strictObject({ action: z.enum(['pair', 'disconnect']) }),
+  z.strictObject({ action: z.literal('set_details'), detailsEnabled: z.boolean() }),
+]);
 const maxBodyBytes = 1024;
 const responseHeaders = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' };
 
@@ -38,6 +42,13 @@ export async function POST(request: NextRequest) {
       patientId: workspace.patient.id,
       isDemo: true,
     };
+
+    if (parsed.data.action === 'set_details') {
+      if (actor.role !== 'patient') return reject(403);
+      const updated = await setPatientTelegramDetails(actor, parsed.data.detailsEnabled);
+      if (!updated) return reject(404);
+      return Response.json(updated, { headers: responseHeaders });
+    }
 
     if (parsed.data.action === 'disconnect') {
       if (actor.role === 'doctor') await disconnectDoctorTelegram(actor);

@@ -32,6 +32,47 @@ export async function getPatientTelegramStatus(actor: ClinicalActor): Promise<bo
   return rows.length > 0;
 }
 
+export async function getPatientTelegramDetails(
+  actor: ClinicalActor,
+): Promise<{ connected: boolean; detailsEnabled: boolean }> {
+  if (!isPatientSideRole(actor.role) || !actor.patientId) {
+    return { connected: false, detailsEnabled: false };
+  }
+  const sql = database();
+  const rows = await sql`
+    SELECT details_enabled AS "detailsEnabled"
+    FROM public.telegram_patient_links
+    WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}
+    LIMIT 1
+  `;
+  if (rows.length === 0) {
+    return { connected: false, detailsEnabled: false };
+  }
+  return {
+    connected: true,
+    detailsEnabled: Boolean((rows[0] as { detailsEnabled?: unknown }).detailsEnabled),
+  };
+}
+
+export async function setPatientTelegramDetails(
+  actor: ClinicalActor,
+  detailsEnabled: boolean,
+): Promise<{ connected: boolean; detailsEnabled: boolean } | null> {
+  if (!isPatientSideRole(actor.role) || !actor.patientId) return null;
+  const sql = database();
+  const rows = await sql`
+    UPDATE public.telegram_patient_links
+    SET details_enabled = ${detailsEnabled}
+    WHERE workspace_id = ${actor.workspaceId} AND patient_id = ${actor.patientId}
+    RETURNING details_enabled AS "detailsEnabled"
+  `;
+  if (rows.length === 0) return null;
+  return {
+    connected: true,
+    detailsEnabled: Boolean((rows[0] as { detailsEnabled?: unknown }).detailsEnabled),
+  };
+}
+
 export async function createTelegramPairing(actor: ClinicalActor): Promise<string | null> {
   if (actor.role === 'doctor') {
     if (!actor.doctorId) return null;

@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 const colorSchemeInitScript = `try{var s=localStorage.getItem('shifo_color_scheme');if(s==='light'||s==='dark'){document.querySelector('meta[name="color-scheme"]').setAttribute('content',s);}if(localStorage.getItem('shifo_text_scale')==='large'){document.documentElement.dataset.textScale='large';}}catch(e){}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const showVercelTelemetry = process.env.VERCEL === '1';
   return (
     <html lang="uz" suppressHydrationWarning>
       <head>
@@ -46,7 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </header>
           <OfflineBanner />
           {children}
-          <SiteTelemetry />
+          {showVercelTelemetry && <SiteTelemetry />}
         </Providers>
       </body>
     </html>

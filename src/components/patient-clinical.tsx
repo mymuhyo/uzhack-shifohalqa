@@ -365,7 +365,7 @@ export function PatientClinical({
       {view.plan && <PatientTeachBack plan={view.plan} initialStatus={teachBackStatus} />}
 
       <section id="urgent-report-section" aria-labelledby="urgent-report-heading">
-        <h2 id="urgent-report-heading">Kutilmagan simptom yoki og‘riq</h2>
+        <h2 id="urgent-report-heading" className="!text-xl !leading-snug">Kutilmagan simptom yoki og‘riq</h2>
         <PatientUrgentSymptomForm isDemo={isDemo} />
         {urgentSymptoms.length > 0 && (
           <ul className={styles.tasks}>

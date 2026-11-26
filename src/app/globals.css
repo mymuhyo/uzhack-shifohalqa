@@ -1015,6 +1015,13 @@ html[data-text-scale='large'] {
   }
 }
 
+.tg-mini-shell {
+  padding-top: var(--tg-safe-top, 0px);
+  padding-bottom: max(1rem, var(--tg-safe-bottom, 0px));
+  padding-left: var(--tg-safe-left, 0px);
+  padding-right: var(--tg-safe-right, 0px);
+}
+
 @media print {
   .site-header,
   .sticky-bar,

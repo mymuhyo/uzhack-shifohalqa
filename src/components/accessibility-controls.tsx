@@ -102,7 +102,14 @@ export function ThemeToggle() {
     const stored = readStoredScheme();
     const meta = document.querySelector('meta[name="color-scheme"]');
     if (meta) {
-      meta.setAttribute('content', stored ?? 'light dark');
+      const tgScheme = document.documentElement.dataset.tgColorScheme;
+      const resolved = stored ?? (tgScheme === 'light' || tgScheme === 'dark' ? tgScheme : 'light dark');
+      meta.setAttribute('content', resolved);
+      if (resolved === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (resolved === 'light') {
+        document.documentElement.classList.remove('dark');
+      }
     }
   }, [effective]);
 

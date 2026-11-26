@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { BookOpenCheck, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useClinicalClient } from '@/lib/clinical-client-fetch';
 import type { PlanInput } from '@/lib/clinical-types';
 import type { TeachBackStatus } from '@/lib/teach-back-store';
 import styles from './patient-clinical.module.css';
@@ -28,6 +29,7 @@ export function PatientTeachBack({
   plan: PlanInput;
   initialStatus?: TeachBackStatus | null;
 }) {
+  const client = useClinicalClient();
   const unit = unitDisplay[plan.medicationStrengthUnit ?? 'mg'] ?? 'mg';
   const strength = plan.medicationStrengthMg;
   const wrongStrength = strength ? strength * 2 : 10;
@@ -97,9 +99,8 @@ export function PatientTeachBack({
 
     setSaving(true);
     try {
-      const response = await fetch('/api/clinical/teach-back', {
+      const response = await client.fetchJson('/api/clinical/teach-back', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: payloadAnswers }),
       });
       if (response.ok) {
@@ -119,7 +120,7 @@ export function PatientTeachBack({
     if (simplifying) return;
     setSimplifying(true);
     try {
-      const response = await fetch('/api/clinical/teach-back?simplify=1');
+      const response = await client.fetchJson('/api/clinical/teach-back?simplify=1');
       if (!response.ok) return;
       const data = (await response.json()) as TeachBackStatus;
       const map: Record<string, string> = {};

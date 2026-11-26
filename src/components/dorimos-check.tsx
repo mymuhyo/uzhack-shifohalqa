@@ -1,12 +1,12 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { Camera, Check, Clock, Loader2, ScanLine, X } from 'lucide-react';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useClinicalClient, useHydrated } from '@/lib/clinical-client-fetch';
 import { dorimosResponse, formatBoxLabel, type dorimosInput } from '@/lib/dorimos-contract';
 import { dorimosSamples, type DorimosSampleId } from '@/lib/dorimos-samples';
 import styles from './patient-clinical.module.css';
@@ -46,8 +46,9 @@ export function DorimosCheck({
   isDemo?: boolean;
   deferred?: boolean;
 }) {
-  const router = useRouter();
-  const endpoint = isDemo ? '/api/demo/dorimos' : '/api/clinical/dorimos';
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const endpoint = client.bearerToken ? '/api/clinical/dorimos' : (isDemo ? '/api/demo/dorimos' : '/api/clinical/dorimos');
   const [sampleId, setSampleId] = useState<DorimosSampleId>('box-5mg');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -77,8 +78,9 @@ export function DorimosCheck({
       case 'saved':
       case 'already_saved':
         setSaved(true);
+        client.hapticNotify('success');
         setMessage(action === 'defer' ? 'Quti tekshiruvi keyinroqqa qoldirildi.' : 'Quti qaydi saqlandi.');
-        router.refresh();
+        client.refresh();
         break;
       case 'expired':
         setConfirmation(null);
@@ -94,9 +96,8 @@ export function DorimosCheck({
     setMessage(input.action === 'scan' ? 'Quti yozuvi tekshirilmoqda…' : 'Qayd saqlanmoqda…');
     if (input.action === 'scan') setConfirmation(null);
     try {
-      const response = await fetch(endpoint, {
+      const response = await client.fetchJson(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
       const result = dorimosResponse.parse(await response.json());
@@ -124,7 +125,7 @@ export function DorimosCheck({
       form.set('taskId', taskId);
       form.set('image', prepared, prepared.type === 'image/png' ? 'box.png' : 'box.jpg');
 
-      const response = await fetch(endpoint, { method: 'POST', body: form });
+      const response = await client.fetchJson(endpoint, { method: 'POST', body: form });
       const result = dorimosResponse.parse(await response.json());
       applyResult(result, 'confirm');
     } catch {
@@ -251,7 +252,7 @@ export function DorimosCheck({
             <button
               type="button"
               className="text-action"
-              disabled={pending || saved}
+              disabled={!hydrated || pending || saved}
               onClick={() => void send({ action: 'defer', taskId })}
             >
               <Clock className="size-3.5" aria-hidden="true" />
@@ -261,7 +262,7 @@ export function DorimosCheck({
           <button
             type="button"
             className="text-action"
-            disabled={pending || saved}
+            disabled={!hydrated || pending || saved}
             onClick={() => void send({ action: 'manual', taskId })}
           >
             Tekshirilmaganini qo‘lda qayd etish · L0

@@ -26,6 +26,8 @@ if ([useExerciseOpenRouter, useExerciseOpenCode, useExerciseAuto].filter(Boolean
 }
 const telegramPort = readPort('SHIFO_E2E_TELEGRAM_PORT', 3420);
 const telegramChatId = (process.env.SHIFO_E2E_TELEGRAM_CHAT_ID ??= String(randomInt(100_000_000_000, 900_000_000_000)));
+const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || '123456789:shifohalqa_e2e_not_a_live_telegram_token';
+const telegramServiceSecret = process.env.TELEGRAM_BOT_SERVICE_SECRET?.trim() || 'shifohalqa-e2e-bot-service-secret-32c';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -55,6 +57,8 @@ export default defineConfig({
       EXERCISE_COACH_OPENCODE_DEMO: 'false',
       EXERCISE_COACH_AI_DEMO: 'false',
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
+      TELEGRAM_BOT_TOKEN: telegramBotToken,
+      TELEGRAM_BOT_SERVICE_SECRET: telegramServiceSecret,
       NEXT_TELEMETRY_DISABLED: '1',
       SESSION_SECRET: randomBytes(32).toString('hex'),
     },
@@ -65,10 +69,12 @@ export default defineConfig({
     env: {
       TELEGRAM_DATABASE_URL: databaseUrl,
       SHIFO_ENV_ID: envId,
-      TELEGRAM_BOT_TOKEN: '123456789:shifohalqa_e2e_not_a_live_telegram_token',
+      TELEGRAM_BOT_TOKEN: telegramBotToken,
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
       TELEGRAM_WEBHOOK_SECRET: 'shifohalqa-e2e-webhook-secret',
+      TELEGRAM_BOT_SERVICE_SECRET: telegramServiceSecret,
       TELEGRAM_APP_URL: 'https://shifohalqa.example.test/',
+      TELEGRAM_API_BASE_URL: baseURL,
       TELEGRAM_HOST: '127.0.0.1',
       TELEGRAM_PORT: String(telegramPort),
       SHIFO_E2E_TELEGRAM_CHAT_ID: telegramChatId,

@@ -4,11 +4,14 @@ import { z } from 'zod';
 import { getActivityDashboard, saveStepCount } from './activity-store';
 import { stepsJsonInput } from './adherence';
 import { exerciseCoachInputSchema } from './ai/exercise-coach';
+import { readLatestClinicalBrief } from './ai/clinical-brief-ai';
+import { readVercelOidcTokenFromRequest } from './ai/provider-config';
 import { personalizedExerciseCoach, publicExerciseCoach } from './ai/public-exercise-coach';
 import {
   getAuthenticatedSupabaseUser,
   listPendingMembershipInvites,
   resolveClinicalActor,
+  resolveClinicalRequestActor,
   resolveWebSessionContext,
 } from './auth';
 import { caregiverActionSchema } from './caregiver';
@@ -55,12 +58,14 @@ import {
   saveExercise,
 } from './exercise-store';
 import { isSameOriginPost, readRequestJson } from './request-body';
+import { getTeachBackStatus } from './teach-back-store';
 import {
   createTelegramPairing,
   disconnectDoctorTelegram,
   disconnectPatientTelegram,
   getDoctorTelegramStatus,
-  getPatientTelegramStatus,
+  getPatientTelegramDetails,
+  setPatientTelegramDetails,
 } from './telegram-store';
 import { getTelegramBotUsername } from './telegram-web';
 
@@ -125,9 +130,15 @@ const patientsPostSchema = z.union([
   }),
 ]);
 
-const telegramActionSchema = z.strictObject({
-  action: z.enum(['pair', 'disconnect']),
-});
+const telegramActionSchema = z.union([
+  z.strictObject({
+    action: z.enum(['pair', 'disconnect']),
+  }),
+  z.strictObject({
+    action: z.literal('set_details'),
+    detailsEnabled: z.boolean(),
+  }),
+]);
 
 const caregiverInviteListRowSchema = z.object({
   membershipId: z.uuid(),
@@ -196,12 +207,40 @@ async function readValidatedPostJson<T>(
   return readPostJson(request, schema, maxBytes);
 }
 
+async function readPatientDisplayName(actor: ClinicalActor): Promise<string | null> {
+  if (!actor.patientId) return null;
+  const sql = getDatabase();
+  if (!sql) return null;
+  const [row] = await sql`
+    SELECT name
+    FROM public.patients
+    WHERE workspace_id = ${actor.workspaceId}
+      AND id = ${actor.patientId}
+    LIMIT 1
+  `;
+  const parsed = z.object({ name: z.string() }).safeParse(row);
+  return parsed.success ? parsed.data.name : null;
+}
+
+async function loadPatientSnapshotFields(actor: ClinicalActor) {
+  const [view, activity, exercisePlan, exerciseAttempts, brief, teachBack, telegram, patientName] =
+    await Promise.all([
+      getClinicalView(actor),
+      getActivityDashboard(actor).catch(() => null),
+      readExercisePlan(actor).catch(() => null),
+      readExerciseAttempts(actor).catch(() => []),
+      readLatestClinicalBrief(actor).catch(() => null),
+      isPatientSideRole(actor.role) ? getTeachBackStatus(actor).catch(() => null) : Promise.resolve(null),
+      isPatientSideRole(actor.role)
+        ? getPatientTelegramDetails(actor).catch(() => ({ connected: false, detailsEnabled: false }))
+        : Promise.resolve(null),
+      readPatientDisplayName(actor).catch(() => null),
+    ]);
+  return { view, activity, exercisePlan, exerciseAttempts, brief, teachBack, telegram, patientName };
+}
+
 export async function handleClinicalViewGet(request: NextRequest) {
   try {
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401);
-    if (session.role === 'caregiver') return errorJson('forbidden', 403);
-
     const rawPatientId = request.nextUrl.searchParams.get('patientId')?.trim();
     let patientIdParam: string | undefined;
     if (rawPatientId) {
@@ -209,6 +248,72 @@ export async function handleClinicalViewGet(request: NextRequest) {
       if (!parsedId.success) return errorJson('invalid', 400);
       patientIdParam = parsedId.data;
     }
+
+    const authorization = request.headers.get('authorization')?.trim() ?? '';
+    if (/^Bearer(?:\s+|$)/i.test(authorization)) {
+      const resolved = await resolveClinicalRequestActor(request, {
+        allowBearer: true,
+        allowRoles: ['doctor', 'patient', 'individual'],
+        allowDoctorWithoutPatient: true,
+        patientId: patientIdParam,
+      });
+      if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+
+      if (resolved.actor.role === 'doctor') {
+        const sql = getDatabase();
+        if (!sql) return errorJson('unavailable', 503);
+        const patientRows = await sql`
+          SELECT p.id, p.name, p.role_kind AS "roleKind"
+          FROM public.patients AS p
+          WHERE p.workspace_id = ${resolved.actor.workspaceId}
+            AND p.doctor_id = ${resolved.actor.doctorId!}
+          ORDER BY p.name ASC, p.id ASC
+        `;
+        const patients = z.array(doctorPatientRowSchema).parse(patientRows);
+        if (!patientIdParam && patients.length === 0) {
+          return json({
+            role: 'doctor',
+            isDemo: Boolean(resolved.actor.isDemo),
+            workspaceId: resolved.actor.workspaceId,
+            patientId: null,
+            patients: [],
+            view: null,
+            activity: null,
+            exercisePlan: null,
+            exerciseAttempts: [],
+          });
+        }
+        if (!patientIdParam && patients.length > 1) {
+          return json({ error: 'patient_required', patients }, 400);
+        }
+        const targetActor: ClinicalActor = {
+          ...resolved.actor,
+          patientId: patientIdParam ?? patients[0]!.id,
+        };
+        const snapshot = await loadPatientSnapshotFields(targetActor);
+        return json({
+          role: targetActor.role,
+          isDemo: Boolean(targetActor.isDemo),
+          workspaceId: targetActor.workspaceId,
+          patientId: targetActor.patientId,
+          patients,
+          ...snapshot,
+        });
+      }
+
+      const snapshot = await loadPatientSnapshotFields(resolved.actor);
+      return json({
+        role: resolved.actor.role,
+        isDemo: Boolean(resolved.actor.isDemo),
+        workspaceId: resolved.actor.workspaceId,
+        patientId: resolved.actor.patientId,
+        ...snapshot,
+      });
+    }
+
+    const session = await resolveWebSessionContext(request);
+    if (!session) return errorJson('unauthorized', 401);
+    if (session.role === 'caregiver') return errorJson('forbidden', 403);
 
     if (session.kind === 'supabase' && session.role === 'doctor') {
       const sql = getDatabase();
@@ -247,12 +352,7 @@ export async function handleClinicalViewGet(request: NextRequest) {
       });
       if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
-      const [view, activity, exercisePlan, exerciseAttempts] = await Promise.all([
-        getClinicalView(resolved.actor),
-        getActivityDashboard(resolved.actor).catch(() => null),
-        readExercisePlan(resolved.actor).catch(() => null),
-        readExerciseAttempts(resolved.actor).catch(() => []),
-      ]);
+      const snapshot = await loadPatientSnapshotFields(resolved.actor);
 
       return json({
         role: resolved.actor.role,
@@ -260,32 +360,21 @@ export async function handleClinicalViewGet(request: NextRequest) {
         workspaceId: resolved.actor.workspaceId,
         patientId: resolved.actor.patientId,
         patients,
-        view,
-        activity,
-        exercisePlan,
-        exerciseAttempts,
+        ...snapshot,
       });
     }
 
     const resolved = await resolveClinicalActor(session, { patientId: patientIdParam });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
-    const [view, activity, exercisePlan, exerciseAttempts] = await Promise.all([
-      getClinicalView(resolved.actor),
-      getActivityDashboard(resolved.actor).catch(() => null),
-      readExercisePlan(resolved.actor).catch(() => null),
-      readExerciseAttempts(resolved.actor).catch(() => []),
-    ]);
+    const snapshot = await loadPatientSnapshotFields(resolved.actor);
 
     return json({
       role: resolved.actor.role,
       isDemo: Boolean(resolved.actor.isDemo),
       workspaceId: resolved.actor.workspaceId,
       patientId: resolved.actor.patientId,
-      view,
-      activity,
-      exercisePlan,
-      exerciseAttempts,
+      ...snapshot,
     });
   } catch {
     return errorJson('unavailable', 503);
@@ -312,18 +401,23 @@ export async function handleClinicalPlanPost(request: NextRequest) {
 
 export async function handleClinicalEvidencePost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const authCheck = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!authCheck.ok) return errorJson(authCheck.error, authCheck.status);
 
     const parsed = await readPostJson(request, evidenceJsonInput);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { patientId: parsed.data.patientId });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+    if (parsed.data.patientId && parsed.data.patientId !== authCheck.actor.patientId) {
+      return errorJson('not_found', 404);
+    }
 
-    const context = await getTaskContext(resolved.actor, parsed.data.command.taskId);
+    const context = await getTaskContext(authCheck.actor, parsed.data.command.taskId);
     const evidence = context ? prepareEvidence(parsed.data.command, context) : null;
-    const result = evidence ? await saveEvidence(resolved.actor, evidence) : 'not_found';
+    const result = evidence ? await saveEvidence(authCheck.actor, evidence) : 'not_found';
     return mutationResponse(result);
   } catch {
     return errorJson('unavailable', 503);
@@ -358,16 +452,21 @@ export async function handleClinicalReviewPost(request: NextRequest) {
 
 export async function handleClinicalFollowupPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const authCheck = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!authCheck.ok) return errorJson(authCheck.error, authCheck.status);
 
     const parsed = await readPostJson(request, followupJsonInput);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { patientId: parsed.data.patientId });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+    if (parsed.data.patientId && parsed.data.patientId !== authCheck.actor.patientId) {
+      return errorJson('not_found', 404);
+    }
 
-    const result = await saveFlagFollowup(resolved.actor, parsed.data.followup);
+    const result = await saveFlagFollowup(authCheck.actor, parsed.data.followup);
     return mutationResponse(result);
   } catch {
     return errorJson('unavailable', 503);
@@ -400,16 +499,21 @@ export async function handleClinicalFollowupAckPost(request: NextRequest) {
 
 export async function handleClinicalSymptomPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const authCheck = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!authCheck.ok) return errorJson(authCheck.error, authCheck.status);
 
     const parsed = await readPostJson(request, urgentSymptomJsonInput);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { patientId: parsed.data.patientId });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+    if (parsed.data.patientId && parsed.data.patientId !== authCheck.actor.patientId) {
+      return errorJson('not_found', 404);
+    }
 
-    const result = await saveUrgentSymptom(resolved.actor, {
+    const result = await saveUrgentSymptom(authCheck.actor, {
       symptom: parsed.data.symptom,
       note: parsed.data.note,
     });
@@ -447,14 +551,16 @@ export async function handleClinicalSymptomReviewPost(request: NextRequest) {
 
 export async function handleClinicalStepsPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const parsed = await readPostJson(request, stepsJsonInput, 1024);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
     if (parsed.data.source === 'demo_sim' && resolved.actor.isDemo !== true) {
       return errorJson('forbidden', 403);
     }
@@ -468,10 +574,11 @@ export async function handleClinicalStepsPost(request: NextRequest) {
 
 export async function handleClinicalDorimosPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
-
-    const resolved = await resolveClinicalActor(auth.session);
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const outcome = await handleDorimosRequest(resolved.actor, request);
@@ -507,14 +614,15 @@ export async function handleClinicalExercisePlanPost(request: NextRequest) {
 
 export async function handleClinicalExercisePost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, isPatientSideRole);
-    if (!auth.ok) return auth.response;
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['patient', 'individual'],
+    });
+    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const parsed = await readPostJson(request, exerciseInput, 10_000);
     if (!parsed.ok) return parsed.response;
-
-    const resolved = await resolveClinicalActor(auth.session);
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const saved = await saveExercise(resolved.actor, parsed.data);
     if (saved.status === 'saved') return json(saved, 200);
@@ -552,15 +660,21 @@ export async function handleClinicalExerciseReviewPost(request: NextRequest) {
 
 export async function handleClinicalExerciseCoachPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(request, (r) => r !== 'caregiver');
-    if (!auth.ok) return auth.response;
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      allowDoctorWithoutPatient: true,
+    });
+    if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     const parsed = await readPostJson(request, exerciseCoachInputSchema, 2048);
     if (!parsed.ok) return parsed.response;
 
+    const oidcToken = readVercelOidcTokenFromRequest(request);
     const advice = 'sample' in parsed.data
-      ? await publicExerciseCoach(parsed.data.sample)
-      : await personalizedExerciseCoach(parsed.data);
+      ? await publicExerciseCoach(parsed.data.sample, oidcToken)
+      : await personalizedExerciseCoach(parsed.data, oidcToken);
     return json(advice, 200);
   } catch {
     return errorJson('unavailable', 503);
@@ -569,6 +683,17 @@ export async function handleClinicalExerciseCoachPost(request: NextRequest) {
 
 export async function handleClinicalCaregiverGet(request: NextRequest) {
   try {
+    const authorization = request.headers.get('authorization')?.trim() ?? '';
+    if (/^Bearer(?:\s+|$)/i.test(authorization)) {
+      const resolved = await resolveClinicalRequestActor(request, {
+        allowBearer: true,
+        allowRoles: ['patient', 'individual'],
+      });
+      if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+      const expiresAt = await getCaregiverSharing(resolved.actor);
+      return json({ role: resolved.actor.role, expiresAt }, 200);
+    }
+
     const session = await resolveWebSessionContext(request);
     if (!session) return errorJson('unauthorized', 401);
     if (session.role === 'doctor') return errorJson('forbidden', 403);
@@ -596,6 +721,24 @@ export async function handleClinicalCaregiverGet(request: NextRequest) {
 
 export async function handleClinicalCaregiverPost(request: NextRequest) {
   try {
+    const authorization = request.headers.get('authorization')?.trim() ?? '';
+    if (/^Bearer(?:\s+|$)/i.test(authorization)) {
+      const resolved = await resolveClinicalRequestActor(request, {
+        allowBearer: true,
+        requireSameOrigin: true,
+        allowRoles: ['patient', 'individual'],
+      });
+      if (!resolved.ok) return errorJson(resolved.error, resolved.status);
+
+      const body = await readRequestJson(request, 1024);
+      if (!body.ok) return errorJson(body.status === 413 ? 'too_large' : 'invalid', body.status);
+      const parsed = caregiverActionSchema.safeParse(body.body);
+      if (!parsed.success) return errorJson('invalid', 400);
+
+      const result = await changeCaregiverSharing(resolved.actor, parsed.data.action);
+      return result ? json(result, 200) : errorJson('not_found', 404);
+    }
+
     if (!isSameOriginPost(request)) return errorJson('forbidden', 403);
     const session = await resolveWebSessionContext(request);
     if (!session) return errorJson('unauthorized', 401);
@@ -955,17 +1098,20 @@ export async function handleClinicalPatientsPost(request: NextRequest) {
 
 export async function handleClinicalTelegramGet(request: NextRequest) {
   try {
-    const session = await resolveWebSessionContext(request);
-    if (!session) return errorJson('unauthorized', 401, telegramHeaders);
-    if (session.role === 'caregiver') return errorJson('forbidden', 403, telegramHeaders);
-
-    const resolved = await resolveClinicalActor(session, { allowDoctorWithoutPatient: true });
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      allowDoctorWithoutPatient: true,
+    });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status, telegramHeaders);
 
-    const connected = resolved.actor.role === 'doctor'
-      ? await getDoctorTelegramStatus(resolved.actor)
-      : await getPatientTelegramStatus(resolved.actor);
-    return json({ connected }, 200, telegramHeaders);
+    if (resolved.actor.role === 'doctor') {
+      const connected = await getDoctorTelegramStatus(resolved.actor);
+      return json({ connected }, 200, telegramHeaders);
+    }
+
+    const status = await getPatientTelegramDetails(resolved.actor);
+    return json(status, 200, telegramHeaders);
   } catch {
     return errorJson('unavailable', 503, telegramHeaders);
   }
@@ -973,17 +1119,25 @@ export async function handleClinicalTelegramGet(request: NextRequest) {
 
 export async function handleClinicalTelegramPost(request: NextRequest) {
   try {
-    const auth = await requireSameOriginWebSession(
-      request,
-      (r) => r === 'doctor' || isPatientSideRole(r),
-    );
-    if (!auth.ok) return auth.response;
+    const resolved = await resolveClinicalRequestActor(request, {
+      allowBearer: true,
+      requireSameOrigin: true,
+      allowRoles: ['doctor', 'patient', 'individual'],
+      allowDoctorWithoutPatient: true,
+    });
+    if (!resolved.ok) return errorJson(resolved.error, resolved.status, telegramHeaders);
 
     const parsed = await readPostJson(request, telegramActionSchema, 1024);
     if (!parsed.ok) return parsed.response;
 
-    const resolved = await resolveClinicalActor(auth.session, { allowDoctorWithoutPatient: true });
-    if (!resolved.ok) return errorJson(resolved.error, resolved.status, telegramHeaders);
+    if (parsed.data.action === 'set_details') {
+      if (!isPatientSideRole(resolved.actor.role)) {
+        return errorJson('forbidden', 403, telegramHeaders);
+      }
+      const updated = await setPatientTelegramDetails(resolved.actor, parsed.data.detailsEnabled);
+      if (!updated) return errorJson('not_found', 404, telegramHeaders);
+      return json(updated, 200, telegramHeaders);
+    }
 
     if (parsed.data.action === 'disconnect') {
       if (resolved.actor.role === 'doctor') await disconnectDoctorTelegram(resolved.actor);

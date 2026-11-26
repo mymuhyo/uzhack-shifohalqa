@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Loader2, PackageX, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +14,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { useClinicalClient, useHydrated } from '@/lib/clinical-client-fetch';
 import type { MissedReason } from '@/lib/clinical-types';
 
 const missedReasons: Record<MissedReason, string> = {
@@ -33,7 +33,9 @@ export function PatientMedicationActions({
   taskTitle: string;
   isDemo: boolean;
 }) {
-  const router = useRouter();
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const useJsonApi = !isDemo || client.bearerToken !== null;
   const reasonId = `reason-${taskId}`;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reason, setReason] = useState<string>('');
@@ -41,23 +43,25 @@ export function PatientMedicationActions({
   const [error, setError] = useState('');
 
   async function submitJson(payload: Record<string, unknown>, mode: 'taken' | 'missed') {
-    if (isDemo || pendingAction) return;
+    if (!useJsonApi || pendingAction) return;
     setPendingAction(mode);
     setError('');
     try {
-      const response = await fetch('/api/clinical/evidence', {
+      const response = await client.fetchJson('/api/clinical/evidence', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
+        client.hapticNotify('error');
         setError('Saqlab bo‘lmadi. Qayta urinib ko‘ring.');
         return;
       }
       setSheetOpen(false);
+      client.hapticNotify('success');
       toast.success(mode === 'taken' ? 'Dori ichilgani saqlandi.' : 'Sabab shifokorga yuborildi.');
-      router.refresh();
+      client.refresh();
     } catch {
+      client.hapticNotify('error');
       setError('Internet aloqasi uzildi. Aloqa tiklangach qayta urinib ko‘ring.');
     } finally {
       setPendingAction(null);
@@ -65,13 +69,13 @@ export function PatientMedicationActions({
   }
 
   function handleTakenSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     void submitJson({ taskId, medicationStatus: 'taken' }, 'taken');
   }
 
   function handleMissedSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     if (!reason) {
       setError('Sababni tanlang.');
@@ -97,7 +101,7 @@ export function PatientMedicationActions({
           value="taken"
           size="lg"
           className="w-full"
-          disabled={pendingAction !== null}
+          disabled={(useJsonApi && !hydrated) || pendingAction !== null}
         >
           {pendingAction === 'taken' ? (
             <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />
@@ -110,7 +114,7 @@ export function PatientMedicationActions({
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
-          <Button type="button" variant="outline" size="lg" className="flex-1 min-w-36">
+          <Button type="button" variant="outline" size="lg" className="flex-1 min-w-36" disabled={!hydrated}>
             <XCircle data-icon="inline-start" aria-hidden="true" />
             <span>Icha olmadim</span>
           </Button>

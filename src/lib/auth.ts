@@ -7,8 +7,8 @@ import type {
   PendingMembershipInvite,
   SessionContext,
 } from './auth-types';
-import type { AppRole, ClinicalActor } from './clinical-types';
-import { getDatabase } from './db';
+import { isPatientSideRole, type AppRole, type ClinicalActor } from './clinical-types';
+import { getDatabase, type SqlAdapter } from './db';
 import { getDemoSession } from './demo-session';
 import { androidPatient, isAndroidDemoEnabled } from './mobile-demo';
 import { isSameOriginPost } from './request-body';
@@ -16,6 +16,7 @@ import { ensureDemoWorkspace } from './seed';
 import { createSupabaseAdminClient } from './supabase/admin';
 import type { Database } from './supabase/database.types';
 import { createSupabaseServerClient } from './supabase/server';
+import { resolveTelegramBearerActor } from './telegram-auth';
 
 const appRoleSchema = z.enum(['doctor', 'patient', 'caregiver', 'individual']);
 const demoBearerPattern = /^[a-f0-9]{64}$/;
@@ -61,7 +62,7 @@ const pendingInviteRowSchema = z.object({
   createdAt: z.iso.datetime(),
 });
 
-function getSupabasePublicEnv(): { url: string; key: string } | null {
+export function getSupabasePublicEnv(): { url: string; key: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
@@ -69,6 +70,51 @@ function getSupabasePublicEnv(): { url: string; key: string } | null {
     '';
   if (!url || !key) return null;
   return { url, key };
+}
+
+export async function findActiveMobilePatientMembership(
+  sql: SqlAdapter,
+  userId: string,
+  requestedWorkspaceId: string | null = null,
+): Promise<{
+  workspaceId: string;
+  patientId: string;
+  doctorId: string | null;
+  role: 'patient' | 'individual';
+  patientName: string;
+} | null> {
+  const rows = await sql`
+    SELECT cm.workspace_id AS "workspaceId",
+           p.id AS "patientId",
+           p.doctor_id AS "doctorId",
+           cm.role,
+           p.name AS "patientName",
+           w.is_demo AS "isDemo"
+    FROM public.clinic_memberships AS cm
+    JOIN public.workspaces AS w ON w.id = cm.workspace_id AND w.is_demo = false
+    LEFT JOIN public.patients AS p ON p.workspace_id = cm.workspace_id AND p.id = cm.actor_id
+    WHERE cm.user_id = ${userId}
+      AND cm.is_demo = false
+      AND cm.status = 'active'
+      AND w.is_demo = false
+      AND (${requestedWorkspaceId}::uuid IS NULL OR cm.workspace_id = ${requestedWorkspaceId}::uuid)
+    ORDER BY (cm.role IN ('patient', 'individual')) DESC, cm.created_at DESC, cm.id DESC
+  `;
+
+  for (const raw of rows) {
+    const parsed = mobileMembershipRowSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    if ((parsed.data.role === 'patient' || parsed.data.role === 'individual') && parsed.data.patientId) {
+      return {
+        workspaceId: parsed.data.workspaceId,
+        patientId: parsed.data.patientId,
+        doctorId: parsed.data.doctorId,
+        role: parsed.data.role,
+        patientName: parsed.data.patientName ?? 'Bemor',
+      };
+    }
+  }
+  return null;
 }
 
 export type SupabaseRouteClient = {
@@ -499,6 +545,19 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
   const token = bearerMatch ? bearerMatch[1].trim() : '';
   if (!token) return { ok: false, status: 401, error: 'unauthorized' };
 
+  if (token.startsWith('tgm1.')) {
+    const tg = await resolveTelegramBearerActor(token);
+    if (!tg.ok) return { ok: false, status: tg.status, error: tg.error };
+    if (!isPatientSideRole(tg.actor.role) || !tg.actor.patientId) {
+      return { ok: false, status: 403, error: 'forbidden' };
+    }
+    return {
+      ok: true,
+      actor: tg.actor,
+      patientName: tg.patientName ?? 'Bemor',
+    };
+  }
+
   if (demoBearerPattern.test(token)) {
     if (!isAndroidDemoEnabled()) return { ok: false, status: 404, error: 'not_found' };
     const demoActor = await androidPatient(request);
@@ -551,40 +610,19 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
   const sql = getDatabase();
   if (!sql) return { ok: false, status: 503, error: 'unavailable' };
 
-  const rows = await sql`
-    SELECT cm.workspace_id AS "workspaceId",
-           p.id AS "patientId",
-           p.doctor_id AS "doctorId",
-           cm.role,
-           p.name AS "patientName",
-           w.is_demo AS "isDemo"
-    FROM public.clinic_memberships AS cm
-    JOIN public.workspaces AS w ON w.id = cm.workspace_id AND w.is_demo = false
-    LEFT JOIN public.patients AS p ON p.workspace_id = cm.workspace_id AND p.id = cm.actor_id
-    WHERE cm.user_id = ${authUserId}
-      AND cm.is_demo = false
-      AND cm.status = 'active'
-      AND w.is_demo = false
-      AND (${requestedWorkspaceId}::uuid IS NULL OR cm.workspace_id = ${requestedWorkspaceId}::uuid)
-    ORDER BY (cm.role IN ('patient', 'individual')) DESC, cm.created_at DESC, cm.id DESC
-  `;
-
-  for (const raw of rows) {
-    const parsed = mobileMembershipRowSchema.safeParse(raw);
-    if (!parsed.success) continue;
-    if ((parsed.data.role === 'patient' || parsed.data.role === 'individual') && parsed.data.patientId) {
-      return {
-        ok: true,
-        actor: {
-          workspaceId: parsed.data.workspaceId,
-          doctorId: parsed.data.doctorId,
-          patientId: parsed.data.patientId,
-          role: parsed.data.role,
-          isDemo: false,
-        },
-        patientName: parsed.data.patientName ?? 'Bemor',
-      };
-    }
+  const membership = await findActiveMobilePatientMembership(sql, authUserId, requestedWorkspaceId);
+  if (membership) {
+    return {
+      ok: true,
+      actor: {
+        workspaceId: membership.workspaceId,
+        doctorId: membership.doctorId,
+        patientId: membership.patientId,
+        role: membership.role,
+        isDemo: false,
+      },
+      patientName: membership.patientName,
+    };
   }
 
   return { ok: false, status: 403, error: 'forbidden' };
@@ -615,6 +653,45 @@ export async function resolveClinicalRequestActor(
     if (!options.allowBearer) {
       return { ok: false, status: 401, error: 'unauthorized' };
     }
+    const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
+    const token = bearerMatch ? bearerMatch[1].trim() : '';
+    if (token.startsWith('tgm1.')) {
+      const tg = await resolveTelegramBearerActor(token);
+      if (!tg.ok) {
+        return { ok: false, status: tg.status, error: tg.error };
+      }
+      if (options.allowRoles && !options.allowRoles.includes(tg.actor.role)) {
+        return { ok: false, status: 403, error: 'forbidden' };
+      }
+      if (tg.actor.role === 'doctor') {
+        const syntheticSession: SessionContext = tg.actor.isDemo
+          ? {
+              kind: 'demo',
+              workspaceId: tg.actor.workspaceId,
+              role: 'doctor',
+              actorId: tg.actor.doctorId!,
+              isDemo: true,
+            }
+          : {
+              kind: 'supabase',
+              userId: tg.actor.doctorId!,
+              workspaceId: tg.actor.workspaceId,
+              role: 'doctor',
+              actorId: tg.actor.doctorId!,
+              isDemo: false,
+              email: null,
+              fullName: tg.doctorName,
+            };
+        const resolved = await resolveClinicalActor(syntheticSession, options);
+        if (!resolved.ok) return resolved;
+        return { ok: true, actor: resolved.actor, authMode: 'bearer' };
+      }
+      if (options.patientId && options.patientId !== tg.actor.patientId) {
+        return { ok: false, status: 404, error: 'not_found' };
+      }
+      return { ok: true, actor: tg.actor, authMode: 'bearer' };
+    }
+
     const auth = await resolveMobilePatientActor(request);
     if (!auth.ok) {
       return { ok: false, status: auth.status, error: auth.error };

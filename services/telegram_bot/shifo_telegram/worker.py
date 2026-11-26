@@ -38,13 +38,18 @@ async def _deliver_batch(store: DeliveryStore, send: Send, batch_size: int) -> i
 
 
 async def run_delivery_worker(
-    store: DeliveryStore, send: Send, *, poll_interval: float = 2.0, batch_size: int = 20
+    store: DeliveryStore,
+    send: Send,
+    *,
+    poll_interval: float = 2.0,
+    max_delay: float | None = None,
+    batch_size: int = 20,
 ) -> None:
     if poll_interval <= 0 or batch_size <= 0:
         raise ValueError("Delivery poll interval and batch size must be positive.")
 
     idle_delay = poll_interval
-    max_delay = max(poll_interval, 10.0)
+    effective_max_delay = max(poll_interval, 10.0 if max_delay is None else max_delay)
     while True:
         try:
             attempted = await _deliver_batch(store, send, batch_size)
@@ -59,4 +64,4 @@ async def run_delivery_worker(
         else:
             await asyncio.sleep(idle_delay)
             if not attempted:
-                idle_delay = min(idle_delay * 2, max_delay)
+                idle_delay = min(idle_delay * 2, effective_max_delay)

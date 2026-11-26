@@ -1,6 +1,6 @@
 import { isPatientSideRole, type ClinicalActor } from '@/lib/clinical-types';
 import { getTelegramBotUsername } from '@/lib/telegram-web';
-import { getDoctorTelegramStatus, getPatientTelegramStatus } from '@/lib/telegram-store';
+import { getDoctorTelegramStatus, getPatientTelegramDetails } from '@/lib/telegram-store';
 import { DoctorTelegramControls } from './telegram-controls';
 
 export async function DoctorTelegramPanel({ actor }: { actor: ClinicalActor }) {
@@ -28,18 +28,23 @@ export async function PatientTelegramPanel({ actor }: { actor?: ClinicalActor })
   const botUsername = getTelegramBotUsername();
   if (!botUsername) return null;
 
-  let connected = false;
+  let status = { connected: false, detailsEnabled: false };
   if (actor && isPatientSideRole(actor.role)) {
-    connected = await getPatientTelegramStatus(actor).catch(() => false);
+    status = await getPatientTelegramDetails(actor).catch(() => ({ connected: false, detailsEnabled: false }));
   }
 
   return (
     <div className="ledger">
       <section aria-labelledby="patient-telegram-title">
         <h2 id="patient-telegram-title">Telegram orqali kirish va holat</h2>
-        <p>Telegramni ulasangiz, botda <code>/holat</code> orqali bugungi dori, bosim, qadam va mashq holatini ko‘rasiz hamda shifokor javobi kelganda xabar olasiz.</p>
+        <p>Telegramni ulasangiz, botda <code>/bugun</code> va <code>/holat</code> orqali bugungi dori, bosim, qadam va 7 kunlik hisobotni ko‘rasiz hamda shifokor javobi kelganda xabar olasiz.</p>
         {actor && isPatientSideRole(actor.role) && (
-          <DoctorTelegramControls connected={connected} isDemo={actor.isDemo === true} />
+          <DoctorTelegramControls
+            connected={status.connected}
+            isDemo={actor.isDemo === true}
+            isPatient
+            initialDetailsEnabled={status.detailsEnabled}
+          />
         )}
         <a className="text-action" href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">
           Telegram botini ochish

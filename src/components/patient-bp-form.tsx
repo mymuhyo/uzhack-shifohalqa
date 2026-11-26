@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, HeartPulse, Loader2, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useClinicalClient, useHydrated } from '@/lib/clinical-client-fetch';
 import { evaluateBpZone } from '@/lib/clinical-triage';
 import type { BloodPressureTargets } from '@/lib/clinical-types';
 import styles from './patient-clinical.module.css';
@@ -51,7 +51,9 @@ export function PatientBpForm({
   isDemo?: boolean;
   priorReadings?: readonly PriorBpReference[];
 }) {
-  const router = useRouter();
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const useJsonApi = !isDemo || client.bearerToken !== null;
   const hintId = `pressure-hint-${taskId}`;
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
@@ -64,7 +66,7 @@ export function PatientBpForm({
   const hasInvalidReading = Boolean(zone?.invalid);
 
   async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     if (pending || hasInvalidReading) return;
 
@@ -78,9 +80,8 @@ export function PatientBpForm({
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/clinical/evidence', {
+      const response = await client.fetchJson('/api/clinical/evidence', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taskId,
           systolic: sysTrim ? Number(sysTrim) : null,
@@ -90,12 +91,15 @@ export function PatientBpForm({
         }),
       });
       if (!response.ok) {
+        client.hapticNotify('error');
         setError('Bosim qiymatlarini tekshiring (sistolik 50–260, diastolik 30–160, sistolik > diastolik).');
         return;
       }
+      client.hapticNotify(zone?.tone === 'urgent' ? 'warning' : 'success');
       toast.success('Qon bosimi qaydi saqlandi.');
-      router.refresh();
+      client.refresh();
     } catch {
+      client.hapticNotify('error');
       setError('Aloqa uzildi. Qayta urinib ko‘ring.');
     } finally {
       setPending(false);
@@ -206,7 +210,7 @@ export function PatientBpForm({
         </p>
       )}
 
-      <Button type="submit" size="lg" className="w-full" disabled={pending || hasInvalidReading}>
+      <Button type="submit" size="lg" className="w-full" disabled={(useJsonApi && !hydrated) || pending || hasInvalidReading}>
         {pending && <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />}
         <span>Qaydni yuborish</span>
       </Button>
@@ -223,7 +227,9 @@ export function PatientRetakeBpForm({
   targets: BloodPressureTargets | null;
   isDemo?: boolean;
 }) {
-  const router = useRouter();
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const useJsonApi = !isDemo || client.bearerToken !== null;
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [chestPain, setChestPain] = useState(false);
@@ -234,15 +240,14 @@ export function PatientRetakeBpForm({
   const hasInvalidReading = Boolean(zone?.invalid);
 
   async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     if (pending || hasInvalidReading) return;
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/clinical/followup', {
+      const response = await client.fetchJson('/api/clinical/followup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           flagId,
           kind: 'retake_vitals',
@@ -252,12 +257,15 @@ export function PatientRetakeBpForm({
         }),
       });
       if (!response.ok) {
+        client.hapticNotify('error');
         setError('Qayta o‘lchov qiymatlarini tekshiring.');
         return;
       }
+      client.hapticNotify('success');
       toast.success('Qayta o‘lchov yuborildi.');
-      router.refresh();
+      client.refresh();
     } catch {
+      client.hapticNotify('error');
       setError('Aloqa uzildi.');
     } finally {
       setPending(false);
@@ -319,7 +327,7 @@ export function PatientRetakeBpForm({
           {error}
         </p>
       )}
-      <Button type="submit" size="lg" className="w-full" disabled={pending || hasInvalidReading}>
+      <Button type="submit" size="lg" className="w-full" disabled={(useJsonApi && !hydrated) || pending || hasInvalidReading}>
         {pending && <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />}
         <span>Qayta o‘lchovni yuborish</span>
       </Button>

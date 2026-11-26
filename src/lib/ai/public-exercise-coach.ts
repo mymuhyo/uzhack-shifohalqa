@@ -87,8 +87,11 @@ async function readPublicAdvice(sample: PublicCoachSample, completion: AiComplet
   );
 }
 
-export async function personalizedExerciseCoach(input: ExerciseCoachRequest): Promise<ExerciseCoachResponse> {
-  const completion = configuredAiCompletion();
+export async function personalizedExerciseCoach(
+  input: ExerciseCoachRequest,
+  oidcToken?: string | null,
+): Promise<ExerciseCoachResponse> {
+  const completion = configuredAiCompletion(oidcToken);
   if (!completion) return exerciseCoachAdvice(input);
   const exerciseTitle = exerciseCatalog[input.movement].title;
   return completeCoachAdvice(
@@ -99,8 +102,8 @@ export async function personalizedExerciseCoach(input: ExerciseCoachRequest): Pr
   );
 }
 
-export async function publicExerciseCoach(sample: PublicCoachSample) {
-  const completion = configuredAiCompletion();
+export async function publicExerciseCoach(sample: PublicCoachSample, oidcToken?: string | null) {
+  const completion = configuredAiCompletion(oidcToken);
   const flags = {
     auto: process.env.EXERCISE_COACH_AI_DEMO,
     opencode: process.env.EXERCISE_COACH_OPENCODE_DEMO,
@@ -108,7 +111,8 @@ export async function publicExerciseCoach(sample: PublicCoachSample) {
   };
   const enabled = completion && flags[completion.provider];
   if (!completion || enabled?.trim() !== 'true') return readPublicAdvice(sample, null);
-  const cacheKey = `${completion.provider}:${sample}`;
+  const tokenScope = oidcToken?.trim() ? 'oidc' : 'env';
+  const cacheKey = `${completion.provider}:${tokenScope}:${sample}`;
   const retained = cache.get(cacheKey);
   if (retained && retained.expiresAt > Date.now()) return retained.result;
   const entry = { expiresAt: Infinity, result: readPublicAdvice(sample, completion) };

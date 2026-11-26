@@ -48,6 +48,8 @@ class TextNotice:
     chat_id: int
     message_text: str
     focus: Literal["patient", "doctor"]
+    details_enabled: bool = True
+    notice_kind: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -483,7 +485,7 @@ class TelegramStore:
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
                     AND notice.next_attempt_at <= CURRENT_TIMESTAMP
                     AND flag.decision IS NULL
-                    AND (%s::bigint IS NULL OR link.chat_id = %s)
+                    AND ((%s::bigint IS NOT NULL AND link.chat_id = %s) OR (%s::bigint IS NULL AND link.chat_id < 100000000000))
                   ORDER BY notice.created_at, notice.workspace_id, notice.flag_id
                   LIMIT 1
                   FOR UPDATE OF notice SKIP LOCKED
@@ -493,7 +495,7 @@ class TelegramStore:
                 FROM eligible WHERE notice.workspace_id = eligible.workspace_id AND notice.flag_id = eligible.flag_id
                 RETURNING notice.workspace_id, notice.doctor_id, notice.link_id, notice.flag_id, eligible.chat_id
                 """,
-                (chat_id, chat_id),
+                (chat_id, chat_id, chat_id),
             )
             row = await claimed.fetchone()
             return Notice(*row) if row is not None else None
@@ -526,17 +528,18 @@ class TelegramStore:
                 (seconds, notice.workspace_id, notice.doctor_id, notice.link_id, notice.flag_id),
             )
 
-    async def claim_pending_text_notice(self) -> TextNotice | None:
+    async def claim_pending_text_notice(self, *, chat_id: int | None = None) -> TextNotice | None:
         async with self._pool.connection() as connection:
             pcur = await connection.execute(
                 """
                 WITH eligible AS (
-                  SELECT notice.id, link.chat_id, notice.message_text
+                  SELECT notice.id, link.chat_id, notice.message_text, link.details_enabled, notice.kind
                   FROM public.telegram_patient_notices AS notice
                   JOIN public.telegram_patient_links AS link USING (workspace_id, patient_id, link_id)
                   WHERE notice.delivery_status = 'pending'
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
                     AND notice.next_attempt_at <= CURRENT_TIMESTAMP
+                    AND ((%s::bigint IS NOT NULL AND link.chat_id = %s) OR (%s::bigint IS NULL AND link.chat_id < 100000000000))
                   ORDER BY notice.created_at, notice.id
                   LIMIT 1
                   FOR UPDATE OF notice SKIP LOCKED
@@ -544,12 +547,21 @@ class TelegramStore:
                 UPDATE public.telegram_patient_notices AS notice
                 SET delivery_status = 'unknown', attempted_at = CURRENT_TIMESTAMP
                 FROM eligible WHERE notice.id = eligible.id
-                RETURNING notice.id, eligible.chat_id, eligible.message_text
-                """
+                RETURNING notice.id, eligible.chat_id, eligible.message_text, eligible.details_enabled, eligible.kind
+                """,
+                (chat_id, chat_id, chat_id),
             )
             prow = await pcur.fetchone()
             if prow is not None:
-                return TextNotice("patient_notice", prow[0], prow[1], prow[2], "patient")
+                return TextNotice(
+                    "patient_notice",
+                    prow[0],
+                    prow[1],
+                    prow[2],
+                    "patient",
+                    details_enabled=bool(prow[3]),
+                    notice_kind=str(prow[4] or ""),
+                )
 
             dcur = await connection.execute(
                 """
@@ -560,6 +572,7 @@ class TelegramStore:
                   WHERE notice.delivery_status = 'pending'
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
                     AND notice.next_attempt_at <= CURRENT_TIMESTAMP
+                    AND ((%s::bigint IS NOT NULL AND link.chat_id = %s) OR (%s::bigint IS NULL AND link.chat_id < 100000000000))
                   ORDER BY notice.created_at, notice.id
                   LIMIT 1
                   FOR UPDATE OF notice SKIP LOCKED
@@ -568,7 +581,8 @@ class TelegramStore:
                 SET delivery_status = 'unknown', attempted_at = CURRENT_TIMESTAMP
                 FROM eligible WHERE notice.id = eligible.id
                 RETURNING notice.id, eligible.chat_id, eligible.message_text
-                """
+                """,
+                (chat_id, chat_id, chat_id),
             )
             drow = await dcur.fetchone()
             if drow is not None:

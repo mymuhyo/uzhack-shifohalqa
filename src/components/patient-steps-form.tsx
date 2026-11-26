@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { Footprints, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { maximumDailySteps } from '@/lib/adherence';
+import { useClinicalClient, useHydrated } from '@/lib/clinical-client-fetch';
 import styles from './patient-adherence.module.css';
 
 export function PatientStepsForm({
@@ -16,33 +16,38 @@ export function PatientStepsForm({
   defaultSteps?: number;
   isDemo: boolean;
 }) {
-  const router = useRouter();
+  const client = useClinicalClient();
+  const hydrated = useHydrated();
+  const useJsonApi = !isDemo || client.bearerToken !== null;
   const [steps, setSteps] = useState(defaultSteps !== undefined ? String(defaultSteps) : '');
   const [pending, setPending] = useState(false);
 
   async function handleClinicSubmit(event: FormEvent<HTMLFormElement>) {
-    if (isDemo) return;
+    if (!useJsonApi) return;
     event.preventDefault();
     if (pending) return;
     const count = Number(steps.trim());
     if (!Number.isInteger(count) || count < 0 || count > maximumDailySteps) {
+      client.hapticNotify('error');
       toast.error('Qadamlar sonini to‘g‘ri kiriting.');
       return;
     }
     setPending(true);
     try {
-      const response = await fetch('/api/clinical/steps', {
+      const response = await client.fetchJson('/api/clinical/steps', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ count, source: 'self_report' }),
       });
       if (!response.ok) {
+        client.hapticNotify('error');
         toast.error('Qadamlarni saqlab bo‘lmadi.');
         return;
       }
+      client.hapticNotify('success');
       toast.success('Bugungi qadamlar saqlandi.');
-      router.refresh();
+      client.refresh();
     } catch {
+      client.hapticNotify('error');
       toast.error('Aloqa uzildi.');
     } finally {
       setPending(false);
@@ -71,7 +76,7 @@ export function PatientStepsForm({
         onChange={(e) => setSteps(e.currentTarget.value)}
         required
       />
-      <Button type="submit" size="lg" disabled={pending}>
+      <Button type="submit" size="lg" disabled={(useJsonApi && !hydrated) || pending}>
         {pending ? (
           <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden="true" />
         ) : (

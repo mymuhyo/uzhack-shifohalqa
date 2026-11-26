@@ -5,6 +5,7 @@ import { CheckCircle2, Film, Loader2, Upload, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useClinicalClient } from '@/lib/clinical-client-fetch';
 
 const MAX_VIDEO_DURATION_SEC = 60;
 const MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024;
@@ -61,10 +62,22 @@ export function ExerciseVideoUpload({
   videoBlob: Blob;
   durationSec: number;
 }) {
+  const client = useClinicalClient();
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState<UploadState>({ status: 'idle' });
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const busy =
+      state.status === 'requesting' ||
+      state.status === 'uploading' ||
+      state.status === 'finalizing';
+    client.setUploadBusy(busy);
+    return () => {
+      client.setUploadBusy(false);
+    };
+  }, [client, state.status]);
 
   const normalizedMime = normalizeVideoMimeType(videoBlob.type || 'video/webm');
   const validMime = normalizedMime === 'video/mp4' || normalizedMime === 'video/webm';
@@ -99,9 +112,8 @@ export function ExerciseVideoUpload({
 
     setState({ status: 'requesting' });
     try {
-      const reqRes = await fetch('/api/clinical/exercise/video-upload', {
+      const reqRes = await client.fetchJson('/api/clinical/exercise/video-upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'request',
           attemptId,
@@ -112,6 +124,7 @@ export function ExerciseVideoUpload({
         }),
       });
       if (!reqRes.ok) {
+        client.hapticNotify('error');
         const errBody = (await reqRes.json().catch(() => ({}))) as { error?: string };
         setState({
           status: 'error',
@@ -134,9 +147,8 @@ export function ExerciseVideoUpload({
       abortRef.current = null;
 
       setState({ status: 'finalizing' });
-      const finRes = await fetch('/api/clinical/exercise/video-upload', {
+      const finRes = await client.fetchJson('/api/clinical/exercise/video-upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'finalize',
           attemptId,
@@ -148,11 +160,14 @@ export function ExerciseVideoUpload({
         }),
       });
       if (!finRes.ok) {
+        client.hapticNotify('error');
         setState({ status: 'error', message: 'Video yuklandi, lekin yakunlab bo‘lmadi. Qayta urinib ko‘ring.' });
         return;
       }
       const finData = (await finRes.json()) as { expiresAt: string };
+      client.hapticNotify('success');
       setState({ status: 'uploaded', expiresAt: finData.expiresAt });
+      client.refresh();
     } catch (error) {
       abortRef.current = null;
       if (error instanceof Error && error.message === 'Aborted') {

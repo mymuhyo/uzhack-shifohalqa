@@ -4,6 +4,33 @@ import { createDatabase } from '../../src/lib/db';
 
 test.describe.configure({ timeout: 90_000 });
 
+test('the share button waits until the patient page is interactive', async ({ page, baseURL }) => {
+  const login = await page.request.post('/api/demo/login', {
+    headers: { origin: baseURL! },
+    form: { role: 'patient' },
+    maxRedirects: 0,
+  });
+  expect(login.status()).toBe(303);
+
+  const scripts = /\/_next\/static\/.*\.js(?:\?|$)/;
+  const hydration = Promise.withResolvers<void>();
+  await page.route(scripts, async (route) => {
+    await hydration.promise;
+    await route.continue();
+  });
+
+  const shareButton = page.getByRole('button', { name: 'Ulashishni yoqish' });
+  try {
+    await page.goto('/patient', { waitUntil: 'commit' });
+    await expect(shareButton).toBeDisabled();
+  } finally {
+    hydration.resolve();
+  }
+
+  await shareButton.click();
+  await expect(page.getByLabel('Yaqiningizga beriladigan havola')).toBeVisible();
+});
+
 test('a patient shares only the current daily aggregate and can rotate, revoke and expire the anonymous link', async ({ page, browser, baseURL }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Shifokor sifatida kirish' }).click();

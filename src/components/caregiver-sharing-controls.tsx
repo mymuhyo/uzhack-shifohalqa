@@ -1,12 +1,16 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import { Copy, Link2, Share2, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import styles from './caregiver-sharing.module.css';
 
 type Sharing = { path: string | null; expiresAt: string | null };
+
+const subscribe = () => () => {};
+const isClient = () => true;
+const isServer = () => false;
 
 const expiryFormat = new Intl.DateTimeFormat('uz-Latn-UZ', {
   dateStyle: 'medium',
@@ -22,6 +26,7 @@ export function CaregiverSharingControls({
   isDemo?: boolean;
 }) {
   const endpoint = isDemo ? '/api/demo/caregiver' : '/api/clinical/caregiver';
+  const isInteractive = useSyncExternalStore(subscribe, isClient, isServer);
   const [sharing, setSharing] = useState<Sharing>({ path: null, expiresAt: initialExpiresAt });
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -86,12 +91,12 @@ export function CaregiverSharingControls({
         </div>
       )}
       <div className={styles.actions}>
-        <button type="button" className="text-action" disabled={pending} onClick={() => void changeSharing('enable')}>
+        <button type="button" className="text-action" disabled={!isInteractive || pending} onClick={() => void changeSharing('enable')}>
           <Share2 className="size-4" aria-hidden="true" />
           <span>{sharing.expiresAt ? 'Havolani yangilash' : 'Ulashishni yoqish'}</span>
         </button>
         {sharing.expiresAt && (
-          <button type="button" className="text-action" disabled={pending} onClick={() => void changeSharing('disable')}>
+          <button type="button" className="text-action" disabled={!isInteractive || pending} onClick={() => void changeSharing('disable')}>
             <ShieldOff className="size-4" aria-hidden="true" />
             <span>Ulashishni o‘chirish</span>
           </button>

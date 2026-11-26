@@ -198,3 +198,9 @@ This append-only log coordinates handoffs across **Codex**, **OpenCode**, and **
 - **Browser checks** — `npm run e2e -- tests/e2e/telegram.spec.ts --workers=1` passed both tests against the isolated database with a synthetic Telegram transport. The tests covered cross-site iframe sign-in, dark theme, a multi-dose save and duplicate tap, opt-out after the first send attempt, generic retry text, exact approved reply, and unlink revocation.
 - **Preview resources** — Configured the Grand Final database variables in the `shifohalqa-final` Vercel Preview. Vercel reported the build ready with deployment protection enabled. Created `shifohalqa-final-telegram` on Railway with a dedicated `telegram-worker` service and set its `SHIFO_ENV_ID=final-preview` guard.
 - **Open gate** — The preview bot credentials are pending. Automatic approval review blocked the worker database URL and generated secrets from being stored in Railway and Vercel pending explicit owner authorization. Set the dedicated credentials, configure Telegram access to the preview, deploy the worker and register the webhook, then test Telegram Web, Desktop and phone.
+
+## [2026-11-26T07:35:09Z] M5 preview bot verification — Codex
+
+- Telegram `getMe` matched the supplied preview bot username. `getWebhookInfo` returned an empty webhook URL.
+- Railway assigned an HTTPS domain to the dedicated `telegram-worker`. Set its hostname binding, port, webhook target, and bot username. Prepared a clean worker archive with a `/healthz` readiness check.
+- Supabase reported `final-preview` and zero pending notices within the current delivery window. Credential transfer and the Telegram preview-domain exception await owner approval. Worker deployment, webhook registration, and real-client checks are pending.

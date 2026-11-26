@@ -1,5 +1,18 @@
 # ShifoHalqa · Demo benchmarklari
 
+## Grand Final · 26-noyabr 2026 (MYT)
+
+Android `ExerciseRecordedVideoTest` 8,792 soniyalik bir xil ommaviy CDC WebM klipini galereya orqali o‘lchadi. Har rejim uchun bittadan urinish bajarildi.
+
+| Qurilma | Full | Heavy | Har ikkala rejim natijasi |
+|---|---:|---:|---|
+| Galaxy S24 Ultra, SM-S928B, Android API 37 | 9,989 s | 17,231 s | 88 kadr, 2 to‘liq, 0 chala |
+| x86-64 emulyator, Android API 37 | 13,306 s | 16,350 s | 88 kadr, 2 to‘liq, 0 chala |
+
+ARM64 debug APK `73 545 543` bayt (70,14 MiB). Jismoniy qurilmadagi sakkizta instrumentatsiya testi o‘tdi. Jonli ulash va sintetik dori, bosim, qadam qaydlarini saqlash 2,409 s, shifokor tasdiqlagan yetti kunlik javobni o‘qish 1,550 s oldi. Bu ikki vaqtga ADB instrumentatsiyasining ishga tushishi ham kiradi. [Android o‘lchov testi](../android/app/src/androidTest/java/uz/shifohalqa/android/ExerciseRecordedVideoTest.kt)
+
+Singapurdagi Vercel Preview’da to‘rtta Playwright sinovi 34,6 soniyada o‘tdi. Brauzerdagi mashq → og‘riq xabari → shifokor javobi ssenariysi 15,325 s oldi. Vercel AI Gateway `openai/gpt-oss-20b` bitta sintetik yetti kunlik hisobotga 9,410 s da javob berdi. 224 785 baytli ommaviy klipni rozilik bilan yuborish va tasdiqlash 1,851 s oldi. Amaldagi tizza namunasi va sinov uchun ko‘rilgan CDC animatsiyasi har biri brauzerda 0 to‘liq sikl qaytardi. [Tekshiruv jurnali](PROGRESS.md)
+
 ## Vercel AI Gateway va OpenCode Go
 
 22-noyabr 2026 (MYT) · lokal server adapterida bir martalik jonli sinov. Vercel GPT-OSS 20B taqqoslash izohini 3,10 s, murabbiy izohini 3,18 s da qaytardi. CDC MP4 uchun Vercel 403, Go’dagi Gemini 4 Argon haftalik limit sababli 429 qaytardi. Go’dagi Hy4 Flash Free ommaviy namunaning 9 kadriga 3,23 s da javob berdi. Uchta o‘tirish vaqti (2, 4, 6 s) qaytdi, MediaPipe esa ikki to‘liq sikl topdi. Uchinchi provayderga o‘tish taqlidiy HTTP bilan tekshirildi, jonli Gemini API sinovida kalit mavjud emas edi.

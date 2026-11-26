@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { headers } from 'next/headers';
 import {
   computePromptHash,
   reserveAiRequestQuota,
@@ -16,6 +17,8 @@ import { configuredSupervisedAiTargets } from '../../src/lib/ai/provider-config'
 import type { ClinicalActor } from '../../src/lib/clinical-types';
 import type { SqlAdapter } from '../../src/lib/db';
 import { z } from 'zod';
+
+vi.mock('next/headers', () => ({ headers: vi.fn() }));
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const doctorId = '22222222-2222-4222-8222-222222222222';
@@ -182,6 +185,7 @@ describe('Supervised AI provider order & completion fallback', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    vi.mocked(headers).mockReset();
   });
 
   afterEach(() => {
@@ -189,18 +193,31 @@ describe('Supervised AI provider order & completion fallback', () => {
     vi.unstubAllGlobals();
   });
 
-  it('orders Vercel AI Gateway primary and Cloudflare Workers AI fallback', () => {
+  it('orders Vercel AI Gateway primary and Cloudflare Workers AI fallback', async () => {
+    vi.stubEnv('VERCEL', '');
     vi.stubEnv('AI_GATEWAY_API_KEY', 'vercel-key');
     vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'cf-acct');
     vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token');
-    expect(configuredSupervisedAiTargets()).toEqual([
+    expect(await configuredSupervisedAiTargets()).toEqual([
       { provider: 'vercel', key: 'vercel-key' },
       { provider: 'cloudflare', accountId: 'cf-acct', apiToken: 'cf-token' },
     ]);
 
     vi.stubEnv('AI_GATEWAY_API_KEY', '');
     vi.stubEnv('VERCEL_OIDC_TOKEN', 'oidc-token');
-    expect(configuredSupervisedAiTargets()[0]).toEqual({ provider: 'vercel', key: 'oidc-token' });
+    expect((await configuredSupervisedAiTargets())[0]).toEqual({ provider: 'vercel', key: 'oidc-token' });
+  });
+
+  it('uses the Vercel function invocation token for supervised requests', async () => {
+    vi.stubEnv('VERCEL', '1');
+    vi.stubEnv('AI_GATEWAY_API_KEY', '');
+    vi.stubEnv('VERCEL_OIDC_TOKEN', 'local-token');
+    vi.mocked(headers).mockResolvedValue(new Headers({ 'x-vercel-oidc-token': 'invocation-token' }));
+    expect((await configuredSupervisedAiTargets())[0]).toEqual({ provider: 'vercel', key: 'invocation-token' });
+
+    vi.stubEnv('VERCEL', '');
+    expect((await configuredSupervisedAiTargets())[0]).toEqual({ provider: 'vercel', key: 'local-token' });
+    expect(headers).toHaveBeenCalledTimes(1);
   });
 
   it('falls back from Vercel AI Gateway to Cloudflare Workers AI and returns null on total outage', async () => {

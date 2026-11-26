@@ -252,7 +252,7 @@ export async function simplifyTeachBackQuestionsWithAi(
   questions: readonly TeachBackQuestion[],
   deps: TeachBackDependencies = {},
 ): Promise<{ questions: TeachBackQuestion[]; sourceMode: 'ai' | 'deterministic_fallback' }> {
-  const targets = deps.targets ?? configuredSupervisedAiTargets();
+  const targets = deps.targets ?? await configuredSupervisedAiTargets();
   if (targets.length === 0 || questions.length === 0) {
     return { questions: [...questions], sourceMode: 'deterministic_fallback' };
   }

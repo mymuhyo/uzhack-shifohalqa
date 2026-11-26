@@ -437,7 +437,7 @@ export async function reviewExerciseKeyframes(
     }
   }
 
-  const targets = configuredSupervisedAiTargets();
+  const targets = await configuredSupervisedAiTargets();
   let aiMatch: { provider: 'vercel' | 'cloudflare'; model: string; data: KeyframeAiObservation } | null = null;
 
   if (actor && targets.length > 0) {

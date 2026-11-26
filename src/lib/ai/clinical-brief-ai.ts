@@ -489,7 +489,7 @@ export async function generateClinicalBrief(
   let fallbackReason: BriefFallbackReason | undefined;
   let rejectedCitationIds: string[] | undefined;
 
-  const targets = deps.targets ?? configuredSupervisedAiTargets();
+  const targets = deps.targets ?? await configuredSupervisedAiTargets();
   if (targets.length === 0) {
     fallbackReason = 'unconfigured';
   } else {

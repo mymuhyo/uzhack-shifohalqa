@@ -6,6 +6,7 @@ import {
   generateClinicalBrief,
   readLatestClinicalBrief,
 } from '../../../../lib/ai/clinical-brief-ai';
+import { readVercelOidcTokenFromRequest } from '../../../../lib/ai/provider-config';
 import { resolveClinicalRequestActor } from '../../../../lib/auth';
 import { readRequestJson } from '../../../../lib/request-body';
 
@@ -69,9 +70,11 @@ export async function POST(request: NextRequest) {
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
     if (parsed.data.action === 'generate') {
-      const generated = await generateClinicalBrief(resolved.actor, {
-        forceRefresh: parsed.data.forceRefresh,
-      });
+      const generated = await generateClinicalBrief(
+        resolved.actor,
+        { forceRefresh: parsed.data.forceRefresh },
+        { oidcToken: readVercelOidcTokenFromRequest(request) },
+      );
       if (!generated.ok) return errorJson(generated.error, generated.status);
       return json({
         status: 'generated',

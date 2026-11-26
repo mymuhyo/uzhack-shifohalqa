@@ -92,18 +92,21 @@ flowchart LR
     A2 -->|"Doctor Approves (L4)"| M
 ```
 
-### 1. Four Core Agentic Capabilities
-1. **Longitudinal Clinical Memory & Pattern Discovery:**
-   - Maintain a structured, queryable multi-week patient state (adherence drift by time-of-day, morning vs. evening BP spikes, post-medication side-effect clusters, exercise range-of-motion progression/fatigue across 4–12 weeks).
-   - Instead of re-prompting raw rows, equip the agent with typed read-only tools (`getAdherenceWindow`, `getBpTrend`, `getBiomechanicsProgression`, `getPriorClinicianReplies`, `getDeviceHealthMetrics`) so reasoning stays fast, cheap, and citation-exact.
-2. **Device-Aware Self-Adaptation (On-Device + Cloud Telemetry):**
-   - Track anonymized device capability telemetry over time (average MediaPipe FPS, frame-drop rate, decode latency, RAM pressure, step-sensor availability, upload retry rate on 3G/4G).
-   - Over repeated sessions, the agent automatically recommends optimal settings per patient device — e.g., switching a struggling budget Android phone from `Heavy` to `Full`/`Lite`, advising better camera angle/lighting when occlusion repeats across 3+ sessions, or suggesting manual step entry when hardware `TYPE_STEP_COUNTER` is absent or stale.
-3. **Proactive Bounded Patient Engagement:**
-   - **Adaptive timing & gentle nudges:** Detect recurring miss patterns (e.g., evening dose missed 3 Fridays in a row) and proactively suggest shifting reminder timing or preparing a question for the next clinic visit.
-   - **Safe contextual Q&A with deterministic escalation:** Let patients ask free-text questions in Uzbek about their current plan. Every response is grounded strictly in approved plan instructions and verified educational snippets; any mention of new symptoms, side effects, drug interactions, or dose changes triggers an automatic hard-coded escalation card (*«Bu savol shifokor qarorini talab qiladi — shifokorga yuborilsinmi?»*) rather than letting an LLM improvise medical advice.
-4. **Proactive Clinician Co-Pilot & Triage Preparation:**
-   - Before a scheduled follow-up or whenever multi-signal deterioration crosses a rule threshold (e.g., gradual BP upward drift + rising shallow exercise reps + declining steps), the agent automatically prepares a pre-visit briefing with linked evidence, identifies missing clinical data (e.g., *«Oxirgi 5 kunda kechki bosim o‘lchanmagan»*), and drafts prioritized patient messages awaiting one-tap clinician approval or edit.
+### 1. Five Core Agentic Capabilities
+1. **Proactive Adherence & Risk-Stratified Care Agent:**
+   - Learns individual patient rhythm from multi-week miss patterns (e.g., recurring Friday evening medication skips or gradual morning systolic BP drift) and dispatches bounded, timing-adapted Telegram Bot / Android nudges rather than fixed generic alerts.
+   - Dynamically escalates cadence from low-friction check-in -> Teach-Back micro-refresher -> clinician pre-visit flag as deterministic risk scores rise.
+2. **Multimodal Uzbek Clinical Intake Agent (Photo, Voice & Free-Text):**
+   - Accepts Uzbek/Russian voice notes, free-text symptom descriptions, blood-pressure cuff photos, and pillbox scans across Web, Android, and Telegram Mini App.
+   - Extracts structured clinical fields (`bp`, `symptom`, `missed_reason`, `medication_box`) and routes every inferred value through explicit **patient confirmation + deterministic L0–L4 rules** — never auto-saving uncertain AI parses as clinical truth.
+3. **Longitudinal Clinical Memory & Rehab Progression Agent:**
+   - Maintains structured multi-week state (`adherence drift`, `BP trend`, `rehab ROM/tempo/asymmetry`, `prior clinician replies`) behind typed read-only tools (`getAdherenceWindow`, `getBpTrend`, `getBiomechanicsProgression`, `getDeviceHealthMetrics`) so reasoning remains fast, cheap, and citation-exact.
+   - Tracks cross-session `chair_stand`, `elbow_bend`, and `seated_knee_ext` joint-angle progression and symmetry: recommends safe progression (`targetReps`/`targetAngle` proposals requiring doctor approval), swaps camera/lighting tips after repeated occlusion, or adapts `Full`/`Heavy` CV model presets to device FPS.
+4. **Doctor Pre-Visit Clinical Copilot Agent:**
+   - Synthesizes morning triage digests prioritizing red/yellow exceptions, surfaces missing measurements (e.g., *«Oxirgi 5 kunda kechki bosim o‘lchanmagan»*), explains trend shifts with clickable DB record citations, and drafts individualized Uzbek follow-up replies or regimen adjustments awaiting one-tap clinician approval or edit (`AI measures/drafts -> deterministic rules flag -> doctor decides`).
+5. **Agentic Evaluation, Security & FinOps Harness:**
+   - Runs automated CI evaluations over synthetic Uzbek clinical vignettes (missed-dose streaks, hypotension, chest pain, occluded rehab video, adversarial prompt injection in notes) measuring schema compliance, DB-ID citation accuracy, and diagnostic-claim suppression.
+   - Preserves **Vercel AI Gateway** (with per-request `x-vercel-oidc-token`) -> **Cloudflare Workers AI** -> **deterministic Uzbek fallback** routing, tiered model selection, clinic daily spend caps, and full human-in-the-loop audit trails.
 
 ### 2. Agentic Safety, Evaluation & FinOps Governance
 - **Non-negotiable safety rails:** Deterministic rules always execute *before* and *after* LLM tool loops. Any generated output failing Zod schema validation, DB-ID citation existence checks, or medical-policy classifiers is blocked and replaced with a deterministic fallback.

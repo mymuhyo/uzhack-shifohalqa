@@ -422,7 +422,7 @@ export type KeyframeReviewOutcome =
 export async function reviewExerciseKeyframes(
   rawInput: unknown,
   actor?: ClinicalActor,
-  options?: { signal?: AbortSignal; timeoutMs?: number },
+  options?: { signal?: AbortSignal; timeoutMs?: number; oidcToken?: string | null },
 ): Promise<KeyframeReviewOutcome> {
   if (actor && actor.role === 'caregiver') return { ok: false, status: 403, error: 'forbidden' };
 
@@ -437,7 +437,7 @@ export async function reviewExerciseKeyframes(
     }
   }
 
-  const targets = configuredSupervisedAiTargets();
+  const targets = configuredSupervisedAiTargets({ oidcToken: options?.oidcToken });
   let aiMatch: { provider: 'vercel' | 'cloudflare'; model: string; data: KeyframeAiObservation } | null = null;
 
   if (actor && targets.length > 0) {

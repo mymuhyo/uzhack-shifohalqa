@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
       user: { id: string; email?: string | null } | null;
       session: { access_token: string; expires_at?: number; expires_in?: number } | null;
     };
-    error: { message: string } | null;
+    error: { message: string; status?: number; code?: string } | null;
   },
   sqlHandler: null as null | ((sqlText: string, values: unknown[]) => unknown[] | Promise<unknown[]>),
   mobileAuth: null as null | { ok: true; actor: ClinicalActor; patientName: string } | { ok: false; status: 401 | 403 | 404 | 503; error: string },
@@ -38,10 +38,14 @@ vi.mock('../../src/lib/db', () => ({
     },
 }));
 
-vi.mock('../../src/lib/auth', () => ({
-  resolveMobilePatientActor: async () =>
-    state.mobileAuth ?? { ok: false, status: 401, error: 'unauthorized' },
-}));
+vi.mock('../../src/lib/auth', async () => {
+  const actual = await vi.importActual<typeof import('../../src/lib/auth')>('../../src/lib/auth');
+  return {
+    ...actual,
+    resolveMobilePatientActor: async () =>
+      state.mobileAuth ?? { ok: false, status: 401, error: 'unauthorized' },
+  };
+});
 
 vi.mock('../../src/lib/clinical-store', () => ({
   getTaskContext: async () => state.taskContext,
@@ -130,6 +134,7 @@ describe('POST /api/mobile/v1/login', () => {
     state.sqlHandler = () => [{
       workspaceId,
       patientId,
+      doctorId,
       role: 'patient',
       patientName: 'Anvar Toshmatov',
       isDemo: false,
@@ -158,6 +163,7 @@ describe('POST /api/mobile/v1/login', () => {
     state.sqlHandler = () => [{
       workspaceId,
       patientId,
+      doctorId: null,
       role: 'individual',
       patientName: 'Dilnoza',
       isDemo: false,
@@ -180,6 +186,7 @@ describe('POST /api/mobile/v1/login', () => {
     state.sqlHandler = () => [{
       workspaceId,
       patientId: null,
+      doctorId: null,
       role: 'doctor',
       patientName: null,
       isDemo: false,
@@ -192,6 +199,7 @@ describe('POST /api/mobile/v1/login', () => {
     state.sqlHandler = () => [{
       workspaceId,
       patientId,
+      doctorId: null,
       role: 'caregiver',
       patientName: 'Anvar',
       isDemo: false,
@@ -210,6 +218,24 @@ describe('POST /api/mobile/v1/login', () => {
 
     const tooLarge = await mobileLoginPost(loginRequest({ email: 'a@b.com', password: 'x'.repeat(2500) }));
     expect(tooLarge.status).toBe(413);
+  });
+
+  it('returns 429 rate_limited and 503 unavailable when Supabase auth throttles or fails with 5xx', async () => {
+    state.signInResult = {
+      data: { user: null, session: null },
+      error: { message: 'Request rate limit reached', status: 429, code: 'over_request_rate_limit' },
+    };
+    const rateLimited = await mobileLoginPost(loginRequest({ email: 'anvar@demo.shifohalqa.uz', password: 'secret' }));
+    expect(rateLimited.status).toBe(429);
+    expect(await rateLimited.json()).toEqual({ error: 'rate_limited' });
+
+    state.signInResult = {
+      data: { user: null, session: null },
+      error: { message: 'Upstream service unavailable', status: 503 },
+    };
+    const unavailable = await mobileLoginPost(loginRequest({ email: 'anvar@demo.shifohalqa.uz', password: 'secret' }));
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toEqual({ error: 'unavailable' });
   });
 });
 

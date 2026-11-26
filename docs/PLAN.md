@@ -100,22 +100,22 @@ Evolve existing `android/` Kotlin Compose code incrementally.
 
 ## M5 — Telegram Mini App (Bearer auth) and chat polish
 
-- [ ] **M5.1 Iframe-safe Mini App auth (`src/app/api/telegram/auth/route.ts`, `src/app/tg/**`).**
+- [x] **M5.1 Iframe-safe Mini App auth (`src/app/api/telegram/auth/route.ts`, `src/app/tg/**`).**
   - Verify Telegram `initData` HMAC, freshness, and binding server-side; return a **scoped short-lived Bearer token** (no `SameSite=Lax` cookie dependency in Telegram Web/Desktop iframes).
-  - Reuse the upgraded M3 patient components inside `/tg` with Telegram theme/safe-area tokens, `MainButton`/`BackButton`, haptics, and all **3 polished prepared-video exercises** with camera/file fallback.
-- [ ] **M5.2 Chat privacy opt-in, styled actions & API bridge (`services/telegram_bot/**`).**
-  - Add per-patient detail opt-in setting: default notifications stay generic with a deep link to the exact Mini App record; opted-in chats receive drug names, short 7-day summary, and approved doctor replies.
-  - Style inline buttons (`primary`/`success`/`danger`), update messages after confirmed actions, and route **new** M2/M5 clinical actions (multi-dose status, manual BP/steps, 7-day summary) to Next.js API via a shared bot-service secret instead of adding direct Python SQL.
-  - Add `SHIFO_ENV_ID` startup check to `services/telegram_bot/shifo_telegram/config.py`.
+  - Reuse the upgraded M3 patient components inside `/tg` with Telegram theme/safe-area tokens, `MainButton`/`SecondaryButton`/`BackButton`, haptics, `enableClosingConfirmation`, and all **3 polished prepared-video exercises** with camera/file fallback.
+- [x] **M5.2 Chat privacy opt-in, styled actions & API bridge (`services/telegram_bot/**`).**
+  - Add per-patient detail opt-in setting: default notifications stay generic with a deep link to the exact Mini App record; opted-in chats receive drug names, short 7-day summary, and approved doctor replies (`telegram_queue_on_brief_approval`).
+  - Style inline buttons (`primary`/`success`/`danger`), update messages in-place (`EditMessageText`) after confirmed actions, and route **new** M2/M5 clinical actions (multi-dose status, manual BP/steps, 7-day summary, opt-in toggle) to Next.js `/api/telegram/bridge` via `TELEGRAM_BOT_SERVICE_SECRET` + `X-Telegram-Chat-Id` instead of adding direct Python SQL.
+  - Add `SHIFO_ENV_ID` startup check and `TELEGRAM_BOT_SERVICE_SECRET` validation to `services/telegram_bot/shifo_telegram/config.py`.
 
-**M5 Checks.** `npm run verify`, `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests`, and real Telegram client smoke on the isolated preview bot.
+**M5 Checks.** Verified locally on `final` with `npm run verify` (`35` files, `313` unit tests), `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests` (`24` passed), `tests/e2e/telegram.spec.ts` (`2/2` passed), and `360×800` Light/Dark Visual QA (`0` console errors, `0` overflow).
 
 ---
 
 ## M6 — Isolated preview deploy and Grand Final acceptance
 
-- [ ] **M6.1 Isolated preview setup.** Configure Vercel Preview for `final` (`shifohalqa-final` Supabase, Vercel AI Gateway + Cloudflare keys, `SHIFO_ENV_ID=final-preview`), a separate preview Telegram bot, and a separate Railway worker service. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
-- [ ] **M6.2 End-to-end judge walkthrough.** Verify both Story 1 and Story 2 end-to-end on the isolated preview across Web (1-click Demo + pre-seeded clinic login), a physical Android phone, and a real Telegram client.
-- [ ] **M6.3 Honest disclosure & evidence.** Verify deterministic fallbacks when AI is disabled/unavailable, confirm zero `doctor_note` leakage, update `docs/BENCHMARK.md` with real measured latency/APK/CV numbers (including Android `Full` vs `Heavy`), and log final verification commands in `docs/PROGRESS.md`.
+- [~] **M6.1 Isolated preview setup.** Env templates, per-request `x-vercel-oidc-token` AI Gateway support, DRY `/api/mobile/v1/login`, and clean `package.json` ready on `final`; redeploy updated Vercel preview & preview `services/telegram_bot` Railway worker against `byswnhfcqxjvnallggxj` (`SHIFO_ENV_ID=final-preview`), keeping `main` untouched at `bc27a09`.
+- [~] **M6.2 End-to-end judge walkthrough.** Automated Story 1 + Story 2 E2E (`33 passed`, `1 skipped` live DoriMos) and Android Gradle (`assembleDebug`/`lintDebug`/`testDebugUnitTest`/`compileDebugAndroidTestKotlin`) passed on `final`; physical wireless Android phone smoke and live Telegram client smoke remain queued per owner hold.
+- [x] **M6.3 Honest disclosure & evidence.** Verified deterministic fallbacks and zero `doctor_note` leakage, aligned Android `androidTest` for `Full`/`Heavy`, added SSR hydration click-safety regression tests, authored `docs/GRAND_FINAL_HANDOFF.md`, expanded next-phase Agentic roadmap in `docs/ROADMAP_V2.md`, updated `docs/BENCHMARK.md` with measured checks, and logged final verification runs in `docs/PROGRESS.md`.
 
 **Deferred to [ROADMAP_V2](ROADMAP_V2.md):** Open clinic self-signup & one-time patient enrollment codes, emailsiz Android-only/Telegram-only onboarding & recovery, authenticated caregivers & clinic teams, `individual`/PAR-Q+, dated `plan_versions` & 7-day retroactive edits/conflict UI, doctor amendment revision threads, per-channel reminder schedulers, full 5-movement fixture pack, automated cron Storage expiry cleanup, experimental Telegram chat widgets, DMED/Asl Belgisi, and the **Fully Agentic Clinical Assistant**.

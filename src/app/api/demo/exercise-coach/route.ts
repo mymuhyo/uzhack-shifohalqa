@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { exerciseCoachInputSchema } from '@/lib/ai/exercise-coach';
+import { readVercelOidcTokenFromRequest } from '@/lib/ai/provider-config';
 import { personalizedExerciseCoach, publicExerciseCoach } from '@/lib/ai/public-exercise-coach';
 import { isDemoEnabled, isSameOriginDemoPost } from '@/lib/demo-session';
 import { readRequestJson } from '@/lib/request-body';
@@ -12,8 +13,9 @@ export async function POST(request: NextRequest) {
   if (!body.ok) return new Response(null, { status: body.status, headers });
   const input = exerciseCoachInputSchema.safeParse(body.body);
   if (!input.success) return Response.json({ error: 'invalid' }, { status: 400, headers });
+  const oidcToken = readVercelOidcTokenFromRequest(request);
   const advice = 'sample' in input.data
-    ? await publicExerciseCoach(input.data.sample)
-    : await personalizedExerciseCoach(input.data);
+    ? await publicExerciseCoach(input.data.sample, oidcToken)
+    : await personalizedExerciseCoach(input.data, oidcToken);
   return Response.json(advice, { headers });
 }

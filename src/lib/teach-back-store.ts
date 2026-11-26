@@ -96,6 +96,7 @@ export type TeachBackStatus = {
 
 export type TeachBackDependencies = {
   sql?: SqlAdapter | null;
+  oidcToken?: string | null;
   targets?: readonly SupervisedAiTarget[];
   complete?: (
     targets: readonly SupervisedAiTarget[],
@@ -252,7 +253,7 @@ export async function simplifyTeachBackQuestionsWithAi(
   questions: readonly TeachBackQuestion[],
   deps: TeachBackDependencies = {},
 ): Promise<{ questions: TeachBackQuestion[]; sourceMode: 'ai' | 'deterministic_fallback' }> {
-  const targets = deps.targets ?? configuredSupervisedAiTargets();
+  const targets = deps.targets ?? configuredSupervisedAiTargets({ oidcToken: deps.oidcToken });
   if (targets.length === 0 || questions.length === 0) {
     return { questions: [...questions], sourceMode: 'deterministic_fallback' };
   }

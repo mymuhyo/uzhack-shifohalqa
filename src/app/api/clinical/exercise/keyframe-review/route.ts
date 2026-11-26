@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { keyframeReviewInputSchema, reviewExerciseKeyframes } from '../../../../../lib/ai/exercise-video-review';
+import { readVercelOidcTokenFromRequest } from '../../../../../lib/ai/provider-config';
 import { resolveClinicalRequestActor } from '../../../../../lib/auth';
 import { readRequestJson } from '../../../../../lib/request-body';
 
@@ -43,7 +44,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status, headers: noStore });
     }
 
-    const outcome = await reviewExerciseKeyframes(parsed.data, resolved.actor);
+    const outcome = await reviewExerciseKeyframes(parsed.data, resolved.actor, {
+      oidcToken: readVercelOidcTokenFromRequest(request),
+    });
     if (!outcome.ok) {
       return NextResponse.json({ error: outcome.error }, { status: outcome.status, headers: noStore });
     }

@@ -165,3 +165,22 @@ Lokal `exp/mashq-ishonchliligi` filialida haqiqiy Gemini brauzer sinovi zaxira `
 21-noyabr 2026 (MYT) · lokal production build · Chromium 360×800. MediaPipe ommaviy CDC klipida 2 to‘liq va 0 chala sikl ko‘rsatdi. Haqiqiy `baidu/ernie-5.5-flash-preview:free` bu natijani 1 894 ms da izohladi. Video modeli sinov javobida 2 s va 6 s kuzatilganda, Baidu haqiqiy API orqali moslikni 2 412 ms da izohladi. Vaqtlar tugma bosilgach server javobini kutishdan boshlab o‘lchandi. Brauzer yuborgan JSON faqat izoh toifasini o‘z ichiga oldi.
 
 Shu akkaunt bilan jonli OpenRouter video so‘rovlari Nemotron va Gemma 4 26B uchun HTTP 402 qaytardi. Xizmat video kirishi uchun kamida 1 AQSh dollari balans talab qildi. Baidu matn so‘rovlari HTTP 200 qaytardi.
+
+### M5/M6 Yakuniy `final` Tekshiruvlari va `/tg` Vizual QA (2026-11-26)
+
+2026-11-26 23:40 MYT · izolyatsiyalangan `shifohalqa-final` (`byswnhfcqxjvnallggxj`, `SHIFO_ENV_ID=final-preview`) va mahalliy build muhitida ketma-ket o‘lchangan tekshiruv natijalari:
+
+| Tekshiruv to‘plami | Natija | O‘lchangan vaqt |
+|---|---|---|
+| `npm run verify` (`typegen` + `tsc --noEmit` + `eslint .` + `vitest` + `next build`) | `35` fayl / `313` unit test o‘tdi; `eslint` va `next build` toza | `42 s` |
+| `uv run --project services/telegram_bot --locked --no-sync pytest services/telegram_bot/tests` | `24 passed` (`test_app.py` + `test_worker.py`) | `6 s` (`4.77 s` pytest) |
+| `SHIFO_E2E_DATABASE_URL="$DATABASE_URL" SHIFO_ENV_ID=final-preview npm run e2e` | `33 passed`, `1 skipped` (`dorimos-live`), `0` xato (`OfflineTelegramSession` mock transport bilan) | `219 s` (`3.6 m`) |
+| `cd android && ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin` | `BUILD SUCCESSFUL` (`lint`, unit testlar va `androidTest` kompilatsiyasi toza; wireless telefon ulanmagan) | `20 s` (`19 s` Gradle) |
+
+- **Playwright E2E ichidagi real MediaPipe / brauzer o‘lchovlari (2026-11-26 run):**
+  - `MediaPipe CDC sample` (`exercise.spec.ts`): **`11 753 ms`**, `109` kadr, ishonch `0.857`, eng kichik burchak `89.8°`, **`2` to‘liq, `0` chala**.
+  - `MediaPipe empty scene`: **`4 052 ms`**, `6` GET so‘rov, media yuklashsiz.
+  - `Browser judge journey` (`rehabilitation.spec.ts`): **`25 217 ms`** (avtomatlashtirilgan sintetik demo).
+- **`/tg` Mini App `360×800` Light va Dark Visual QA (Chromium + mock `window.Telegram.WebApp`):**
+  - Barcha 4 bo‘limda (`Bugun`, `Mashq`, `Hisobot`, `Maxfiylik`) ham Light (`rgb(255, 255, 255)` / `rgb(0, 0, 0)`), ham Dark (`rgb(10, 10, 11)` / `rgb(255, 255, 255)`) rejimlarda `scrollWidth === clientWidth === 360` (`0` gorizontal overflow), `0` konsol xatosi va `0` `>=400` tarmoq xatosi tasdiqlandi.
+- **Ochiq qolgan real-qurilma o‘lchovlari:** jismoniy Android telefonda jonli kamera/video uchun `Full` vs `Heavy` kechikish taqqoslashi va real Telegram ilovasida jonli preview webhook sinovi qurilma sinovi bosqichida qo‘shimcha o‘lchanadi.

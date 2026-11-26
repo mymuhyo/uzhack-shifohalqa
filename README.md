@@ -23,10 +23,11 @@ Tanlanadigan mashqlar — o‘tirib-turish (`chair_stand`), tirsak bukish (`elbo
 | Fayl | Maqsad |
 |---|---|
 | [`AGENTS.md`](AGENTS.md) | Ish chegaralari, branch qoidalari va pushdan oldingi tekshiruvlar |
+| [`docs/GRAND_FINAL_HANDOFF.md`](docs/GRAND_FINAL_HANDOFF.md) | Hakamlar uchun Story 1 + Story 2 tezkor qo‘llanma va halollik deklaratsiyasi |
 | [`docs/PLAN.md`](docs/PLAN.md) | Grand Final M1–M6 bajarish rejasi va gate tekshiruvlari |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Grand Final arxitektura qarorlari (`ADR-001`–`ADR-008`) |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Interfeys, motion va platformalararo dizayn shartnomasi |
-| [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) | Grand Finaldan keyingi klinik pilot va v2 reja |
+| [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) | Grand Finaldan keyingi klinik pilot va Fully Agentic Clinical Assistant v2 reja |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | Sessiyalararo davomiylik jurnali |
 | [`docs/SPEC.md`](docs/SPEC.md) | Mahsulot + texnik kontrakt: rollar, sxema, AI pipeline, qoidalar |
 | [`docs/INTERFACES.md`](docs/INTERFACES.md) | Engine eksportlari va server integratsiyasi |
@@ -70,9 +71,12 @@ node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/dorimos-
 
 `npm run dev` va `npm run build` boshlanishida pin qilingan MediaPipe paketidan WASM fayllari `public/models/wasm/` ga ko‘chiriladi. Lite model repoda saqlanadi. [Kamera va klip sinovi](docs/BENCHMARK.md)
 
-## Telegram bot
+## Telegram bot va Mini App (`/tg`)
 
-Bot Python 3.12–3.14 va aiogram bilan alohida servisda ishlaydi. Veb-ilova uchun `TELEGRAM_BOT_USERNAME` yetarli. Python servisiga shu botning nomi, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_APP_URL` va shu muhitdagi PostgreSQL ulanishini bering. `TELEGRAM_DATABASE_URL` bo‘sh bo‘lsa, `DATABASE_URL` ishlatiladi. Webhook siri uchun `openssl rand -hex 32` ishlating. `TELEGRAM_APP_URL` tugmadagi veb-ilova manzili.
+Bot Python 3.12–3.14 va `aiogram==3.31.0` servisida ishlaydi (`services/telegram_bot`). Veb-ilova `TELEGRAM_BOT_USERNAME` va `TELEGRAM_BOT_TOKEN` orqali Telegram `initData` imzosini tekshirib, Telegram Web/Desktop/Mobile iframe’larida kukisiz ishlaydigan qisqa muddatli `tgm1.` Bearer tokenini chiqaradi (`POST /api/telegram/auth`). Bot esa `TELEGRAM_BOT_SERVICE_SECRET` + `X-Telegram-Chat-Id` bilan Next.js `/api/telegram/bridge` ko‘prigiga murojaat qiladi.
+
+- **Mini App (`/tg`):** Telegram SDK `themeParams`/`colorScheme` (Light/Dark), `safeAreaInset`, `MainButton`/`SecondaryButton`/`BackButton`, `HapticFeedback`, 4 bo‘lim (`Bugun`, `Mashq` — barcha 3 harakat, `Hisobot` — 7 kunlik L4 brief va trend, `Maxfiylik` — chat tafsilotlari opt-in/opt-out va Yaqinim havolasi) hamda 1-click Demo kirishi.
+- **Bot buyruqlari:** `/start`, `/bugun` (semantik `success`/`primary`/`danger` tugmalar + joyida `EditMessageText` ko‘p-doza kartasi), `/bosim 135/85`, `/qadam 4800`, `/hisobot`, `/maxfiylik`, `/mashq`, `/ilova`, `/stop`. Sukut bo‘yicha chat maxfiyligi himoyalangan (tafsilotlar faqat opt-in dan keyin ko‘rinadi).
 
 ShifoHalqaning alohida bot nomi `shifohalqa_bot`. Jonli webhook boshqaruvi uchun `services/telegram_bot/.env.local` ishlatiladi. Lokal sinov uchun `.env.test.local` da alohida test bazasi va test botini belgilang yoki repodagi mock transport bilan E2E’ni ishga tushiring. Bot tokenini xizmatning maxfiy sozlamasida saqlang. Yangilash zarur bo‘lsa, BotFather’dan yangi token oling. [Telegram token yo‘riqnomasi](https://core.telegram.org/bots/features#generating-an-authentication-token)
 

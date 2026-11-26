@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { readVercelOidcTokenFromRequest } from '../../../../lib/ai/provider-config';
 import { resolveClinicalRequestActor } from '../../../../lib/auth';
 import { readRequestJson } from '../../../../lib/request-body';
 import {
@@ -37,7 +38,11 @@ export async function GET(request: NextRequest) {
     });
     if (!resolved.ok) return errorJson(resolved.error, resolved.status);
 
-    const status = await getTeachBackStatus(resolved.actor, { simplifyWithAi });
+    const status = await getTeachBackStatus(
+      resolved.actor,
+      { simplifyWithAi },
+      { oidcToken: readVercelOidcTokenFromRequest(request) },
+    );
     if (!status) return errorJson('unavailable', 503);
     return json(status, 200);
   } catch {

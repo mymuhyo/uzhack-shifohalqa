@@ -36,6 +36,7 @@ const briefDeadlineMs = 15_000;
 
 export type ClinicalBriefDependencies = {
   sql?: SqlAdapter | null;
+  oidcToken?: string | null;
   targets?: readonly SupervisedAiTarget[];
   complete?: (
     targets: readonly SupervisedAiTarget[],
@@ -489,7 +490,7 @@ export async function generateClinicalBrief(
   let fallbackReason: BriefFallbackReason | undefined;
   let rejectedCitationIds: string[] | undefined;
 
-  const targets = deps.targets ?? configuredSupervisedAiTargets();
+  const targets = deps.targets ?? configuredSupervisedAiTargets({ oidcToken: deps.oidcToken });
   if (targets.length === 0) {
     fallbackReason = 'unconfigured';
   } else {

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { findActiveMobilePatientMembership, getSupabasePublicEnv } from '../../../../../lib/auth';
 import { getDatabase } from '../../../../../lib/db';
 import { readMobileBody } from '../../../../../lib/mobile-demo';
 import type { Database } from '../../../../../lib/supabase/database.types';
@@ -11,14 +12,6 @@ const mobileLoginSchema = z.strictObject({
   workspaceId: z.uuid().optional(),
 });
 
-const mobileLoginMembershipSchema = z.object({
-  workspaceId: z.uuid(),
-  patientId: z.uuid().nullable(),
-  role: z.enum(['doctor', 'patient', 'caregiver', 'individual']),
-  patientName: z.string().nullable(),
-  isDemo: z.literal(false).optional().default(false),
-});
-
 const noStoreHeaders = {
   'Cache-Control': 'private, no-store',
   'X-Robots-Tag': 'noindex',
@@ -26,16 +19,6 @@ const noStoreHeaders = {
 
 function mobileLoginJson(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: noStoreHeaders });
-}
-
-function getSupabasePublicEnv(): { url: string; key: string } | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
-    '';
-  if (!url || !key) return null;
-  return { url, key };
 }
 
 export async function POST(request: Request) {
@@ -62,48 +45,43 @@ export async function POST(request: Request) {
 
     const { email, password, workspaceId } = parsed.data;
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user || !data.session?.access_token) {
+    if (error) {
+      const statusCode = typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : null;
+      const errorCode = typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : null;
+      if (statusCode === 429 || errorCode === 'over_request_rate_limit') {
+        return mobileLoginJson({ error: 'rate_limited' }, 429);
+      }
+      if (statusCode !== null && statusCode >= 500) {
+        return mobileLoginJson({ error: 'unavailable' }, 503);
+      }
+      return mobileLoginJson({ error: 'invalid_credentials' }, 401);
+    }
+    if (!data.user || !data.session?.access_token) {
       return mobileLoginJson({ error: 'invalid_credentials' }, 401);
     }
 
-    const rows = await sql`
-      SELECT cm.workspace_id AS "workspaceId",
-             p.id AS "patientId",
-             cm.role,
-             p.name AS "patientName",
-             w.is_demo AS "isDemo"
-      FROM public.clinic_memberships AS cm
-      JOIN public.workspaces AS w ON w.id = cm.workspace_id AND w.is_demo = false
-      LEFT JOIN public.patients AS p ON p.workspace_id = cm.workspace_id AND p.id = cm.actor_id
-      WHERE cm.user_id = ${data.user.id}
-        AND cm.is_demo = false
-        AND cm.status = 'active'
-        AND w.is_demo = false
-        AND (${workspaceId ?? null}::uuid IS NULL OR cm.workspace_id = ${workspaceId ?? null}::uuid)
-      ORDER BY (cm.role IN ('patient', 'individual')) DESC, cm.created_at DESC, cm.id DESC
-    `;
-
-    for (const rawRow of rows) {
-      const membership = mobileLoginMembershipSchema.safeParse(rawRow);
-      if (!membership.success) continue;
-      if ((membership.data.role === 'patient' || membership.data.role === 'individual') && membership.data.patientId) {
-        const expiresAtMs = typeof data.session.expires_at === 'number'
-          ? data.session.expires_at * 1000
-          : Date.now() + (typeof data.session.expires_in === 'number' ? data.session.expires_in : 3600) * 1000;
-        return mobileLoginJson(
-          {
-            token: data.session.access_token,
-            expiresAt: new Date(expiresAtMs).toISOString(),
-            workspaceId: membership.data.workspaceId,
-            patientName: membership.data.patientName ?? 'Bemor',
-            isDemo: false,
-          },
-          200,
-        );
-      }
+    const membership = await findActiveMobilePatientMembership(sql, data.user.id, workspaceId ?? null);
+    if (!membership) {
+      return mobileLoginJson({ error: 'forbidden' }, 403);
     }
 
-    return mobileLoginJson({ error: 'forbidden' }, 403);
+    const expiresAtMs = typeof data.session.expires_at === 'number'
+      ? data.session.expires_at * 1000
+      : Date.now() + (typeof data.session.expires_in === 'number' ? data.session.expires_in : 3600) * 1000;
+    return mobileLoginJson(
+      {
+        token: data.session.access_token,
+        expiresAt: new Date(expiresAtMs).toISOString(),
+        workspaceId: membership.workspaceId,
+        patientName: membership.patientName,
+        isDemo: false,
+      },
+      200,
+    );
   } catch {
     return mobileLoginJson({ error: 'unavailable' }, 503);
   }

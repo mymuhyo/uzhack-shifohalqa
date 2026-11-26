@@ -176,15 +176,18 @@ function cloudflareCredentials() {
   return accountId && apiToken ? { accountId, apiToken } : null;
 }
 
-export function isMedicationBoxAiConfigured() {
-  return Boolean(cloudflareCredentials() || (process.env.GEMINI_API_KEY?.trim() && configuredAiCompletion()));
+export function isMedicationBoxAiConfigured(oidcToken?: string | null) {
+  return Boolean(cloudflareCredentials() || (process.env.GEMINI_API_KEY?.trim() && configuredAiCompletion(oidcToken)));
 }
 
 /** For server-owned synthetic fixtures. The caller owns access checks, confirmation and storage. */
-export async function readMedicationBox(input: BoxImageInput): Promise<MedicationBoxReading> {
+export async function readMedicationBox(
+  input: BoxImageInput,
+  options?: { oidcToken?: string | null },
+): Promise<MedicationBoxReading> {
   const parsed = boxImageInput.parse(input);
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const completion = configuredAiCompletion();
+  const completion = configuredAiCompletion(options?.oidcToken);
   const cloudflare = cloudflareCredentials();
   const signal = AbortSignal.timeout(requestDeadlineMs);
 

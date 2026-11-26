@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { compareMedicationBox, isMedicationBoxAiConfigured, readMedicationBox } from './ai/dorimos';
+import { readVercelOidcTokenFromRequest } from './ai/provider-config';
 import { medicationBoxLabelSchema } from './ai/medication-box';
 import type { ClinicalActor } from './clinical-types';
 import { issueBoxConfirmation, readBoxConfirmation } from './dorimos-confirmation';
@@ -89,7 +90,8 @@ export async function handleDorimosRequest(actor: ClinicalActor, request: Reques
     return { data: { status }, status: status === 'not_found' ? 404 : 200 };
   }
 
-  if (!isMedicationBoxAiConfigured()) return { data: { status: 'manual' }, status: 200 };
+  const oidcToken = readVercelOidcTokenFromRequest(request);
+  if (!isMedicationBoxAiConfigured(oidcToken)) return { data: { status: 'manual' }, status: 200 };
   if (!await reserveDorimosScan(actor.workspaceId)) return { data: { status: 'manual' }, status: 429 };
 
   const sample = dorimosSamples[input.sampleId];
@@ -98,7 +100,7 @@ export async function handleDorimosRequest(actor: ClinicalActor, request: Reques
     image,
     mimeType: 'image/png',
     expected: dorimosPracticePrescription,
-  });
+  }, { oidcToken });
   if (measurement.status !== 'needs_confirmation') return { data: { status: measurement.status }, status: 200 };
 
   const reading = boxReading.parse(measurement);
@@ -134,7 +136,8 @@ async function handleMultipartScan(actor: ClinicalActor, request: Request): Prom
     strength: target.strength,
     unit: target.strengthUnit,
   });
-  if (!prescription.success || !secret || !isMedicationBoxAiConfigured()) {
+  const oidcToken = readVercelOidcTokenFromRequest(request);
+  if (!prescription.success || !secret || !isMedicationBoxAiConfigured(oidcToken)) {
     return { data: { status: 'manual' }, status: 200 };
   }
   if (!await reserveDorimosScan(actor.workspaceId)) return { data: { status: 'manual' }, status: 429 };
@@ -143,7 +146,7 @@ async function handleMultipartScan(actor: ClinicalActor, request: Request): Prom
     image: bytes,
     mimeType,
     expected: prescription.data,
-  });
+  }, { oidcToken });
   if (measurement.status !== 'needs_confirmation') return { data: { status: measurement.status }, status: 200 };
 
   const reading = boxReading.parse(measurement);

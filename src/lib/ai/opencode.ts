@@ -5,10 +5,10 @@ export type AiCompletion =
   | { provider: 'openrouter' | 'opencode'; key: string }
   | { provider: 'auto'; targets: FallbackTarget[] };
 
-export function configuredAiCompletion(): AiCompletion | null {
+export function configuredAiCompletion(oidcToken?: string | null): AiCompletion | null {
   const provider = process.env.AI_COMPLETION_PROVIDER?.trim() || 'openrouter';
   if (provider === 'auto') {
-    const targets = configuredFallbackTargets();
+    const targets = configuredFallbackTargets({ oidcToken });
     return targets.length ? { provider, targets } : null;
   }
   if (provider !== 'opencode' && provider !== 'openrouter') return null;

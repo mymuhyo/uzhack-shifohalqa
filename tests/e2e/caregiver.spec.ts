@@ -118,6 +118,28 @@ test('a patient shares only the current daily aggregate and can rotate, revoke a
   }
 });
 
+test('SSR hydration click-safety: immediate click on Ulashishni yoqish and Icha olmadim after goto never drops clicks', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Shifokor sifatida kirish' }).click();
+  await page.getByLabel('Dori vaqti').fill('00:00');
+  await page.getByLabel('Bosim o‘lchash vaqti').fill('00:00');
+  await page.getByRole('button', { name: 'Rejani biriktirish' }).click();
+  await expect(page.getByRole('heading', { name: 'Biriktirilgan reja' })).toBeVisible();
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Bemor sifatida kirish' }).click();
+  await expect(page).toHaveURL('/patient');
+
+  // Re-open /patient directly from SSR HTML (`domcontentloaded`) and immediately trigger interactive controls
+  await page.goto('/patient', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Ulashishni yoqish' }).click();
+  await expect(page.getByLabel('Yaqiningizga beriladigan havola')).toBeVisible();
+
+  await page.goto('/patient', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Icha olmadim', { exact: true }).click();
+  await expect(page.getByLabel('Nega icha olmadingiz?')).toBeVisible();
+});
+
 function hashLink(link: string) {
   return digestCaregiverToken(new URL(link).pathname.split('/').at(-1));
 }

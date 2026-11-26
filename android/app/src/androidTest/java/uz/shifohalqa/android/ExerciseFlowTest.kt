@@ -41,15 +41,14 @@ class ExerciseFlowTest {
         compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("3")
         compose.onNodeWithText("Qo‘lda qayd saqlash").performScrollTo().performClick()
         compose.onNodeWithText("Namuna qaydi. Shifokorga yuborish uchun veb-panelga ulang.").assertExists()
-        compose.onNodeWithText("AI tahlilchi · CDC namunasi").performScrollTo().performClick()
-        compose.onNodeWithText("AI tahlili uchun veb-panelga ulang.").assertExists()
+        compose.onNodeWithText("Tayyor namunani tahlil qilish").assertExists()
     }
 
     @Test fun choosesAnotherMovementForOfflinePractice() {
         compose.onNodeWithText("O‘tirib-turish mashqi").performScrollTo().performClick()
         compose.onNodeWithText("Mashq turini tanlash").performClick()
-        compose.onNodeWithText("Qo‘l ko‘tarish").performClick()
-        compose.onNodeWithText("Qo‘lni yelkadan ko‘tarish").assertExists()
+        compose.onNodeWithText("Oyoq tekislash").performClick()
+        compose.onNodeWithText("O‘tirib oyoqni tekislash").assertExists()
         compose.onNodeWithText("Kamerani boshlash").assertExists()
         compose.onNodeWithText("Video tanlash va tahlil qilish").assertExists()
     }

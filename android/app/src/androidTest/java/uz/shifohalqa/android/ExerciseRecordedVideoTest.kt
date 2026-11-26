@@ -31,7 +31,7 @@ class ExerciseRecordedVideoTest {
                 context.assets.open("pose-cdc-sample.webm").use { it.copyTo(output) }
             }
             val started = System.nanoTime()
-            val result = analyzeExerciseVideo(context, ExerciseClip.fromPicker(uri), 100)
+            val result = analyzeExerciseVideo(context, ExerciseClip.fromPicker(uri), 100, accuracy = PoseAccuracy.Heavy)
             println("Heavy recorded clip: ${(System.nanoTime() - started) / 1_000_000} ms, ${result.measurement}")
             assertTrue("Heavy clip gives a usable measurement", result.measurement.savable)
             assertEquals(2, result.measurement.validReps)

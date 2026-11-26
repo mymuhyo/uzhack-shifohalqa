@@ -8,6 +8,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,12 +21,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, 0x80172F28.toInt()),
-        )
         val demo = PatientDemo(this)
-        setContent { ShifoTheme { PatientApp(demo, mobile) } }
+        val preferences = PatientPreferences(this)
+        setContent {
+            val dark = when (preferences.appearance) {
+                Appearance.System -> isSystemInDarkTheme()
+                Appearance.Light -> false
+                Appearance.Dark -> true
+            }
+            SideEffect {
+                val barStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+                    else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+            }
+            CompositionLocalProvider(LocalPatientPreferences provides preferences) {
+                ShifoTheme(dark, preferences.largeText) { PatientApp(demo, mobile) }
+            }
+        }
     }
 }
 

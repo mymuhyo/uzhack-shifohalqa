@@ -157,14 +157,14 @@ internal fun DorimosSheet(
         sheetGesturesEnabled = !busy,
         containerColor = Card,
         contentColor = Ink,
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        shape = RoundedCornerShape(topStart = 11.dp, topEnd = 11.dp),
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionTitle("DoriMos · qutini tekshirish")
-            Text("${task.title} qutisini real kamera bilan rasmga oling yoki tayyor demo namunani tanlang.", color = Muted)
+            Text("${task.title} qutisidagi nom va kuchi ko‘rinadigan qilib suratga oling.", color = Muted)
             PrimaryAction("Kamera bilan rasmga olish", enabled = !busy) {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                     launchCamera()
@@ -173,6 +173,7 @@ internal fun DorimosSheet(
                 }
             }
             OutlinedButton(
+                shape = MaterialTheme.shapes.large,
                 onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
@@ -187,49 +188,53 @@ internal fun DorimosSheet(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(16.dp)),
                 )
             }
-            Text("Yoki tayyor demo qutilar:", color = Muted, style = MaterialTheme.typography.labelLarge)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                dorimosSampleOptions.take(2).forEach { sample ->
-                    OutlinedButton(
-                        onClick = {
-                            busy = true
-                            confirmation = null
-                            statusMessage = "${sample.label} tekshirilmoqda…"
-                            scope.launch {
-                                try {
-                                    handleOutcome(mobile.dorimosScanSample(task.id, sample.id), isManual = false)
-                                } catch (_: MobileFailure) {
-                                    statusMessage = "Aloqa uzildi. Qayta urinib ko‘ring."
-                                } finally {
-                                    busy = false
+            if (mobile.state.isDemo) {
+                Text("Tayyor demo qutilar", color = Muted, style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dorimosSampleOptions.take(2).forEach { sample ->
+                        OutlinedButton(
+                            shape = MaterialTheme.shapes.large,
+                            onClick = {
+                                busy = true
+                                confirmation = null
+                                statusMessage = "${sample.label} tekshirilmoqda…"
+                                scope.launch {
+                                    try {
+                                        handleOutcome(mobile.dorimosScanSample(task.id, sample.id), isManual = false)
+                                    } catch (_: MobileFailure) {
+                                        statusMessage = "Aloqa uzildi. Qayta urinib ko‘ring."
+                                    } finally {
+                                        busy = false
+                                    }
                                 }
-                            }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(sample.label) }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text(sample.label) }
+                    }
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                dorimosSampleOptions.drop(2).forEach { sample ->
-                    OutlinedButton(
-                        onClick = {
-                            busy = true
-                            confirmation = null
-                            statusMessage = "${sample.label} tekshirilmoqda…"
-                            scope.launch {
-                                try {
-                                    handleOutcome(mobile.dorimosScanSample(task.id, sample.id), isManual = false)
-                                } catch (_: MobileFailure) {
-                                    statusMessage = "Aloqa uzildi. Qayta urinib ko‘ring."
-                                } finally {
-                                    busy = false
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dorimosSampleOptions.drop(2).forEach { sample ->
+                        OutlinedButton(
+                            shape = MaterialTheme.shapes.large,
+                            onClick = {
+                                busy = true
+                                confirmation = null
+                                statusMessage = "${sample.label} tekshirilmoqda…"
+                                scope.launch {
+                                    try {
+                                        handleOutcome(mobile.dorimosScanSample(task.id, sample.id), isManual = false)
+                                    } catch (_: MobileFailure) {
+                                        statusMessage = "Aloqa uzildi. Qayta urinib ko‘ring."
+                                    } finally {
+                                        busy = false
+                                    }
                                 }
-                            }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(sample.label) }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text(sample.label) }
+                    }
                 }
             }
 
@@ -237,7 +242,7 @@ internal fun DorimosSheet(
 
             confirmation?.let { item ->
                 PatientCard {
-                    Badge("Ishonch: ${(item.confidence * 100).roundToInt()}%", Mint, Green)
+                    Badge("Ishonch: ${(item.confidence * 100).roundToInt()}%", Tinted, Action)
                     SectionTitle("${item.drugName} · ${item.strengthLabel}")
                     Text("Model: ${item.model} (${item.decisionModel})", color = Muted, style = MaterialTheme.typography.bodyMedium)
                     PrimaryAction("Qutidagi yozuvni tasdiqlash (L2)", enabled = !busy) {

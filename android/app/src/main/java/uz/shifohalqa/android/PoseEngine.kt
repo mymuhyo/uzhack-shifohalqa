@@ -117,10 +117,10 @@ internal enum class PoseMovement(
     }
 }
 
-internal enum class PoseFormWarning(val labelUz: String) {
-    TrunkLean("Gavdani tik tuting"),
-    ElbowDrift("Tirsakni tanaga yaqin tuting"),
-    ShoulderAsymmetry("Yelkani tekis tuting"),
+internal enum class PoseFormWarning(val labelUz: String, val code: String) {
+    TrunkLean("Gavdani tik tuting", "trunk_lean"),
+    ElbowDrift("Tirsakni tanaga yaqin tuting", "elbow_drift"),
+    ShoulderAsymmetry("Yelkani tekis tuting", "shoulder_asymmetry"),
 }
 
 internal data class PoseLandmarkPoint(val x: Float, val y: Float, val visibility: Float)
@@ -130,6 +130,7 @@ internal data class PoseCycleResult(
     val toMs: Long,
     val minAngle: Double,
     val reachesTarget: Boolean,
+    val postureCodes: Set<String> = emptySet(),
 )
 
 internal data class PoseFrameUpdate(
@@ -230,7 +231,7 @@ internal class PoseTracker(
         var minimum = initial.angle
         var maximum = initial.angle
         var bottomFrames = 0
-        var hasCompensation = false
+        val postureCodes = mutableSetOf<String>()
     }
 
     private val angleWindow = 5
@@ -408,7 +409,7 @@ internal class PoseTracker(
                     cycle = ActiveCycle(start).apply {
                         samples.add(sample)
                         minimum = min(minimum, sample.angle)
-                        if (currentFormWarning != null) hasCompensation = true
+                        currentFormWarning?.let { postureCodes.add(it.code) }
                     }
                 }
                 return
@@ -422,7 +423,7 @@ internal class PoseTracker(
             }
             active.samples.add(sample)
             active.minimum = min(active.minimum, sample.angle)
-            if (currentFormWarning != null) active.hasCompensation = true
+            currentFormWarning?.let { active.postureCodes.add(it.code) }
             if (rawAngle <= movement.peakThreshold) active.bottomFrames += 1
             if (phase == Phase.Descending && sample.angle <= movement.peakThreshold && active.bottomFrames >= 2) {
                 phase = Phase.Bottom
@@ -434,8 +435,8 @@ internal class PoseTracker(
             if (phase == Phase.Ascending && duration >= minCycleMs) {
                 val reachesTarget = active.minimum <= targetAngle + 1e-9
                 if (reachesTarget) validReps += 1 else shallowReps += 1
-                if (active.hasCompensation) compensationCycles += 1
-                completed.add(PoseCycleResult(active.samples.first().timeMs, sample.timeMs, active.minimum, reachesTarget))
+                if (active.postureCodes.isNotEmpty()) compensationCycles += 1
+                completed.add(PoseCycleResult(active.samples.first().timeMs, sample.timeMs, active.minimum, reachesTarget, active.postureCodes.toSet()))
                 if (completed.size > 40) completed.removeAt(0)
                 if (motionSignature == null) motionSignature = sampleSignature(active.samples)
             } else {
@@ -461,7 +462,7 @@ internal class PoseTracker(
                 cycle = ActiveCycle(start).apply {
                     samples.add(sample)
                     maximum = max(maximum, sample.angle)
-                    if (currentFormWarning != null) hasCompensation = true
+                    currentFormWarning?.let { postureCodes.add(it.code) }
                 }
             }
             return
@@ -475,7 +476,7 @@ internal class PoseTracker(
         }
         active.samples.add(sample)
         active.maximum = max(active.maximum, sample.angle)
-        if (currentFormWarning != null) active.hasCompensation = true
+        currentFormWarning?.let { active.postureCodes.add(it.code) }
         if (rawAngle >= movement.peakThreshold) active.bottomFrames += 1
         if (phase == Phase.Descending && sample.angle >= movement.peakThreshold && active.bottomFrames >= 2) {
             phase = Phase.Bottom
@@ -487,8 +488,8 @@ internal class PoseTracker(
         if (phase == Phase.Ascending && duration >= minCycleMs) {
             val reachesTarget = active.maximum >= targetAngle - 1e-9
             if (reachesTarget) validReps += 1 else shallowReps += 1
-            if (active.hasCompensation) compensationCycles += 1
-            completed.add(PoseCycleResult(active.samples.first().timeMs, sample.timeMs, active.maximum, reachesTarget))
+            if (active.postureCodes.isNotEmpty()) compensationCycles += 1
+            completed.add(PoseCycleResult(active.samples.first().timeMs, sample.timeMs, active.maximum, reachesTarget, active.postureCodes.toSet()))
             if (completed.size > 40) completed.removeAt(0)
             if (motionSignature == null) motionSignature = sampleSignature(active.samples)
         } else {
@@ -549,7 +550,9 @@ internal class PoseTracker(
         if (left == null || right == null) return left ?: right
         trackedSide?.let { side ->
             val current = if (side == Side.Left) left else right
-            if ((liveCamera && current.visibility >= framingVisibility) || abs(left.visibility - right.visibility) < 0.05) {
+            val startedSeatedKneeCycle = movement == PoseMovement.SeatedKneeExt && standingSample != null
+            val keepVisibleSide = (liveCamera || startedSeatedKneeCycle) && current.visibility >= framingVisibility
+            if (keepVisibleSide || abs(left.visibility - right.visibility) < 0.05) {
                 return current
             }
         }

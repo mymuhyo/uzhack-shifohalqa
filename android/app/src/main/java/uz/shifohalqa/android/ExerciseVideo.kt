@@ -1,6 +1,8 @@
 package uz.shifohalqa.android
 
 import android.content.Context
+import android.os.SystemClock
+import java.io.File
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.annotation.OptIn
@@ -24,10 +26,13 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 
-internal class ExerciseClip private constructor(val uri: Uri, val isPublic: Boolean) {
+internal class ExerciseClip private constructor(val uri: Uri, val sample: ExerciseSample?) {
+    val isPublic get() = sample != null
+
     companion object {
-        val PublicSample = ExerciseClip("asset:///pose-cdc-sample.webm".toUri(), true)
-        fun fromPicker(uri: Uri) = ExerciseClip(uri, false)
+        val PublicSample = ExerciseClip("asset:///pose-cdc-sample.webm".toUri(), ExerciseSample.Chair)
+        fun fromPicker(uri: Uri) = ExerciseClip(uri, null)
+        fun cached(file: File, sample: ExerciseSample) = ExerciseClip(Uri.fromFile(file), sample)
     }
 }
 
@@ -35,9 +40,15 @@ internal data class ExerciseVideoResult(
     val measurement: ExerciseMeasurement,
     val cycles: List<ExerciseCycle>,
     val sha256: String?,
-    val isPublic: Boolean,
-    val movement: PoseMovement = PoseMovement.ChairStand,
-)
+    val clip: ExerciseClip,
+    val movement: PoseMovement,
+    val targetAngle: Int,
+    val durationMs: Long,
+    val elapsedMs: Long,
+    val accuracy: PoseAccuracy,
+) {
+    val isPublic get() = clip.isPublic
+}
 
 internal class ExerciseVideoTooLong : Exception()
 private const val maxClipMs = 120_000L
@@ -50,26 +61,28 @@ internal suspend fun analyzeExerciseVideo(
     movement: PoseMovement = PoseMovement.ChairStand,
     targetReps: Int = 5,
     maxShallow: Int = 1,
+    accuracy: PoseAccuracy = PoseAccuracy.Full,
     onProgress: (Int) -> Unit = {},
 ): ExerciseVideoResult = Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { decoder ->
-    withContext(decoder) { analyzeClip(context, clip, ExercisePlan("video", targetAngle, targetReps, movement, maxShallow), onProgress) }
+    withContext(decoder) { analyzeClip(context, clip, ExercisePlan("video", targetAngle, targetReps, movement, maxShallow), accuracy, onProgress) }
 }
 
 @OptIn(UnstableApi::class)
 private suspend fun analyzeClip(
-    context: Context, clip: ExerciseClip, plan: ExercisePlan, onProgress: (Int) -> Unit,
+    context: Context, clip: ExerciseClip, plan: ExercisePlan, accuracy: PoseAccuracy, onProgress: (Int) -> Unit,
 ): ExerciseVideoResult {
     val coroutine = currentCoroutineContext()
     val app = context.applicationContext
+    val started = SystemClock.elapsedRealtime()
     // The system picker gives the app only the selected content URI.
     require(clip.isPublic || clip.uri.scheme == "content")
-    val duration = if (clip.isPublic) 8_792L else clipDuration(app, clip.uri)
+    val duration = if (clip.uri.scheme == "asset") 8_792L else clipDuration(app, clip.uri)
     require(duration > 0)
     if (duration > maxClipMs) throw ExerciseVideoTooLong()
 
     val tracker = ExerciseMotionTracker(plan, live = false)
     val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-        .setBaseOptions(BaseOptions.builder().setModelAssetPath("pose_landmarker_heavy.task").build())
+        .setBaseOptions(BaseOptions.builder().setModelAssetPath(accuracy.asset).build())
         .setRunningMode(RunningMode.VIDEO)
         .setNumPoses(1)
         .build()
@@ -86,10 +99,10 @@ private suspend fun analyzeClip(
                         if (decoded.presentationTimeMs > lastFrameTime) {
                             lastFrameTime = decoded.presentationTimeMs
                             val bitmap = decoded.bitmap
-                            val points = BitmapImageBuilder(bitmap).build().use { image ->
-                                landmarker.detectForVideo(image, lastFrameTime).landmarks().firstOrNull()
+                            BitmapImageBuilder(bitmap).build().use { image ->
+                                val points = landmarker.detectForVideo(image, lastFrameTime).landmarks().firstOrNull()
+                                tracker.update(points, bitmap.width, bitmap.height, lastFrameTime)
                             }
-                            tracker.update(points, bitmap.width, bitmap.height, lastFrameTime)
                         }
                     } finally {
                         decoded.bitmap.recycle()
@@ -106,14 +119,17 @@ private suspend fun analyzeClip(
 
     val result = tracker.result()
     val fingerprint = if (result.savable) {
-        val stream = if (clip.isPublic) app.assets.open("pose-cdc-sample.webm")
-            else requireNotNull(app.contentResolver.openInputStream(clip.uri))
-        stream.use { fingerprint(it) { coroutine.ensureActive() } }
+        clip.sample?.sha256 ?: requireNotNull(app.contentResolver.openInputStream(clip.uri)).use {
+            fingerprint(it) { coroutine.ensureActive() }
+        }
     } else null
-    return ExerciseVideoResult(result, tracker.completedCycles(), fingerprint, clip.isPublic, plan.movement)
+    return ExerciseVideoResult(
+        result, tracker.completedCycles(), fingerprint, clip, plan.movement, plan.targetAngle, duration,
+        SystemClock.elapsedRealtime() - started, accuracy,
+    )
 }
 
-private fun clipDuration(context: Context, uri: Uri): Long {
+internal fun clipDuration(context: Context, uri: Uri): Long {
     val retriever = MediaMetadataRetriever()
     return try {
         retriever.setDataSource(context, uri)
@@ -123,7 +139,7 @@ private fun clipDuration(context: Context, uri: Uri): Long {
     }
 }
 
-private fun fingerprint(stream: InputStream, checkCancellation: () -> Unit): String {
+internal fun fingerprint(stream: InputStream, checkCancellation: () -> Unit): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val chunk = ByteArray(64 * 1024)
     while (true) {

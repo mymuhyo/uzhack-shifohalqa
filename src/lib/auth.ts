@@ -72,6 +72,13 @@ function getSupabasePublicEnv(): { url: string; key: string } | null {
   return { url, key };
 }
 
+export function createStatelessSupabaseClient() {
+  const env = getSupabasePublicEnv();
+  return env ? createClient<Database>(env.url, env.key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  }) : null;
+}
+
 export type SupabaseRouteClient = {
   client: ReturnType<typeof createServerClient<Database>>;
   applyToResponse: (response: NextResponse) => NextResponse;
@@ -522,14 +529,8 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
     return { ok: false, status: 401, error: 'unauthorized' };
   }
 
-  let supabaseClient = createSupabaseAdminClient();
-  if (!supabaseClient) {
-    const env = getSupabasePublicEnv();
-    if (!env) return { ok: false, status: 503, error: 'unavailable' };
-    supabaseClient = createClient<Database>(env.url, env.key, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-  }
+  const supabaseClient = createSupabaseAdminClient() ?? createStatelessSupabaseClient();
+  if (!supabaseClient) return { ok: false, status: 503, error: 'unavailable' };
 
   let authUserId: string;
   try {
@@ -550,6 +551,14 @@ export async function resolveMobilePatientActor(request: Request): Promise<Resol
     requestedWorkspaceId = parsedWs.data;
   }
 
+  return resolveMobileClinicPatient(authUserId, requestedWorkspaceId);
+}
+
+// The caller must already have verified this user with Supabase Auth.
+export async function resolveMobileClinicPatient(
+  authUserId: string,
+  requestedWorkspaceId: string | null = null,
+): Promise<ResolveMobilePatientResult> {
   const sql = getDatabase();
   if (!sql) return { ok: false, status: 503, error: 'unavailable' };
 

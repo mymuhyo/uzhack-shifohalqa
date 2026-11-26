@@ -1,0 +1,4 @@
+<resources>
+    <color name="shifo_window">#0A0A0B</color>
+    <bool name="shifo_light_system_bars">false</bool>
+</resources>

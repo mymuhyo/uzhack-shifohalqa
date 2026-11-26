@@ -13,9 +13,9 @@
 | M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [x] |
 | M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [x] |
 | M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [x] |
-| M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
+| M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [~] |
 | M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [~] |
-| M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [ ] |
+| M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [~] |
 
 Close M1 before starting M2. Keep changes atomic and verifiable. Move any enterprise, multi-clinic onboarding, conflict-resolution, or autonomous longitudinal agent work strictly to [ROADMAP_V2](ROADMAP_V2.md).
 
@@ -85,16 +85,16 @@ Iterate freely on [DESIGN](DESIGN.md) to deliver judge-ready visual craft, tacti
 
 Evolve existing `android/` Kotlin Compose code incrementally.
 
-- [ ] **M4.1 Theme, Auth & Daily workflows.**
+- [x] **M4.1 Theme, Auth & Daily workflows.**
   - Add Dark Mode color scheme parity to `ShifoTheme.kt`.
   - Support existing 1-time demo pairing code AND pre-seeded Supabase Bearer login (reusing `resolveMobilePatientActor`).
   - Upgrade `MobileApi.kt` & patient screens for multi-medication daily doses, manual BP (high + low zone feedback), dual-source steps (`Telefon sensori` + `Qo‘lda`) with 7-day trend, DoriMos, and 7-day report/doctor replies.
-- [ ] **M4.2 Three movements, `Full`/`Heavy` selector & consented video upload.**
+- [~] **M4.2 Three movements, `Full`/`Heavy` selector & consented video upload.**
   - Wire `chair_stand`, `elbow_bend`, and `seated_knee_ext` to prepared samples (downloaded/cached on demand to keep APK lean), live camera, and file picker.
   - Default on-device MediaPipe Pose to **`Full`** everywhere, and add a clear settings toggle (**«Aniqlik rejimi: Tezkor (Full) / Yuqori aniqlik (Heavy)»**) for recorded video analysis.
   - Display flagged-cycle AI observations and wire explicit patient consent (`Shu urinish videosini shifokorga yuborish`) to the signed Storage URL upload + finalize flow (with progress, cancel, and offline message).
 
-**M4 Checks.** `cd android && ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest`, inspect changed Compose `@Preview`s, and test Story 1 + Story 2 (including `Full` vs `Heavy` timing) on a physical Android phone.
+**M4 verification gate [~].** Android assemble/lint/unit, web verify, an API 37 emulator and isolated Supabase round trips cover the implementation. Trusted cycle counts for the cropped seated-knee fixture and Story 1 and Story 2 on a physical Android phone remain open, including DoriMos capture, sensor behavior, live exercise framing, video sharing and measured `Full` vs `Heavy` timing.
 
 ---
 
@@ -117,7 +117,7 @@ Evolve existing `android/` Kotlin Compose code incrementally.
 
 ## M6 — Isolated preview deploy and Grand Final acceptance
 
-- [ ] **M6.1 Isolated preview setup.** Confirm the M5 Vercel Preview, dedicated bot and separate Railway worker for the Grand Final build. Configure Vercel AI Gateway and Cloudflare keys against that preview. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
+- [~] **M6.1 Isolated preview setup.** Confirm the M5 Vercel Preview, dedicated bot and separate Railway worker for the Grand Final build. Configure Vercel AI Gateway and Cloudflare keys against that preview. Verify `main` still resolves to `bc27a09` (`shifohalqa.vercel.app`, `@shifohalqa_bot`, Neon).
 - [ ] **M6.2 End-to-end judge walkthrough.** Verify both Story 1 and Story 2 end-to-end on the isolated preview across Web (1-click Demo + pre-seeded clinic login), a physical Android phone, and a real Telegram client.
 - [ ] **M6.3 Honest disclosure & evidence.** Verify deterministic fallbacks when AI is disabled/unavailable, confirm zero `doctor_note` leakage, update `docs/BENCHMARK.md` with real measured latency/APK/CV numbers (including Android `Full` vs `Heavy`), and log final verification commands in `docs/PROGRESS.md`.
 

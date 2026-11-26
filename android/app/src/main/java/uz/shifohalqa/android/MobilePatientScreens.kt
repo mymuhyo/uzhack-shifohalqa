@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -28,6 +29,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -64,6 +67,9 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
     var focusedReplyId by rememberSaveable { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<MobileSheetRequest?>(null) }
     var dorimosTask by remember { mutableStateOf<MobileTask?>(null) }
+    var pressureDialog by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var manualSteps by rememberSaveable { mutableStateOf(false) }
+    val pressureTask = state.day?.vitals
     val busy = state.refreshing || state.saving
     val stepPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         mobile.refreshStepPermission()
@@ -75,7 +81,8 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
         Modifier.fillMaxSize().background(Paper).windowInsetsPadding(WindowInsets.safeDrawing),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BrandBar("Ulangan demo")
+        BrandBar(if (state.isDemo) "Ulangan demo" else "Klinika hisobi")
+        SafetyActions(onReportPain = if (pressureTask != null && pressureTask.record == null) ({ pressureDialog = true }) else null)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             PatientPage {
                 when (tab) {
@@ -88,6 +95,8 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
                             }
                         },
                         onSimulateSteps = { mobile.simulateSteps(500) },
+                        onPressure = { pressureDialog = false },
+                        onManualSteps = { manualSteps = true },
                         onRecord = { task, type -> sheet = MobileSheetRequest(task, type) },
                         onDorimos = { task -> dorimosTask = task },
                         onReply = { recordId ->
@@ -95,16 +104,16 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
                             tab = PatientTab.Reply
                         },
                     )
-                    PatientTab.Reply -> ConnectedReplies(state.day, focusedReplyId)
+                    PatientTab.Reply -> ConnectedReplies(state, focusedReplyId)
                 }
                 state.message?.let { PatientNotice(it) }
                 if (busy) {
                     PatientNotice(if (state.saving) "Qayd tekshirilmoqda…" else "Veb-panel yangilanmoqda…")
                 }
-                TextButton(onClick = mobile::refresh, enabled = !busy) { Text("Yangilash") }
+                TextButton(onClick = mobile::refresh, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Yangilash") }
                 if (tab == PatientTab.Today) {
                     PrimaryAction(mobile.exercise.plan?.movement?.titleUz ?: "Reabilitatsiya mashqi", onClick = onExercise)
-                    TextButton(onClick = mobile::disconnect, enabled = !busy) { Text("Ulanishni uzish") }
+                    TextButton(onClick = mobile::disconnect, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Hisobdan chiqish") }
                 }
             }
         }
@@ -113,6 +122,14 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
             tab = it
         })
     }
+    pressureDialog?.let { pain ->
+        pressureTask?.let { task ->
+            PressureDialog(state.day.bpTargets, pain, onDismiss = { pressureDialog = null }) { upper, lower, hasPain ->
+                mobile.recordPressure(task, upper, lower, hasPain)
+            }
+        }
+    }
+    if (manualSteps) ManualStepsDialog(state.day?.steps?.selfReport, onDismiss = { manualSteps = false }, mobile::saveManualSteps)
     sheet?.let { request ->
         RecordSheet(request.sheet, request.task.title, request.task.time, onDismiss = { sheet = null }) {
             mobile.record(request.task.id, it)
@@ -124,29 +141,27 @@ internal fun ConnectedPatientApp(mobile: MobileWorkspaceModel, onExercise: () ->
 }
 
 @Composable
-private fun ConnectedToday(
+internal fun ConnectedToday(
     state: MobileWorkspaceState,
     steps: StepUi,
     onRequestStepPermission: () -> Unit,
     onSimulateSteps: () -> Unit,
+    onPressure: () -> Unit,
+    onManualSteps: () -> Unit,
     onRecord: (MobileTask, MedicationSheet) -> Unit,
     onDorimos: (MobileTask) -> Unit,
     onReply: (String) -> Unit,
 ) {
-    SoftReveal(0) { PageTitle("Bugungi vazifalar") }
-    val day = state.day ?: return
-    Text("Assalomu alaykum, ${day.patientName}", color = Muted, style = MaterialTheme.typography.bodyLarge)
-    Text(displayDate(day.date), color = Muted, style = MaterialTheme.typography.labelLarge)
-    DailyStepsCard(steps, onRequestStepPermission, onSimulateSteps)
-    if (day.tasks.isEmpty()) {
-        PatientCard {
-            SectionTitle("Bugunga dori vazifasi yo‘q")
-            Text("Shifokor reja qo‘shgach, shu yerda ko‘rinadi.", color = Muted)
-        }
-        return
+    Text(state.day?.date?.let(::displayDate) ?: "Kunlik reja", color = Muted, style = MaterialTheme.typography.labelLarge)
+    PageTitle("Bugungi vazifalar")
+    (state.day?.patientName ?: state.patientName)?.let {
+        Text("Assalomu alaykum, $it", color = Muted, style = MaterialTheme.typography.bodyLarge)
     }
-    SoftReveal(45) { DayOverview(day.tasks.size, day.tasks.count { it.record != null }) }
-    SectionTitle("Dori rejangiz")
+    val day = state.day ?: return
+    val taskCount = day.tasks.size + if (day.vitals != null) 1 else 0
+    val savedCount = day.tasks.count { it.record != null } + if (day.vitals?.record != null) 1 else 0
+    if (taskCount > 0) DayOverview(taskCount, savedCount)
+    if (day.tasks.isNotEmpty()) SectionTitle("Dori rejangiz")
     day.tasks.forEach { task ->
         key(task.id) {
             val record = task.record
@@ -158,59 +173,83 @@ private fun ConnectedToday(
                 enabled = !state.refreshing && !state.saving,
                 boxAvailable = task.boxAvailable,
                 boxDone = task.boxDone,
+                strength = task.strength,
                 onDorimos = { onDorimos(task) },
             )
         }
     }
+    if (day.tasks.isEmpty()) PatientCard {
+        SectionTitle("Dori rejangiz")
+        Text("Bugunga dori qabuli rejalashtirilmagan.", color = Muted)
+    }
+    PressureCard(day.vitals, day.bpTargets, !state.refreshing && !state.saving, onPressure)
+    DailyStepsCard(day.steps, steps, state.isDemo, !state.refreshing && !state.saving,
+        onRequestStepPermission, onManualSteps, onSimulateSteps)
 }
 
 @Composable
 private fun DailyStepsCard(
-    steps: StepUi,
-    onRequestPermission: () -> Unit,
-    onSimulateSteps: () -> Unit,
+    summary: MobileStepSummary?, steps: StepUi, isDemo: Boolean, enabled: Boolean,
+    onRequestPermission: () -> Unit, onManualSteps: () -> Unit, onSimulateSteps: () -> Unit,
 ) {
-    val progress = (steps.count.toFloat() / steps.goal.coerceAtLeast(1)).coerceIn(0f, 1f)
-    val sourceLabel = when (steps.source) {
-        "demo_sim" -> "Demo simulyatsiya · auto-sync"
-        "self_report" -> "Vebdan kiritilgan"
-        else -> if (steps.sensorAvailable && steps.permissionGranted) "Telefon sensori · auto-sync" else "Qadam hisobi"
-    }
-    val syncLabel = when {
-        steps.syncing -> "Sinxronlanmoqda…"
-        steps.syncError != null -> steps.syncError
-        steps.count == 0 -> "Yurish yoki simulyatsiya bilan boshlanadi"
-        steps.synced -> "Shifokor paneliga yuborildi"
-        else -> "Sinxronlash kutilmoqda…"
-    }
+    val sensor = maxOf(summary?.deviceSensor ?: 0, steps.count).takeIf { it > 0 } ?: summary?.deviceSensor
+    val count = sensor ?: summary?.selfReport ?: summary?.demoSim ?: summary?.count ?: 0
+    val goal = summary?.goal ?: steps.goal
     PatientCard {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SectionTitle("Bugungi qadamlar")
-            Badge(
-                if (steps.achieved) "Maqsad bajarildi" else "Jarayonda",
-                if (steps.achieved) Mint else Amber,
-                if (steps.achieved) Green else AmberInk,
-            )
-        }
-        Text("${steps.count} / ${steps.goal} qadam", color = Ink, style = MaterialTheme.typography.headlineSmall)
-        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Green, trackColor = Mint)
-        Text("$sourceLabel · $syncLabel", color = Muted, style = MaterialTheme.typography.bodyMedium)
+        SectionTitle("Bugungi qadamlar")
+        Text("$count / $goal qadam", color = Ink,
+            style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"))
+        LinearProgressIndicator(progress = { (count.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth(), trackColor = Border)
+        Text("Telefon sensori · ${sensor?.toString() ?: "Qayd yo‘q"}", color = Muted)
+        Text("Qo‘lda · ${summary?.selfReport?.toString() ?: "Qayd yo‘q"}", color = Muted)
+        if (isDemo && summary?.demoSim != null) Text("Demo simulyatsiya · ${summary.demoSim}", color = Muted)
+        if (count >= goal) Badge("Maqsad bajarildi", Positive, PositiveInk)
+        StepsTrend(summary?.trend.orEmpty())
+        if (steps.syncing) Text("Qadamlar yuborilmoqda…", color = Muted)
+        steps.syncError?.let { PatientNotice(it) }
         if (steps.sensorAvailable && !steps.permissionGranted) {
-            OutlinedButton(onClick = onRequestPermission, modifier = Modifier.fillMaxWidth()) {
-                Text("Telefon qadam sensorini yoqish")
+            OutlinedButton(shape = MaterialTheme.shapes.large, onClick = onRequestPermission, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Telefon sensorini yoqish", color = Ink)
             }
         }
-        OutlinedButton(onClick = onSimulateSteps, modifier = Modifier.fillMaxWidth()) {
-            Text("+500 qadam qo‘shish (demo simulyatsiya)")
+        OutlinedButton(shape = MaterialTheme.shapes.large, onClick = onManualSteps, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Qadamlarni qo‘lda kiritish", color = Ink)
+        }
+        if (isDemo) OutlinedButton(shape = MaterialTheme.shapes.large, onClick = onSimulateSteps, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("+500 qadam qo‘shish (demo simulyatsiya)", color = Ink)
         }
     }
 }
 
 @Composable
-private fun ConnectedReplies(day: MobileDay?, focusedReplyId: String?) {
-    SoftReveal(0) { PageTitle("Shifokor javobi") }
-    if (day == null) return
-    if (day.replies.isEmpty()) {
+internal fun ConnectedReplies(state: MobileWorkspaceState, focusedReplyId: String?) {
+    PageTitle("Shifokor javoblari")
+    val day = state.day ?: return
+    PatientCard {
+        SectionTitle("7 kunlik hisobot")
+        day.adherence.forEach { medication ->
+            Text(listOfNotNull(medication.name, medication.strength).joinToString(" · "),
+                color = Ink, style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AdherenceCount("Ichdim", medication.taken, Modifier.weight(1f))
+                AdherenceCount("Icha olmadim", medication.missed, Modifier.weight(1f))
+                AdherenceCount("Javobsiz", medication.unanswered, Modifier.weight(1f))
+            }
+        }
+        val brief = state.brief
+        if (brief != null) {
+            Badge("Shifokor tasdiqlagan · L4", Positive, PositiveInk)
+            Text(brief.reply, color = Ink, style = MaterialTheme.typography.bodyLarge)
+            Text(displayReviewTime(brief.approvedAt), color = Muted)
+        } else Text(if (state.briefError) "Hisobotni yuklab bo‘lmadi. Ulanishni tekshiring."
+            else "Shifokor haftalik xulosani tasdiqlagach, shu yerda ko‘rinadi.", color = Muted)
+    }
+    val bpReply = day.vitals?.record?.let { record ->
+        record.reply?.let { MobileReply(record.id, "Qon bosimi", day.date, it) }
+    }
+    val allReplies = day.replies + listOfNotNull(bpReply).filter { reply -> day.replies.none { it.recordId == reply.recordId } }
+    if (allReplies.isEmpty()) {
         PatientCard {
             IconTile(Glyph.Message)
             SectionTitle("Hozircha javob yo‘q")
@@ -218,14 +257,14 @@ private fun ConnectedReplies(day: MobileDay?, focusedReplyId: String?) {
         }
         return
     }
-    val replies = day.replies.sortedByDescending { it.recordId == focusedReplyId }
+    val replies = allReplies.sortedByDescending { it.recordId == focusedReplyId }
     replies.forEach { reply ->
         key(reply.recordId) {
             val retake = reply.review.needsRetake
             PatientCard {
                 IconTile(Glyph.Message)
                 Badge(if (retake) "Qayta ko‘rib chiqish so‘raldi" else "Shifokor ko‘rib chiqdi",
-                    if (retake) Amber else Mint, if (retake) AmberInk else Green)
+                    if (retake) Amber else Tinted, if (retake) AmberInk else Action)
                 SectionTitle(reply.taskTitle)
                 Text("Vazifa sanasi · ${displayDate(reply.date)}", color = Muted, style = MaterialTheme.typography.labelLarge)
                 Text(reply.review.body, color = Ink, style = MaterialTheme.typography.bodyLarge)
@@ -237,14 +276,28 @@ private fun ConnectedReplies(day: MobileDay?, focusedReplyId: String?) {
 }
 
 @Composable
-internal fun MobilePairDialog(state: MobileWorkspaceState, onPair: (String, String) -> Unit, onDismiss: () -> Unit) {
+private fun AdherenceCount(label: String, count: Int, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(count.toString(), color = Ink, style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"))
+        Text(label, color = Muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+internal fun MobilePairDialog(
+    state: MobileWorkspaceState, onPair: (String, String) -> Unit,
+    onLogin: (String, String, String) -> Unit, onDismiss: () -> Unit,
+) {
     var address by rememberSaveable { mutableStateOf(if (BuildConfig.DEBUG) LOCAL_DEMO_ORIGIN else "") }
     var code by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var clinic by rememberSaveable { mutableStateOf(false) }
     val pairing = state.pairing
     AlertDialog(
         onDismissRequest = { if (!pairing) onDismiss() },
         properties = DialogProperties(dismissOnBackPress = !pairing, dismissOnClickOutside = !pairing),
-        title = { Text("Veb-panelga ulash") },
+        title = { Text("ShifoHalqaga kirish") },
         text = {
             val view = LocalView.current
             SideEffect {
@@ -253,24 +306,41 @@ internal fun MobilePairDialog(state: MobileWorkspaceState, onPair: (String, Stri
                     View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
             }
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Veb-paneldagi shifokor sahifasidan bir martalik ulash kodini oling.")
+                PrimaryTabRow(selectedTabIndex = if (clinic) 0 else 1) {
+                    Tab(selected = clinic, onClick = { if (!pairing) { clinic = true; code = "" } },
+                        modifier = Modifier.heightIn(min = 48.dp), text = { Text("Klinika") })
+                    Tab(selected = !clinic, onClick = { if (!pairing) { clinic = false; password = "" } },
+                        modifier = Modifier.heightIn(min = 48.dp), text = { Text("Demo") })
+                }
+                Text(if (clinic) "Klinikada berilgan hisobingiz bilan kiring."
+                    else "Shifokor panelidan bir martalik ulash kodini oling.", color = Muted)
                 OutlinedTextField(
                     value = address, onValueChange = { address = it }, modifier = Modifier.fillMaxWidth(),
                     label = { Text("Veb-panel manzili") }, singleLine = true, enabled = !pairing,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
                 )
-                OutlinedTextField(
-                    value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Ulash kodi") }, singleLine = true, enabled = !pairing,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrectEnabled = false),
-                )
+                if (clinic) {
+                    OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("Elektron pochta") },
+                        singleLine = true, enabled = !pairing,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false))
+                    OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("Parol") },
+                        singleLine = true, enabled = !pairing, visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                } else {
+                    OutlinedTextField(code, { code = it.take(32) }, Modifier.fillMaxWidth(), label = { Text("Ulash kodi") },
+                        singleLine = true, enabled = !pairing, visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrectEnabled = false))
+                }
                 state.message?.let { PatientNotice(it) }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onPair(address, code) }, enabled = !pairing && code.isNotBlank()) {
-                Text(if (pairing) "Ulanmoqda…" else "Ulash")
+            TextButton(
+                onClick = { if (clinic) onLogin(address, email, password) else onPair(address, code) },
+                enabled = !pairing && if (clinic) email.isNotBlank() && password.isNotEmpty() else code.isNotBlank(),
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Text(if (pairing) "Ulanmoqda…" else if (clinic) "Kirish" else "Ulash")
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !pairing) { Text("Bekor qilish") } },
@@ -290,7 +360,7 @@ internal fun PatientNotice(message: String) {
 private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 private val reviewTimeFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm").withZone(ZoneId.of("Asia/Tashkent"))
 
-private fun displayDate(value: String): String = try { LocalDate.parse(value).format(dateFormat) }
+internal fun displayDate(value: String): String = try { LocalDate.parse(value).format(dateFormat) }
 catch (_: DateTimeParseException) { value }
 
 private fun displayReviewTime(value: String): String = try { reviewTimeFormat.format(Instant.parse(value)) }

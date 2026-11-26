@@ -38,6 +38,25 @@ describe('Android demo JSON', () => {
     expect(mobileStepsInputSchema.safeParse({ count: -1 }).success).toBe(false);
   });
 
+  it('includes past blood pressure replies without exposing private review fields', () => {
+    const bpView: ClinicalView = {
+      ...view,
+      tasks: [{
+        id: 'bp', type: 'vitals', date: '2026-11-19', dueTime: '10:00', title: 'Qon bosimi',
+        status: 'recorded', boxEvidence: null,
+        evidence: {
+          id: 'bp-reviewed', taskId: 'bp', payload: { kind: 'vitals', systolic: 155, diastolic: 95, chestPain: false },
+          level: 4, source: 'self_report', aiMode: 'manual', createdAt: '2026-11-19T05:00:00Z',
+          review: reviewed,
+        },
+      }],
+    };
+    expect(mobileToday('Bemor', bpView, '2026-11-20').replies).toEqual([{
+      recordId: 'bp-reviewed', taskTitle: 'Qon bosimi', date: '2026-11-19',
+      body: reviewed.reply, decision: reviewed.decision, reviewedAt: reviewed.reviewedAt,
+    }]);
+  });
+
   it('rejects large and non-JSON request bodies', async () => {
     const http = (contentType: string, body: string) => new Request('https://example.test/', {
       method: 'POST', headers: { 'Content-Type': contentType }, body,

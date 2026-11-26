@@ -12,9 +12,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
-internal data class DemoConnection(val api: MobileApi, val credentials: MobileCredentials) {
+internal data class DemoConnection(private val origin: MobileApi, val credentials: MobileCredentials) {
+    val api = origin.forWorkspace(credentials.workspaceId)
     val token get() = credentials.token
-    val scope get() = "${api.address}/${credentials.workspaceId}"
+    val scope = listOfNotNull(api.address, credentials.workspaceId, credentials.accountId).joinToString("/")
     val expired get() = !credentials.expiresAt.isAfter(Instant.now())
 }
 
@@ -24,6 +25,7 @@ internal class DemoConnectionStore(context: Context) {
     fun save(connection: DemoConnection): Boolean = runCatching {
         val json = JSONObject().put("origin", connection.api.address).put("token", connection.token)
             .put("workspace", connection.credentials.workspaceId).put("expiresAt", connection.credentials.expiresAt.toString())
+            .put("isDemo", connection.credentials.isDemo).put("patientName", connection.credentials.patientName)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
@@ -37,7 +39,8 @@ internal class DemoConnectionStore(context: Context) {
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
         val json = JSONObject(cipher.doFinal(bytes, 12, bytes.size - 12).toString(Charsets.UTF_8))
         DemoConnection(MobileApi.forAddress(json.getString("origin")),
-            MobileCredentials(json.getString("token"), Instant.parse(json.getString("expiresAt")), json.getString("workspace")))
+            MobileCredentials(json.getString("token"), Instant.parse(json.getString("expiresAt")), json.getString("workspace"),
+                json.optBoolean("isDemo", true), json.optString("patientName").takeIf { it.isNotBlank() }))
     }.getOrNull()
 
     fun clear() { prefs.edit().remove("session").apply() }

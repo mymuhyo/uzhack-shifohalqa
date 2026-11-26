@@ -14,7 +14,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         android:icon="@drawable/shifo_mark"
-        android:label="ShifoHalqa Demo"
+        android:label="ShifoHalqa"
         android:usesCleartextTraffic="false"
         android:theme="@style/ShifoTheme">
         <activity android:name=".MainActivity" android:exported="true">

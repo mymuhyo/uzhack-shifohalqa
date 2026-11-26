@@ -149,8 +149,9 @@ internal class StepDayAccumulator(
     )
 }
 
-internal class StepTrackerStore(context: Context) {
-    private val prefs = context.getSharedPreferences("shifo_daily_steps", Context.MODE_PRIVATE)
+internal class StepTrackerStore(context: Context, scope: String) {
+    private val key = java.util.UUID.nameUUIDFromBytes(scope.toByteArray(Charsets.UTF_8))
+    private val prefs = context.getSharedPreferences("shifo_daily_steps_$key", Context.MODE_PRIVATE)
     private val accumulator = StepDayAccumulator()
 
     init {

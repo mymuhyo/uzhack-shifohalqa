@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -37,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import android.os.SystemClock
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -48,22 +52,26 @@ import java.time.LocalDate
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import androidx.compose.runtime.rememberCoroutineScope
 import org.json.JSONObject
 
-private val samplePlan = ExercisePlan("sample", 100, 5)
+private fun practicePlan(movement: PoseMovement) = ExercisePlan(
+    "practice", movement.defaultTargetAngle, movement.defaultTargetReps, movement, movement.defaultMaxShallow,
+)
 
 @Composable
 internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
-    var practice by rememberSaveable { mutableStateOf(PoseMovement.ChairStand.apiKey) }
-    val selectedMovement = PoseMovement.fromApiKey(practice)
-    val ui = mobile?.exercise ?: ExerciseUi(planLoaded = true, plan = samplePlan.copy(
-        movement = selectedMovement, targetAngle = selectedMovement.defaultTargetAngle,
-    ))
-    val plan = ui.plan
-    val movement = plan?.movement ?: PoseMovement.ChairStand
+    var practice by rememberSaveable { mutableStateOf<String?>(null) }
+    val ui = mobile?.exercise ?: ExerciseUi(planLoaded = true)
+    val prescribed = ui.plan
+    val movement = practice?.let(PoseMovement::fromApiKey) ?: prescribed?.movement ?: PoseMovement.ChairStand
+    val plan = prescribed?.takeIf { it.movement == movement } ?: practicePlan(movement)
+    val canSave = prescribed?.movement == movement
+    val accuracy = LocalPatientPreferences.current?.accuracy ?: PoseAccuracy.Full
+    val haptic = LocalHapticFeedback.current
     var running by remember { mutableStateOf(false) }
     var frame by remember { mutableStateOf<ExerciseCameraFrame?>(null) }
     var finished by remember { mutableStateOf<ExerciseMeasurement?>(null) }
@@ -73,7 +81,14 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     var clip by remember { mutableStateOf<ExerciseClip?>(null) }
     var videoResult by remember { mutableStateOf<ExerciseVideoResult?>(null) }
     var videoProgress by remember { mutableStateOf(0) }
-    var showSampleAi by rememberSaveable { mutableStateOf(false) }
+    var sampleDownload by remember { mutableStateOf<Job?>(null) }
+    var sampleProgress by remember { mutableStateOf(0) }
+    var videoQueueId by remember { mutableStateOf<String?>(null) }
+    var videoAccuracy by remember { mutableStateOf(PoseAccuracy.Full) }
+    var startedAt by remember { mutableStateOf(0L) }
+    var cameraElapsed by remember { mutableStateOf(0L) }
+    val mediaBusy = clip != null || sampleDownload != null
+    val savedVideo = ui.outbox.firstOrNull { it.id == videoQueueId }
     var audioEnabled by rememberSaveable { mutableStateOf(true) }
     var aiCoachAdvice by remember { mutableStateOf<PublicExerciseAdvice?>(null) }
     var aiCoachLoading by remember { mutableStateOf(false) }
@@ -105,8 +120,13 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     }
 
     LaunchedEffect(frame, running, audioEnabled) {
-        if (!running || !audioEnabled) return@LaunchedEffect
+        if (!running) return@LaunchedEffect
         val current = frame ?: return@LaunchedEffect
+        if (current.result.validReps > lastValidSpoken) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+        if (!audioEnabled) {
+            lastValidSpoken = current.result.validReps
+            return@LaunchedEffect
+        }
         if (current.ready && !lastReadySpoken) {
             audioCoach.speakReady()
             lastReadySpoken = true
@@ -173,7 +193,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                 }
                 aiCoachAdvice = mobile.requestExerciseCoach(payload)
             } catch (_: MobileFailure) {
-                aiCoachError = "AI murabbiy javob bermadi; lokal biomexanika tahlili ko‘rsatildi."
+                aiCoachError = "AI murabbiy javob bermadi. Telefon o‘lchovi ko‘rsatildi."
             } finally {
                 aiCoachLoading = false
             }
@@ -185,7 +205,8 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         notice = null
         videoResult = null
         videoProgress = 0
-        showSampleAi = input.isPublic
+        videoQueueId = null
+        videoAccuracy = accuracy
         clip = input
     }
 
@@ -196,17 +217,13 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
     LaunchedEffect(clip) {
         val selected = clip ?: return@LaunchedEffect
         try {
-            val analysisPlan = if (selected.isPublic) samplePlan else plan ?: samplePlan
+            val analysisPlan = if (selected.sample?.movement == plan.movement || !selected.isPublic) plan
+                else practicePlan(requireNotNull(selected.sample).movement)
             videoResult = analyzeExerciseVideo(context, selected, analysisPlan.targetAngle, analysisPlan.movement,
-                analysisPlan.targetReps, analysisPlan.maxShallow) {
-                videoProgress = it
-            }
+                analysisPlan.targetReps, analysisPlan.maxShallow, videoAccuracy) { videoProgress = it }
             if (videoResult?.measurement?.savable != true) {
                 notice = "Videodan yetarli o‘lchov olinmadi. Boshqa video tanlang yoki takrorlarni qo‘lda kiriting."
                 manual = true
-            } else {
-                val analysisPlan = if (selected.isPublic) samplePlan else plan ?: samplePlan
-                videoResult?.measurement?.let { requestCoachForResult(it, analysisPlan) }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -225,6 +242,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         videoResult = null
         notice = null
         runDate = exerciseToday()
+        startedAt = SystemClock.elapsedRealtime()
         running = true
     }
 
@@ -236,23 +254,46 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         }
     }
 
-    fun submit(evidence: JSONObject, title: String, date: LocalDate = exerciseToday(), onSaved: () -> Unit = {}) {
+    fun submit(evidence: JSONObject, title: String, date: LocalDate = exerciseToday(), onSaved: (String?) -> Unit = {}) {
         if (mobile == null) {
             notice = "Namuna qaydi. Shifokorga yuborish uchun veb-panelga ulang."
-            onSaved()
-        } else mobile.queueExercise(evidence.put("movement", movement.apiKey), title, date) {
+            onSaved(null)
+        } else if (canSave) mobile.queueExercise(evidence.put("movement", movement.apiKey), title, date) {
             notice = null
-            onSaved()
+            onSaved(it)
+        }
+    }
+
+    fun startSample(sample: ExerciseSample) {
+        notice = null
+        sampleProgress = 0
+        sampleDownload = coachScope.launch {
+            try {
+                val api = mobile?.sampleApi() ?: if (BuildConfig.DEBUG) MobileApi.forAddress(LOCAL_DEMO_ORIGIN) else null
+                startVideo(loadExerciseSample(context, sample, api) { sampleProgress = it })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: MobileFailure) {
+                notice = if (failure.kind == MobileFailureKind.Rejected) "Namuna fayli tekshiruvdan o‘tmadi. Qayta urinib ko‘ring."
+                    else "Namuna hali telefoningizga yuklanmagan. Internet va veb-panel ulanishini tekshiring."
+            } catch (_: java.io.IOException) {
+                notice = "Namunani telefonga saqlab bo‘lmadi. Qayta urinib ko‘ring."
+            } finally {
+                sampleDownload = null
+            }
         }
     }
 
     fun reportPain() {
+        sampleDownload?.cancel()
         clip = null
         videoResult = null
         running = false
         finished = null
         frame = null
-        submit(JSONObject().put("source", "self_report").put("reason", "pain"), "Og‘riq xabari")
+        if (mobile == null || canSave) {
+            submit(JSONObject().put("source", "self_report").put("reason", "pain"), "Og‘riq xabari")
+        } else notice = "Mashqni to‘xtating. Ko‘krak og‘rig‘i yoki kuchli bosh aylanishida 103 ga qo‘ng‘iroq qiling."
     }
 
     fun emergency() {
@@ -289,6 +330,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
             running = false
             frame = null
         } else if (clip != null) clip = null
+        else if (sampleDownload != null) sampleDownload?.cancel()
         else onBack()
     }
 
@@ -296,7 +338,7 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
         Modifier.fillMaxSize().background(Paper).windowInsetsPadding(WindowInsets.safeDrawing),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (running && plan != null) {
+        if (running) {
             ExerciseCamera(Modifier.weight(1f).fillMaxWidth(), plan, onFrame = { frame = it }) {
                 running = false
                 frame = null
@@ -318,11 +360,12 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                 val activeWarning = reading?.formWarning ?: reading?.result?.pose?.biomechanics?.currentFormWarning
                 Badge(
                     activeWarning?.let { "AI maslahat: ${it.labelUz}" } ?: "Texnika: Me’yor",
-                    if (activeWarning != null) Amber else Mint,
-                    if (activeWarning != null) AmberInk else Green,
+                    if (activeWarning != null) Amber else Tinted,
+                    if (activeWarning != null) AmberInk else Action,
                 )
                 PrimaryAction("To‘xtatish") {
                     running = false
+                    cameraElapsed = SystemClock.elapsedRealtime() - startedAt
                     val savable = reading?.result?.takeIf { it.savable }
                     finished = savable
                     frame = null
@@ -334,25 +377,25 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                         requestCoachForResult(savable, plan)
                     }
                 }
-                OutlinedButton(onClick = ::reportPain, modifier = Modifier.fillMaxWidth(), enabled = !ui.saving) {
-                    Text("Og‘riq bor")
-                }
-                TextButton(onClick = ::emergency, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("Tez yordam · 103")
-                }
+                RowSafety(onPain = ::reportPain, onEmergency = ::emergency, enabled = !ui.saving)
             }
         } else {
-            BrandBar(if (mobile == null) "Namuna" else "Ulangan demo")
+            BrandBar(when {
+                mobile == null -> "Namuna"
+                mobile.state.isDemo -> "Ulangan demo"
+                else -> "Klinika hisobi"
+            })
+            RowSafety(onPain = ::reportPain, onEmergency = ::emergency, enabled = !ui.saving)
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 PatientPage {
                     TextButton(onClick = onBack) { Text("Bugungi vazifalar") }
                     PageTitle(movement.titleUz)
-                    if (mobile == null) {
+                    run {
                         var movementsOpen by remember { mutableStateOf(false) }
                         Box {
-                            TextButton(enabled = clip == null, onClick = { movementsOpen = true }) { Text("Mashq turini tanlash") }
+                            TextButton(enabled = !mediaBusy && !ui.saving, onClick = { movementsOpen = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Mashq turini tanlash") }
                             DropdownMenu(expanded = movementsOpen, onDismissRequest = { movementsOpen = false }) {
-                                PoseMovement.entries.forEach { item ->
+                                (ExerciseSample.entries.map { it.movement } + listOfNotNull(prescribed?.movement)).distinct().forEach { item ->
                                     DropdownMenuItem(text = { Text(item.shortTitleUz) }, onClick = {
                                         practice = item.apiKey
                                         movementsOpen = false
@@ -360,44 +403,50 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                                         finished = null
                                         notice = null
                                         manual = false
+                                        videoQueueId = null
                                     })
                                 }
                             }
                         }
                     }
-                    TextButton(onClick = ::emergency) { Text("Tez yordam · 103") }
                     notice?.let { PatientNotice(it) }
                     ui.message?.let { PatientNotice(it) }
-                    if (plan == null) {
-                        Text(when {
-                            ui.loading -> "Mashq rejasi yuklanmoqda…"
-                            ui.planLoaded -> "Shifokor mashq rejasini hali biriktirmagan."
-                            else -> "Mashq rejasi telefonga yuklanmagan."
-                        })
-                    } else {
-                        Text("Rejadagi maqsad · ${plan.targetReps} takror", style = MaterialTheme.typography.bodyLarge)
+                    if (mobile != null && prescribed == null && ui.loading) Text("Mashq rejasi yuklanmoqda…", color = Muted)
+                    if (mobile != null && !canSave) Text("Mashqni sinab ko‘rishingiz mumkin. Shifokor biriktirgan mashq natijasi yuboriladi.", color = Muted)
+                    run {
+                        Text(if (canSave) "Rejadagi maqsad · ${plan.targetReps} takror" else movement.cycleCueUz,
+                            style = MaterialTheme.typography.bodyLarge)
+                        Text("Kamera yoki video uchun yon tomondan butun gavdangiz kadrga sig‘sin.", color = Muted)
+                        val sample = ExerciseSample.entries.firstOrNull { it.movement == movement }
+                        if (sample != null) PrimaryAction("Tayyor namunani tahlil qilish", enabled = !mediaBusy && !ui.saving) {
+                            startSample(sample)
+                        }
                         TextButton(onClick = { audioEnabled = !audioEnabled }) {
                             Text("Ovozli sanoq: ${if (audioEnabled) "Yoqilgan" else "O‘chirilgan"}")
                         }
-                        PrimaryAction("Kamerani boshlash", enabled = !ui.saving && clip == null) {
+                        OutlinedButton(shape = MaterialTheme.shapes.large, onClick = {
                             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                                 PackageManager.PERMISSION_GRANTED) startCamera()
                             else permission.launch(Manifest.permission.CAMERA)
+                        }, enabled = !ui.saving && !mediaBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            Text("Kamerani boshlash", color = Ink)
                         }
                         OutlinedButton(
+                            shape = MaterialTheme.shapes.large,
                             onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
-                            enabled = !ui.saving && clip == null,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Video tanlash va tahlil qilish") }
+                            enabled = !ui.saving && !mediaBusy,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) { Text("Video tanlash va tahlil qilish", color = Ink) }
                         val result = finished
                         if (result != null) PatientCard {
                             SectionTitle("Kamera o‘lchovi · Full")
+                            Text("${cameraElapsed / 1000} soniya", color = Muted)
                             Text("To‘liq ${result.validReps} · Chala ${result.shallowReps}")
                             result.pose?.let { Text(analyzePoseDiagnostics(it).patientCoachingUz) }
                             result.minAngle?.let { Text("${if (movement.direction == PoseDirection.Extend) "Eng katta" else "Eng kichik"} burchak ${it.roundToInt()}°") }
                             if (aiCoachLoading) PatientNotice("AI murabbiy maslahat tayyorlamoqda…")
                             aiCoachAdvice?.let { advice ->
-                                Text("AI murabbiy (${advice.source}${if (advice.model.isNotBlank()) " · ${advice.model}" else ""})", color = Green, style = MaterialTheme.typography.labelLarge)
+                                Text("AI murabbiy (${advice.source}${if (advice.model.isNotBlank()) " · ${advice.model}" else ""})", color = Action, style = MaterialTheme.typography.labelLarge)
                                 Text(advice.text)
                                 Text("Keyingi e’tibor: ${advice.cue}", color = Muted)
                             }
@@ -407,50 +456,35 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                                     Text("AI murabbiy maslahatini yangilash")
                                 }
                             }
-                            PrimaryAction("Natijani saqlash", enabled = !ui.saving) {
+                            if (canSave) PrimaryAction("Natijani saqlash", enabled = !ui.saving) {
                                 submit(result.asEvidence(), "Kamera o‘lchovi", runDate) { finished = null }
                             }
                         }
-                        OutlinedButton(onClick = ::reportPain, modifier = Modifier.fillMaxWidth(), enabled = !ui.saving) {
-                            Text("Og‘riq bor")
+                        if (canSave || mobile == null) TextButton(onClick = { manual = !manual }, enabled = !mediaBusy) {
+                            Text("Takrorni qo‘lda kiritish")
                         }
-                        TextButton(onClick = { manual = !manual }, enabled = clip == null) { Text("Takrorni qo‘lda kiritish") }
-                        if (manual && clip == null) ManualExerciseInput(ui.saving) { reps ->
+                        if (manual && !mediaBusy && (canSave || mobile == null)) ManualExerciseInput(ui.saving) { reps ->
                             submit(JSONObject().put("source", "self_report").put("reason", "manual").put("reps", reps),
                                 "Qo‘lda qayd") { manual = false }
                         }
                     }
-                    TextButton(onClick = { startVideo(ExerciseClip.PublicSample) }, enabled = clip == null && !ui.saving) {
-                        Text("CDC namunasini Heavy bilan tahlil qilish")
+                    if (sampleDownload != null) {
+                        PatientNotice("Namuna yuklanmoqda · $sampleProgress%")
+                        TextButton(onClick = { sampleDownload?.cancel() }) { Text("Yuklashni bekor qilish") }
                     }
                     if (clip != null) {
-                        PatientNotice("Heavy video tahlili · $videoProgress%")
+                        PatientNotice("${videoAccuracy.name} video tahlili · $videoProgress%")
                         TextButton(onClick = { clip = null }) { Text("Video tahlilini bekor qilish") }
                     }
                     videoResult?.let { result ->
                         if (result.measurement.savable && result.sha256 != null) {
-                            PatientCard {
-                                SectionTitle(if (result.isPublic) "Heavy o‘lchovi · CDC namunasi" else "Heavy o‘lchovi · Tanlangan video")
-                                Text("To‘liq ${result.measurement.validReps} · Chala ${result.measurement.shallowReps}")
-                                result.measurement.minAngle?.let { Text("${if (result.movement.direction == PoseDirection.Extend) "Eng katta" else "Eng kichik"} burchak ${it.roundToInt()}°") }
-                                result.measurement.pose?.let { Text(analyzePoseDiagnostics(it).patientCoachingUz) }
-                                if (plan != null && result.movement == plan.movement) {
-                                    Text("Video shu telefonda qoladi. Saqlashda faqat o‘lchov xulosasi yuboriladi.")
-                                    PrimaryAction("Natijani tasdiqlash va saqlash", enabled = !ui.saving) {
-                                        submit(result.measurement.asEvidence(result.sha256), "Video o‘lchovi") { videoResult = null }
-                                    }
+                            androidx.compose.runtime.key(result) {
+                                ExerciseVideoResultPanel(result, mobile, savedVideo, ui.saving,
+                                    canSave = canSave && videoQueueId == null && result.movement == movement) {
+                                    submit(result.measurement.asEvidence(result.sha256), "Video o‘lchovi") { videoQueueId = it }
                                 }
                             }
-                        }
-                    }
-                    if (clip?.isPublic != false && videoResult?.isPublic != false) {
-                        TextButton(onClick = { showSampleAi = !showSampleAi }) {
-                            Text(if (showSampleAi) "AI tahlilchini yopish" else "AI tahlilchi · CDC namunasi")
-                        }
-                        if (showSampleAi) {
-                            val cycles = videoResult?.takeIf { it.isPublic && it.measurement.savable }?.cycles
-                            ExerciseSampleAi(mobile, cycles)
-                        }
+                        } else ExerciseVideoRetake(result)
                     }
                     if (mobile != null) {
                         TextButton(onClick = mobile::refreshExercise, enabled = !ui.loading) { Text("Yangilash") }
@@ -458,6 +492,22 @@ internal fun ExerciseScreen(mobile: MobileWorkspaceModel?, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RowSafety(onPain: () -> Unit, onEmergency: () -> Unit, enabled: Boolean) {
+    androidx.compose.foundation.layout.Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp)
+            .background(Urgent, androidx.compose.foundation.shape.RoundedCornerShape(7.dp)),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        TextButton(onClick = onPain, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Og‘riq bor", color = UrgentInk)
+        }
+        TextButton(onClick = onEmergency, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Tez yordam · 103", color = UrgentInk)
         }
     }
 }
@@ -499,6 +549,7 @@ private fun ExerciseHistory(ui: ExerciseUi, onDiscard: (String) -> Unit) {
                 Text(attempt.shallow?.let { "To‘liq $reps · Chala $it" } ?: "$reps takror")
             }
             val review = attempt.review
+            if (attempt.hasVideo) Badge("Video yuborildi", Positive, PositiveInk)
             if (review == null) Text("Shifokor paneliga yuborildi")
             else {
                 Text(if (review.retake) "Qayta o‘lchash so‘raldi" else "Shifokor ko‘rib chiqdi")

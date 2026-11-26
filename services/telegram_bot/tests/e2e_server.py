@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 import os
 from time import monotonic
+from urllib.parse import parse_qs, urlsplit
 
 from aiogram import Bot
 from aiogram.client.session.base import BaseSession
@@ -20,6 +21,7 @@ class OfflineTelegramSession(BaseSession):
     def __init__(self):
         super().__init__()
         self.retry_at = {}
+        self.patient_notice_retry = False
 
     async def close(self):
         pass
@@ -32,6 +34,16 @@ class OfflineTelegramSession(BaseSession):
             return User(id=bot.id, is_bot=True, first_name="Demo", username="shifohalqa_e2e_bot")
         assert isinstance(method, SendMessage)
         assert type(method.chat_id) is int and method.chat_id > 0
+        if method.chat_id == int(os.environ["SHIFO_E2E_TELEGRAM_CHAT_ID"]) + 2:
+            button = method.reply_markup.inline_keyboard[0][0]
+            target = parse_qs(urlsplit(button.web_app.url).query)
+            assert target["kind"] == ["doctor_reply"] and target["reply"], "Notice must open the exact reply"
+            if not self.patient_notice_retry:
+                self.patient_notice_retry = True
+                assert "Tasdiqlangan sinov javobi." in method.text
+                raise TelegramRetryAfter(method=method, message="test notice retry", retry_after=8)
+            assert method.text == "Yangi xabar bor.", "A retried notice must check current chat privacy"
+            return Message(message_id=2, date=datetime.now(timezone.utc), chat=Chat(id=method.chat_id, type="private"))
         assert method.text == "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
         assert method.reply_markup is not None
         buttons = method.reply_markup.inline_keyboard
@@ -48,6 +60,9 @@ class OfflineTelegramSession(BaseSession):
 class ScopedTestStore(TelegramStore):
     async def claim_pending(self):
         return await super().claim_pending(chat_id=int(os.environ["SHIFO_E2E_TELEGRAM_CHAT_ID"]))
+
+    async def claim_pending_text_notice(self):
+        return await super().claim_pending_text_notice(chat_id=int(os.environ["SHIFO_E2E_TELEGRAM_CHAT_ID"]) + 2)
 
 
 def main():

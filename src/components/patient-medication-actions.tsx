@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePatientApi } from './patient-api';
 import { Check, Loader2, PackageX, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,7 @@ export function PatientMedicationActions({
   taskTitle: string;
   isDemo: boolean;
 }) {
-  const router = useRouter();
+  const { apiFetch, refresh } = usePatientApi();
   const reasonId = `reason-${taskId}`;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reason, setReason] = useState<string>('');
@@ -45,7 +45,7 @@ export function PatientMedicationActions({
     setPendingAction(mode);
     setError('');
     try {
-      const response = await fetch('/api/clinical/evidence', {
+      const response = await apiFetch('/api/clinical/evidence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -56,7 +56,7 @@ export function PatientMedicationActions({
       }
       setSheetOpen(false);
       toast.success(mode === 'taken' ? 'Dori ichilgani saqlandi.' : 'Sabab shifokorga yuborildi.');
-      router.refresh();
+      refresh();
     } catch {
       setError('Internet aloqasi uzildi. Aloqa tiklangach qayta urinib ko‘ring.');
     } finally {

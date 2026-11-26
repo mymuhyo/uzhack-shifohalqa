@@ -1,5 +1,7 @@
 'use client';
 
+import { usePatientApi } from './patient-api';
+
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
@@ -289,6 +291,7 @@ export function ExerciseClient({
   movement?: PoseMovement;
   isDemo?: boolean;
 }) {
+  const { apiFetch, linked } = usePatientApi();
   const copy = exerciseCatalog[movement];
   const analysisProvider = analysisProviders.find((provider) => provider !== 'gemini');
   const example =
@@ -638,9 +641,9 @@ export function ExerciseClient({
     const controller = new AbortController();
     request.current = { controller, report };
     setSaveStatus({ state: 'saving', report, message: 'Yuborilmoqda…' });
-    const endpoint = isDemo ? '/api/demo/exercise' : '/api/clinical/exercise';
+    const endpoint = isDemo && !linked ? '/api/demo/exercise' : '/api/clinical/exercise';
     try {
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -683,9 +686,9 @@ export function ExerciseClient({
     const controller = new AbortController();
     coachRequest.current = controller;
     setCoachState({ status: 'loading' });
-    const endpoint = isDemo ? '/api/demo/exercise-coach' : '/api/clinical/exercise-coach';
+    const endpoint = isDemo && !linked ? '/api/demo/exercise-coach' : '/api/clinical/exercise-coach';
     try {
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
@@ -739,7 +742,7 @@ export function ExerciseClient({
           ? saveStatus.attemptId
           : undefined;
 
-      const response = await fetch('/api/clinical/exercise/keyframe-review', {
+      const response = await apiFetch('/api/clinical/exercise/keyframe-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { usePatientApi } from './patient-api';
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { Camera, Check, Clock, Loader2, ScanLine, X } from 'lucide-react';
 import type { z } from 'zod';
@@ -46,8 +46,8 @@ export function DorimosCheck({
   isDemo?: boolean;
   deferred?: boolean;
 }) {
-  const router = useRouter();
-  const endpoint = isDemo ? '/api/demo/dorimos' : '/api/clinical/dorimos';
+  const { apiFetch, refresh, linked } = usePatientApi();
+  const endpoint = isDemo && !linked ? '/api/demo/dorimos' : '/api/clinical/dorimos';
   const [sampleId, setSampleId] = useState<DorimosSampleId>('box-5mg');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -78,7 +78,7 @@ export function DorimosCheck({
       case 'already_saved':
         setSaved(true);
         setMessage(action === 'defer' ? 'Quti tekshiruvi keyinroqqa qoldirildi.' : 'Quti qaydi saqlandi.');
-        router.refresh();
+        refresh();
         break;
       case 'expired':
         setConfirmation(null);
@@ -94,7 +94,7 @@ export function DorimosCheck({
     setMessage(input.action === 'scan' ? 'Quti yozuvi tekshirilmoqda…' : 'Qayd saqlanmoqda…');
     if (input.action === 'scan') setConfirmation(null);
     try {
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -124,7 +124,7 @@ export function DorimosCheck({
       form.set('taskId', taskId);
       form.set('image', prepared, prepared.type === 'image/png' ? 'box.png' : 'box.jpg');
 
-      const response = await fetch(endpoint, { method: 'POST', body: form });
+      const response = await apiFetch(endpoint, { method: 'POST', body: form });
       const result = dorimosResponse.parse(await response.json());
       applyResult(result, 'confirm');
     } catch {

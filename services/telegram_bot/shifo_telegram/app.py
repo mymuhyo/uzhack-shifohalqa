@@ -19,6 +19,7 @@ from aiohttp import web
 from pydantic import ValidationError
 
 from .config import Config
+from .patient_chat import PatientBridge, open_patient, patient_callback, patient_overview
 from .store import (
     DeliveryResult,
     RetryAfter,
@@ -33,13 +34,14 @@ WEBHOOK_PATH = "/api/telegram/webhook"
 WEBHOOK_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token"
 MAX_WEBHOOK_BYTES = 32 * 1024
 NO_STORE = {"Cache-Control": "no-store"}
-COMMAND = re.compile(r"/(start|bugun|ilova|mashq|holat|help|stop)(?:@([A-Za-z0-9_]+))?(?:[ \t]+(\S+))?")
+COMMAND = re.compile(r"/(start|bugun|ilova|mashq|holat|help|stop|bosim|qadam)(?:@([A-Za-z0-9_]+))?(?:[ \t]+([^\r\n]+))?")
 
 INVALID_PAIR = "Ulash kodi yaroqsiz. ShifoHalqa sahifasidan yangi ulash havolasini oling."
 TODAY = "Bugungi vazifalarni ShifoHalqada oching."
 MINI_APP = "ShifoHalqani Telegram Mini App ichida yoki brauzerda oching."
 EXERCISE_APP = "Mashq tahlilini Telegram Mini App yoki brauzerda oching."
-HELP = "Bugungi holat uchun /holat, ilova uchun /bugun yoki /ilova, mashq uchun /mashq, xabarlarni to‘xtatish uchun /stop buyrug‘ini yuboring."
+HELP = ("Bugungi vazifalar — /bugun yoki /holat\nMashqlar — /mashq\n"
+        "Qon bosimini kiritish — /bosim\nQadamlarni kiritish — /qadam\nTelegramni uzish — /stop")
 RED_NOTICE = "ShifoHalqa tekshiruv navbatiga yangi qayd tushdi."
 
 logger = logging.getLogger(__name__)
@@ -66,7 +68,7 @@ def _mini_app_keyboard(
     ]
     if include_exercise:
         rows.append([
-            InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}demo/mashq")),
+            InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}tg?tab=exercise")),
             InlineKeyboardButton(text="Brauzerda ochish", url=config.app_url),
         ])
     else:
@@ -84,7 +86,7 @@ def _mini_app_menu_keyboard(config: Config) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Shifokor (Mini App)", web_app=WebAppInfo(url=_mini_app_url(config, "doctor"))),
             ],
             [
-                InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}demo/mashq")),
+                InlineKeyboardButton(text="Mashq tahlili", web_app=WebAppInfo(url=f"{config.app_url}tg?tab=exercise")),
                 InlineKeyboardButton(text="Brauzerda ochish", url=config.app_url),
             ],
         ]
@@ -95,7 +97,7 @@ def _exercise_keyboard(config: Config) -> InlineKeyboardMarkup:
     exercise_url = f"{config.app_url}demo/mashq"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Mashq tahlilini ochish", web_app=WebAppInfo(url=exercise_url))],
+            [InlineKeyboardButton(text="Mashq tahlilini ochish", web_app=WebAppInfo(url=f"{config.app_url}tg?tab=exercise"))],
             [InlineKeyboardButton(text="Brauzerda ochish", url=exercise_url)],
         ]
     )
@@ -123,28 +125,12 @@ class PrivateCommand(Filter):
         command, recipient, argument = match.groups()
         if recipient and recipient.casefold() != self.bot_username:
             return False
-        if argument and command != "start":
+        if argument and command not in {"start", "bosim", "qadam"}:
             return False
         return {"command": command, "argument": argument}
 
 
-def _holat_keyboard(config: Config, role: str, pending_med_task_id: str | None) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if role == "patient" and pending_med_task_id:
-        rows.append([
-            InlineKeyboardButton(text="✓ Dori ichdim", callback_data=f"med_taken:{pending_med_task_id}"),
-            InlineKeyboardButton(text="Dori tugadi", callback_data=f"med_supply:{pending_med_task_id}"),
-        ])
-    rows.append([
-        InlineKeyboardButton(
-            text="ShifoHalqa Mini App" if role == "patient" else "Shifokor navbatini ochish",
-            web_app=WebAppInfo(url=_mini_app_url(config, role)),
-        )
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
+def _dispatcher(config: Config, store: TelegramStore, bridge: PatientBridge) -> Dispatcher:
     router = Router()
 
     @router.message(PrivateCommand(config.bot_username))
@@ -168,15 +154,42 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
         if command == "stop":
             stopped = await store.disconnect_chat(chat_id, sent_at=sent_at, update_id=event_update.update_id)
             return _message(chat_id, "Telegram xabarlari o‘chirildi.") if stopped else None
-        if command == "holat":
-            summary = await store.get_today_summary(chat_id) if hasattr(store, "get_today_summary") else None
-            if summary is None:
+        if command in {"bosim", "qadam"}:
+            key = "bp" if command == "bosim" else "steps"
+            numbers = (argument or "").split()
+            if len(numbers) != (2 if key == "bp" else 1) or any(not re.fullmatch(r"[0-9]{1,6}", n) for n in numbers):
+                example = "/bosim 120 80" if key == "bp" else "/qadam 3000"
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[[open_patient(config, tab=key)]])
+                return _message(chat_id, f"Qiymatlarni kiriting\nNamuna\n{example}", keyboard)
+            data = {"action": key, "systolic": int(numbers[0]), "diastolic": int(numbers[1])} if key == "bp" else {
+                "action": key, "count": int(numbers[0]),
+            }
+            status, result = await bridge.request(chat_id, data)
+            if status == 200:
+                text = "Qayd avval saqlangan." if result.get("status") == "already_saved" else "Qayd saqlandi."
+            elif status == 400:
+                text = "Qiymatlar yaroqsiz. Raqamlarni tekshiring."
+            elif status == 404:
+                text = "Bugungi vazifa topilmadi. Rejangizni ilovada tekshiring."
+            else:
+                text = "Qayd saqlanmadi. Qayta urinib ko‘ring."
+            return _message(chat_id, text, InlineKeyboardMarkup(inline_keyboard=[[open_patient(config, tab=key)]]))
+        if command in {"holat", "bugun"}:
+            role = await store.get_linked_role(chat_id) if hasattr(store, "get_linked_role") else None
+            if role == "doctor" and command == "holat":
+                summary = await store.get_today_summary(chat_id)
+                if summary is not None and summary.role == "doctor":
+                    return _message(chat_id, summary.text, _mini_app_keyboard(config, focus="doctor"))
+            status, snapshot = await bridge.request(chat_id)
+            if status == 200 or role == "patient":
+                text, keyboard = patient_overview(config, snapshot if status == 200 else {})
+                return _message(chat_id, text, keyboard)
+            if command == "holat":
                 return _message(
                     chat_id,
                     "Chat hali ulanmagan. Veb-paneldagi «Telegramni ulash» tugmasi orqali ulang yoki Mini App’ni oching.",
                     _mini_app_menu_keyboard(config),
                 )
-            return _message(chat_id, summary.text, _holat_keyboard(config, summary.role, summary.pending_med_task_id))
         if command == "ilova":
             return _message(chat_id, MINI_APP, _mini_app_menu_keyboard(config))
         if command == "mashq":
@@ -190,7 +203,7 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
         )
 
     @router.callback_query()
-    async def handle_callback(callback: CallbackQuery, event_update: Update) -> AnswerCallbackQuery | None:
+    async def handle_callback(callback: CallbackQuery, event_update: Update, bot: Bot) -> AnswerCallbackQuery | None:
         data = callback.data or ""
         msg = callback.message
         sender = callback.from_user
@@ -212,17 +225,11 @@ def _dispatcher(config: Config, store: TelegramStore) -> Dispatcher:
                 callback_query_id=callback.id,
                 text="Telegram xabarlari o‘chirildi." if stopped else "Faol ulanish topilmadi.",
             )
-        if (data.startswith("med_taken:") or data.startswith("med_supply:")) and hasattr(store, "record_medication_action"):
-            action_key, task_id = data.split(":", 1)
-            action = "taken" if action_key == "med_taken" else "supply"
-            outcome = await store.record_medication_action(msg.chat.id, task_id, action)
-            reply_text = {
-                "saved_taken": "Dori ichildi deb saqlandi ✓",
-                "saved_supply": "Dori tugadi xabari shifokorga yuborildi ✓",
-                "already_saved": "Bugungi dori qaydi avval saqlangan.",
-                "not_found": "Vazifa topilmadi yoki muddati o‘tgan.",
-            }[outcome]
-            return AnswerCallbackQuery(callback_query_id=callback.id, text=reply_text)
+        if data.startswith("m5:"):
+            outcome = await patient_callback(config, bridge, bot, msg, data)
+            return AnswerCallbackQuery(callback_query_id=callback.id, text=outcome)
+        if data.startswith(("med_taken:", "med_supply:")):
+            return AnswerCallbackQuery(callback_query_id=callback.id, text="Bu tugma eskirgan. /bugun orqali dozani oching.")
         return None
 
     dispatcher = Dispatcher()
@@ -242,11 +249,17 @@ async def send_text_message(
     *,
     focus: str = "doctor",
     label: str = "ShifoHalqa Mini App",
+    reply_kind: str | None = None,
+    reply_id: str | None = None,
 ) -> DeliveryResult:
     if not telegram_chat_id_valid(chat_id):
         return "rejected"
     try:
-        keyboard = _mini_app_keyboard(config, focus=focus, primary_label=label)
+        keyboard = (
+            InlineKeyboardMarkup(inline_keyboard=[[open_patient(config, "Javobni ochish", kind=reply_kind, reply=reply_id)]])
+            if focus == "patient" and reply_kind and reply_id
+            else _mini_app_keyboard(config, focus=focus, primary_label=label)
+        )
         result = await bot(_message(chat_id, text, keyboard), request_timeout=3.5)
     except TelegramRetryAfter as error:
         return RetryAfter(max(1, error.retry_after))
@@ -257,8 +270,8 @@ async def send_text_message(
     return "sent" if isinstance(result, Message) else "unknown"
 
 
-def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Application:
-    dispatcher = _dispatcher(config, store)
+def create_app(config: Config, store: TelegramStore, bot: Bot, *, bridge: PatientBridge | None = None) -> web.Application:
+    dispatcher = _dispatcher(config, store, bridge or PatientBridge(config))
     secret_digest = hashlib.sha256(config.webhook_secret.encode()).digest()
     app = web.Application(client_max_size=MAX_WEBHOOK_BYTES)
 
@@ -279,6 +292,7 @@ def create_app(config: Config, store: TelegramStore, bot: Bot) -> web.Applicatio
                 try:
                     status = await send_text_message(
                         bot, config, notice.chat_id, notice.message_text, focus=notice.focus, label=label,
+                        reply_kind=notice.reply_kind, reply_id=notice.reply_id,
                     )
                 except Exception:
                     continue

@@ -2,184 +2,90 @@
 
 import Link from 'next/link';
 import Script from 'next/script';
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { TelegramPatient, type TelegramTarget } from './telegram-patient';
+import { readTelegramWebApp } from './telegram-sdk';
+import styles from './telegram-mini-app.module.css';
 
-type TelegramWebApp = {
-  ready?: () => void;
-  expand?: () => void;
-  close?: () => void;
-  openLink?: (url: string) => void;
-  initData?: string;
-  platform?: string;
-  initDataUnsafe?: {
-    user?: {
-      first_name?: string;
-    };
-  };
-  HapticFeedback?: {
-    impactOccurred?: (style: 'light' | 'medium' | 'heavy') => void;
-  };
-  MainButton?: {
-    setText: (text: string) => void;
-    show: () => void;
-    hide: () => void;
-    onClick: (cb: () => void) => void;
-    offClick: (cb: () => void) => void;
-  };
-};
+type Session = { token: string; expiresAt: number } | { error: string };
 
-type TelegramWindow = Window & {
-  Telegram?: {
-    WebApp?: TelegramWebApp;
-  };
-};
-
-const listeners = new Set<() => void>();
-const subscribeTelegram = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-const notifyTelegram = () => {
-  listeners.forEach((listener) => listener());
-};
-const readWebApp = () => (window as TelegramWindow).Telegram?.WebApp;
-const readInTelegram = () => Boolean(readWebApp()?.initData);
-const readPlatform = () => readWebApp()?.platform ?? '';
-const readFirstName = () => readWebApp()?.initDataUnsafe?.user?.first_name?.trim() ?? '';
-const readFalse = () => false;
-const readEmpty = () => '';
-
-export function TelegramMiniApp({
-  demoEnabled,
-  focus = null,
-}: {
+export function TelegramMiniApp({ demoEnabled, focus, target }: {
   demoEnabled: boolean;
-  focus?: 'doctor' | 'patient' | null;
+  focus: 'doctor' | 'patient' | null;
+  target: TelegramTarget;
 }) {
-  const inTelegram = useSyncExternalStore(subscribeTelegram, readInTelegram, readFalse);
-  const platform = useSyncExternalStore(subscribeTelegram, readPlatform, readEmpty);
-  const firstName = useSyncExternalStore(subscribeTelegram, readFirstName, readEmpty);
-  const doctorFormRef = useRef<HTMLFormElement>(null);
-  const patientFormRef = useRef<HTMLFormElement>(null);
+  const [launch, setLaunch] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>();
 
-  const primaryRole = focus === 'doctor' ? 'doctor' : 'patient';
-
-  const triggerHaptic = useCallback(() => {
-    readWebApp()?.HapticFeedback?.impactOccurred?.('light');
-  }, []);
-
-  const syncTelegramWebApp = useCallback(() => {
-    const webApp = readWebApp();
-    if (webApp) {
-      webApp.ready?.();
-      webApp.expand?.();
-      notifyTelegram();
-    }
+  const start = useCallback(() => {
+    const app = readTelegramWebApp();
+    app?.ready?.();
+    app?.expand?.();
+    setTheme(app?.colorScheme);
+    setLaunch(app?.initData ?? '');
   }, []);
 
   useEffect(() => {
-    const webApp = readWebApp();
-    webApp?.ready?.();
-    webApp?.expand?.();
-  }, []);
+    if (!launch || focus === 'doctor') return;
+    const controller = new AbortController();
+    void fetch('/api/telegram/auth', {
+      method: 'POST', credentials: 'omit', cache: 'no-store', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: launch }),
+    }).then(async (response) => {
+      const data = await response.json();
+      if (!controller.signal.aborted) {
+        setSession(response.ok && typeof data.token === 'string' && Number.isSafeInteger(data.expiresAt)
+          ? { token: data.token, expiresAt: data.expiresAt } : { error: String(data.error ?? 'unavailable') });
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setSession({ error: 'unavailable' });
+    });
+    return () => controller.abort();
+  }, [focus, launch]);
 
   useEffect(() => {
-    if (!inTelegram || !demoEnabled) return;
-    const mainButton = readWebApp()?.MainButton;
-    if (!mainButton) return;
-
-    const handleMainClick = () => {
-      triggerHaptic();
-      const targetForm = primaryRole === 'doctor' ? doctorFormRef.current : patientFormRef.current;
-      targetForm?.requestSubmit();
-    };
-
-    mainButton.setText(primaryRole === 'doctor' ? 'Shifokor navbatini ochish' : 'Bemor vazifalarini ochish');
-    mainButton.onClick(handleMainClick);
-    mainButton.show();
-
-    return () => {
-      mainButton.offClick(handleMainClick);
-      mainButton.hide();
-    };
-  }, [demoEnabled, inTelegram, primaryRole, triggerHaptic]);
-
-  const patientCard = (
-    <form key="patient" ref={patientFormRef} action="/api/demo/login" method="post" onSubmit={triggerHaptic}>
-      <input type="hidden" name="role" value="patient" />
-      <button className="role-button" type="submit">
-        Bemor vazifalarini ochish <span aria-hidden="true">↗</span>
-      </button>
-      <p className="role-hint">Kunlik dori, bosim, mashq va Yaqinim havolasini boshqarish.</p>
-    </form>
-  );
-
-  const doctorCard = (
-    <form key="doctor" ref={doctorFormRef} action="/api/demo/login" method="post" onSubmit={triggerHaptic}>
-      <input type="hidden" name="role" value="doctor" />
-      <button className="role-button" type="submit">
-        Shifokor navbatini ochish <span aria-hidden="true">↗</span>
-      </button>
-      <p className="role-hint">Ochiq bayroqlarga 1-klik javob berish va L4 tasdiqlash.</p>
-    </form>
-  );
+    if (!launch) return;
+    const app = readTelegramWebApp();
+    const syncTheme = () => setTheme(app?.colorScheme);
+    app?.onEvent?.('themeChanged', syncTheme);
+    return () => app?.offEvent?.('themeChanged', syncTheme);
+  }, [launch]);
 
   return (
-    <div className="ledger">
-      <Script
-        src="https://telegram.org/js/telegram-web-app.js"
-        strategy="afterInteractive"
-        onReady={syncTelegramWebApp}
-      />
-      <section aria-labelledby="tg-intro-heading">
-        <span className="status-pill status-ok">
-          {inTelegram
-            ? `Telegram Mini App${platform ? ` · ${platform}` : ''}`
-            : 'Mini App ko‘rinishi'}
-        </span>
-        <h2 id="tg-intro-heading">
-          {inTelegram && firstName ? `Assalomu alaykum, ${firstName}` : 'Tezkor kirish'}
-        </h2>
-        <p>
-          Telegram ichidan chiqmasdan kunlik dori, qon bosimi, mashq tahlili va shifokor javoblarini oching.
-        </p>
-        {demoEnabled ? (
-          <div className="role-picker">
-            {focus === 'doctor' ? [doctorCard, patientCard] : [patientCard, doctorCard]}
-          </div>
-        ) : (
-          <p className="notice">Demo kirishi hozir mavjud emas.</p>
-        )}
-      </section>
-      <section aria-labelledby="tg-camera-heading">
-        <h2 id="tg-camera-heading">Kamera va mashq tahlili</h2>
-        <p>
-          Ayrim telefonlarda Telegram ichki oynasi kamera ruxsatini cheklashi mumkin. Agar kamera ochilmasa, mashq sahifasini tashqi brauzerda yoki Android ilovaning jonli kamera CV bo‘limida oching.
-        </p>
-        <div className="role-actions">
-          <Link className="text-action" href="/demo/mashq">Mashq demosini ochish</Link>
-          {inTelegram ? (
-            <>
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => readWebApp()?.openLink?.(`${window.location.origin}/`)}
-              >
-                Tashqi brauzerda ochish
-              </button>
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => readWebApp()?.close?.()}
-              >
-                Mini Appni yopish
-              </button>
-            </>
-          ) : (
-            <Link className="text-action" href="/">Tashqi brauzerda ochish</Link>
-          )}
-        </div>
-      </section>
+    <div className={styles.surface} data-telegram-theme={theme}>
+      <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive"
+        onReady={start} onError={() => setLaunch('')} />
+      {focus === 'doctor' ? (
+        <section className={styles.entry}>
+          <h1>Shifokor veb-paneli</h1>
+          <p>Murojaatlar va bemor qaydlarini brauzerda ko‘ring.</p>
+          <Link className="role-button" href="/doctor" target="_blank" rel="noreferrer">Shifokor panelini ochish</Link>
+        </section>
+      ) : launch === null || (launch && !session) ? (
+        <p className={styles.feedback} role="status">ShifoHalqa ochilmoqda…</p>
+      ) : session && 'token' in session ? (
+        <TelegramPatient token={session.token} expiresAt={session.expiresAt} target={target} />
+      ) : launch ? (
+        <section className={styles.entry}>
+          <h1>{session && 'error' in session && session.error === 'not_linked' ? 'Telegramni ulang' : 'Mini App ochilmadi'}</h1>
+          <p>{session && 'error' in session && session.error === 'not_linked'
+            ? 'Bemor sahifasidagi Telegramni ulash tugmasi orqali hisobingizni ulang.'
+            : 'Telegram menyusidan Mini Appni qayta oching.'}</p>
+          <Link className="text-action" href="/" target="_blank" rel="noreferrer">ShifoHalqani brauzerda ochish</Link>
+        </section>
+      ) : (
+        <section className={styles.entry}>
+          <h1>Telegram Mini App</h1>
+          <p>Ulangan bemor hisobini ochish uchun Telegram botidagi Mini App tugmasidan foydalaning.</p>
+          {demoEnabled ? (
+            <form action="/api/demo/login" method="post">
+              <input type="hidden" name="role" value="patient" />
+              <button type="submit" className="text-action">Brauzerda demo ochish</button>
+            </form>
+          ) : <Link className="text-action" href="/">ShifoHalqa bosh sahifasi</Link>}
+        </section>
+      )}
     </div>
   );
 }

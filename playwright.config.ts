@@ -55,6 +55,8 @@ export default defineConfig({
       EXERCISE_COACH_OPENCODE_DEMO: 'false',
       EXERCISE_COACH_AI_DEMO: 'false',
       TELEGRAM_BOT_USERNAME: 'shifohalqa_e2e_bot',
+      TELEGRAM_BOT_TOKEN: '123456789:shifohalqa_e2e_not_a_live_telegram_token',
+      TELEGRAM_BOT_SERVICE_SECRET: 'shifohalqa-e2e-fake-bridge-key-for-tests',
       NEXT_TELEMETRY_DISABLED: '1',
       SESSION_SECRET: randomBytes(32).toString('hex'),
     },

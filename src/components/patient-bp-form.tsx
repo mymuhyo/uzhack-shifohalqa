@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePatientApi } from './patient-api';
 import { AlertTriangle, HeartPulse, Loader2, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,7 @@ export function PatientBpForm({
   isDemo?: boolean;
   priorReadings?: readonly PriorBpReference[];
 }) {
-  const router = useRouter();
+  const { apiFetch, refresh } = usePatientApi();
   const hintId = `pressure-hint-${taskId}`;
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
@@ -78,7 +78,7 @@ export function PatientBpForm({
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/clinical/evidence', {
+      const response = await apiFetch('/api/clinical/evidence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -94,7 +94,7 @@ export function PatientBpForm({
         return;
       }
       toast.success('Qon bosimi qaydi saqlandi.');
-      router.refresh();
+      refresh();
     } catch {
       setError('Aloqa uzildi. Qayta urinib ko‘ring.');
     } finally {
@@ -223,7 +223,7 @@ export function PatientRetakeBpForm({
   targets: BloodPressureTargets | null;
   isDemo?: boolean;
 }) {
-  const router = useRouter();
+  const { apiFetch, refresh } = usePatientApi();
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [chestPain, setChestPain] = useState(false);
@@ -240,7 +240,7 @@ export function PatientRetakeBpForm({
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/clinical/followup', {
+      const response = await apiFetch('/api/clinical/followup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -256,7 +256,7 @@ export function PatientRetakeBpForm({
         return;
       }
       toast.success('Qayta o‘lchov yuborildi.');
-      router.refresh();
+      refresh();
     } catch {
       setError('Aloqa uzildi.');
     } finally {

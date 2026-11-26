@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePatientApi } from './patient-api';
 import { Footprints, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ export function PatientStepsForm({
   defaultSteps?: number;
   isDemo: boolean;
 }) {
-  const router = useRouter();
+  const { apiFetch, refresh } = usePatientApi();
   const [steps, setSteps] = useState(defaultSteps !== undefined ? String(defaultSteps) : '');
   const [pending, setPending] = useState(false);
 
@@ -31,7 +31,7 @@ export function PatientStepsForm({
     }
     setPending(true);
     try {
-      const response = await fetch('/api/clinical/steps', {
+      const response = await apiFetch('/api/clinical/steps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ count, source: 'self_report' }),
@@ -41,7 +41,7 @@ export function PatientStepsForm({
         return;
       }
       toast.success('Bugungi qadamlar saqlandi.');
-      router.refresh();
+      refresh();
     } catch {
       toast.error('Aloqa uzildi.');
     } finally {

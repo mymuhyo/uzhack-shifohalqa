@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePatientApi } from './patient-api';
 import { AlertOctagon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const symptomLabels: Record<UrgentSymptomType, string> = {
 };
 
 export function PatientUrgentSymptomForm({ isDemo }: { isDemo: boolean }) {
-  const router = useRouter();
+  const { apiFetch, refresh } = usePatientApi();
   const [symptom, setSymptom] = useState<UrgentSymptomType>('chest_pain');
   const [note, setNote] = useState('');
   const [pending, setPending] = useState(false);
@@ -29,7 +29,7 @@ export function PatientUrgentSymptomForm({ isDemo }: { isDemo: boolean }) {
     if (pending) return;
     setPending(true);
     try {
-      const response = await fetch('/api/clinical/symptom', {
+      const response = await apiFetch('/api/clinical/symptom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symptom, note: note.trim() }),
@@ -40,7 +40,7 @@ export function PatientUrgentSymptomForm({ isDemo }: { isDemo: boolean }) {
       }
       setNote('');
       toast.success('Shoshilinch simptom shifokorga yuborildi.');
-      router.refresh();
+      refresh();
     } catch {
       toast.error('Tarmoq xatosi.');
     } finally {

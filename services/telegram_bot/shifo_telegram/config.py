@@ -33,6 +33,7 @@ class Config:
     host: str = "127.0.0.1"
     port: int = 8081
     env_id: str = ""
+    service_secret: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls, *, require_database: bool = True) -> "Config":
@@ -44,6 +45,7 @@ class Config:
         host = _env("TELEGRAM_HOST") or "127.0.0.1"
         port = _env("TELEGRAM_PORT") or "8081"
         env_id = _env("SHIFO_ENV_ID")
+        service_secret = _env("TELEGRAM_BOT_SERVICE_SECRET")
 
         if re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{30,128}", bot_token) is None:
             raise ValueError("Set a valid TELEGRAM_BOT_TOKEN.")
@@ -57,5 +59,7 @@ class Config:
             raise ValueError("Set SHIFO_ENV_ID to the expected database environment identity (e.g. final-preview).")
         if re.fullmatch(r"[0-9]{1,5}", port) is None or not 1 <= int(port) <= 65535:
             raise ValueError("TELEGRAM_PORT must be between 1 and 65535.")
+        if service_secret and (len(service_secret) < 32 or not service_secret.isascii() or any(c.isspace() for c in service_secret)):
+            raise ValueError("Set a TELEGRAM_BOT_SERVICE_SECRET with at least 32 non-space ASCII characters.")
 
-        return cls(bot_token, webhook_secret, bot_username, app_url, database_url, host, int(port), env_id)
+        return cls(bot_token, webhook_secret, bot_username, app_url, database_url, host, int(port), env_id, service_secret)

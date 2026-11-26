@@ -50,6 +50,9 @@ async def manage_webhook(config: Config, target: str, *, register: bool) -> str:
             raise ValueError("Telegram did not confirm webhook registration.")
         await bot.set_my_commands([
             BotCommand(command="bugun", description="Bugungi vazifalarni ochish"),
+            BotCommand(command="holat", description="Bugungi va 7 kunlik holat"),
+            BotCommand(command="bosim", description="Qon bosimini kiritish"),
+            BotCommand(command="qadam", description="Qadamlarni kiritish"),
             BotCommand(command="ilova", description="ShifoHalqa Mini App menyusi"),
             BotCommand(command="mashq", description="Mashq tahlilini ochish"),
             BotCommand(command="help", description="Yordam va boshqaruv"),

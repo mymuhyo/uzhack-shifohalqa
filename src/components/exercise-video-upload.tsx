@@ -1,5 +1,7 @@
 'use client';
 
+import { usePatientApi } from './patient-api';
+
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Film, Loader2, Upload, X } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -61,6 +63,7 @@ export function ExerciseVideoUpload({
   videoBlob: Blob;
   durationSec: number;
 }) {
+  const { apiFetch } = usePatientApi();
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState<UploadState>({ status: 'idle' });
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -99,7 +102,7 @@ export function ExerciseVideoUpload({
 
     setState({ status: 'requesting' });
     try {
-      const reqRes = await fetch('/api/clinical/exercise/video-upload', {
+      const reqRes = await apiFetch('/api/clinical/exercise/video-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,7 +137,7 @@ export function ExerciseVideoUpload({
       abortRef.current = null;
 
       setState({ status: 'finalizing' });
-      const finRes = await fetch('/api/clinical/exercise/video-upload', {
+      const finRes = await apiFetch('/api/clinical/exercise/video-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

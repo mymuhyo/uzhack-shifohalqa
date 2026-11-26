@@ -21,7 +21,6 @@ from shifo_telegram.app import (
     send_text_message,
 )
 from shifo_telegram.config import Config
-from shifo_telegram.store import TodaySummary
 
 BOT_TOKEN = "123456789:abcdefghijklmnopqrstuvwxyz-0123456789"
 SECRET = "telegram-e2e-secret"
@@ -53,7 +52,6 @@ class OfflineStore:
         self.disconnected = []
         self.stop_applied = True
         self.summary = None
-        self.med_actions = []
 
     async def open(self):
         self.opened = True
@@ -72,9 +70,17 @@ class OfflineStore:
     async def get_today_summary(self, chat_id):
         return self.summary
 
-    async def record_medication_action(self, chat_id, task_id, action):
-        self.med_actions.append((chat_id, task_id, action))
-        return "saved_taken" if action == "taken" else "saved_supply"
+class OfflineBridge:
+    def __init__(self):
+        self.status = 404
+        self.data = {}
+        self.actions = []
+
+    async def request(self, chat_id, action=None):
+        if action is None:
+            return self.status, self.data
+        self.actions.append((chat_id, action))
+        return 200, {"status": "saved", "queued": True}
 
 
 class OfflineBot(Bot):
@@ -112,7 +118,8 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         self.worker_mock = patch("shifo_telegram.app.run_delivery_worker", new=no_network_worker)
         self.worker_mock.start()
         self.addCleanup(self.worker_mock.stop)
-        self.app = create_app(CONFIG, self.store, self.bot)
+        self.bridge = OfflineBridge()
+        self.app = create_app(CONFIG, self.store, self.bot, bridge=self.bridge)
         self.app.freeze()
         await self.app.startup()
         self.addAsyncCleanup(self.app.cleanup)
@@ -190,7 +197,7 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                     "inline_keyboard": [
                         [{"text": "ShifoHalqa Mini App", "web_app": {"url": f"{APP_URL}tg?focus=patient"}}],
                         [
-                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}demo/mashq"}},
+                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}tg?tab=exercise"}},
                             {"text": "Brauzerda ochish", "url": APP_URL},
                         ],
                     ]
@@ -214,7 +221,7 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                             {"text": "Shifokor (Mini App)", "web_app": {"url": f"{APP_URL}tg?focus=doctor"}},
                         ],
                         [
-                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}demo/mashq"}},
+                            {"text": "Mashq tahlili", "web_app": {"url": f"{APP_URL}tg?tab=exercise"}},
                             {"text": "Brauzerda ochish", "url": APP_URL},
                         ],
                     ]
@@ -230,7 +237,7 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
                 "text": "Mashq tahlilini Telegram Mini App yoki brauzerda oching.",
                 "reply_markup": {
                     "inline_keyboard": [
-                        [{"text": "Mashq tahlilini ochish", "web_app": {"url": f"{APP_URL}demo/mashq"}}],
+                        [{"text": "Mashq tahlilini ochish", "web_app": {"url": f"{APP_URL}tg?tab=exercise"}}],
                         [{"text": "Brauzerda ochish", "url": f"{APP_URL}demo/mashq"}],
                     ]
                 },
@@ -306,29 +313,41 @@ class TelegramAppTests(IsolatedAsyncioTestCase):
         self.assertEqual(retry.seconds, 17)
         self.assertEqual(len(self.bot.requests), 1)
 
-    async def test_holat_returns_summary_and_inline_medication_actions(self):
+    async def test_holat_keeps_details_private_then_opens_one_selected_dose(self):
         unlinked = await self.message("/holat")
         self.assertIn("Chat hali ulanmagan", json.loads(unlinked.text)["text"])
 
         task_id = "f2b5ee25-b406-4732-83f9-f45ce90aeccd"
-        self.store.summary = TodaySummary(
-            role="patient",
-            text="Bugungi holat · Anvar aka\n• Qadamlar: 3200 / 3000 (Maqsad bajarildi ✓)",
-            pending_med_task_id=task_id,
-        )
+        other_id = "f2b5ee25-b406-4732-83f9-f45ce90aecce"
+        self.bridge.status = 200
+        self.bridge.data = {"detailsEnabled": False}
         linked = await self.message("/holat")
         payload = json.loads(linked.text)
-        self.assertEqual(payload["method"], "sendMessage")
-        self.assertIn("3200 / 3000", payload["text"])
-        buttons = payload["reply_markup"]["inline_keyboard"][0]
-        self.assertEqual(buttons[0]["callback_data"], f"med_taken:{task_id}")
-        self.assertEqual(buttons[1]["callback_data"], f"med_supply:{task_id}")
+        self.assertIn("Rejangizni tekshiring", payload["text"])
+        self.assertEqual(payload["reply_markup"]["inline_keyboard"][0][0]["style"], "primary")
 
-        taken = await self.callback(f"med_taken:{task_id}")
-        self.assertEqual(json.loads(taken.text)["text"], "Dori ichildi deb saqlandi ✓")
-        supply = await self.callback(f"med_supply:{task_id}")
-        self.assertEqual(json.loads(supply.text)["text"], "Dori tugadi xabari shifokorga yuborildi ✓")
-        self.assertEqual(self.store.med_actions, [(42, task_id, "taken"), (42, task_id, "supply")])
+        self.bridge.data = {"detailsEnabled": True, "doses": [
+            {"id": task_id, "title": "Dori A", "time": "08:00"},
+            {"id": other_id, "title": "Dori B", "time": "08:00"},
+        ]}
+        chooser = json.loads((await self.message("/bugun")).text)
+        self.assertEqual(chooser["reply_markup"]["inline_keyboard"][0][0]["callback_data"], f"m5:pick:{task_id}")
+        await self.callback(f"m5:pick:{task_id}")
+        method, _ = self.bot.requests[-1]
+        self.assertIn("08:00", method.text)
+        self.assertIn("Dori A", method.text)
+        self.assertNotIn("Dori B", method.text)
+        styles = [button.style for row in method.reply_markup.inline_keyboard for button in row if button.style]
+        self.assertEqual(styles, ["success", "primary", "danger"])
+        await self.callback(f"m5:supply:{task_id}")
+        self.assertEqual(self.bridge.actions[-1][1], {
+            "action": "dose", "taskId": task_id, "medicationStatus": "missed", "reason": "out_of_supply",
+        })
+        self.assertIn("shifokor navbatiga", self.bot.requests[-1][0].text)
+
+        self.bridge.data = {"detailsEnabled": False}
+        await self.callback(f"m5:taken:{task_id}")
+        self.assertEqual(len(self.bridge.actions), 1)
 
     async def test_send_text_message_delivers_patient_reply_with_patient_focus(self):
         self.assertEqual(

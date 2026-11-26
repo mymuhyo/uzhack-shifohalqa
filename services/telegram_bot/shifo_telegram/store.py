@@ -48,13 +48,14 @@ class TextNotice:
     chat_id: int
     message_text: str
     focus: Literal["patient", "doctor"]
+    reply_kind: str | None = None
+    reply_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class TodaySummary:
     role: LinkedRole
     text: str
-    pending_med_task_id: str | None = None
 
 
 class TelegramStore:
@@ -291,77 +292,6 @@ class TelegramStore:
         if not telegram_chat_id_valid(chat_id):
             return None
         async with self._pool.connection() as connection:
-            pcur = await connection.execute(
-                """
-                WITH today AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date AS d)
-                SELECT patient.name,
-                       med_item.title,
-                       med_task.id::text,
-                       med_task.status,
-                       vitals_task.status,
-                       COALESCE(steps.step_count, 0),
-                       COALESCE(plan.daily_step_goal, 3000),
-                       ex_plan.movement,
-                       ex_plan.target_reps,
-                       (
-                         SELECT flag.patient_reply
-                         FROM public.flags AS flag
-                         JOIN public.evidence_logs AS ev ON ev.workspace_id = flag.workspace_id AND ev.id = flag.evidence_log_id
-                         JOIN public.task_instances AS t ON t.workspace_id = ev.workspace_id AND t.id = ev.task_instance_id
-                         JOIN public.plan_items AS pi ON pi.workspace_id = t.workspace_id AND pi.id = t.plan_item_id
-                         WHERE pi.workspace_id = plan.workspace_id AND pi.plan_id = plan.id AND flag.patient_reply IS NOT NULL
-                         ORDER BY flag.reviewed_at DESC NULLS LAST LIMIT 1
-                       )
-                FROM public.telegram_patient_links AS link
-                JOIN public.patients AS patient
-                  ON patient.workspace_id = link.workspace_id AND patient.id = link.patient_id
-                LEFT JOIN public.plans AS plan
-                  ON plan.workspace_id = patient.workspace_id AND plan.patient_id = patient.id
-                CROSS JOIN today
-                LEFT JOIN public.plan_items AS med_item
-                  ON med_item.workspace_id = plan.workspace_id AND med_item.plan_id = plan.id AND med_item.type = 'medication'
-                LEFT JOIN public.task_instances AS med_task
-                  ON med_task.workspace_id = med_item.workspace_id AND med_task.plan_item_id = med_item.id AND med_task.scheduled_date = today.d
-                LEFT JOIN public.plan_items AS vitals_item
-                  ON vitals_item.workspace_id = plan.workspace_id AND vitals_item.plan_id = plan.id AND vitals_item.type = 'vitals'
-                LEFT JOIN public.task_instances AS vitals_task
-                  ON vitals_task.workspace_id = vitals_item.workspace_id AND vitals_task.plan_item_id = vitals_item.id AND vitals_task.scheduled_date = today.d
-                LEFT JOIN public.daily_step_counts AS steps
-                  ON steps.workspace_id = patient.workspace_id AND steps.patient_id = patient.id AND steps.activity_date = today.d
-                LEFT JOIN public.exercise_prescriptions AS ex_plan
-                  ON ex_plan.workspace_id = patient.workspace_id AND ex_plan.patient_id = patient.id
-                WHERE link.chat_id = %s
-                """,
-                (chat_id,),
-            )
-            prow = await pcur.fetchone()
-            if prow is not None:
-                (
-                    patient_name, med_title, med_task_id, med_status, vitals_status,
-                    steps_count, step_goal, ex_movement, ex_reps, latest_reply,
-                ) = prow
-                med_label = {
-                    "taken": "Ichildi ✓",
-                    "missed": "Qoldirildi",
-                    "pending": "Kutilmoqda",
-                }.get(med_status or "", "Belgilanmagan")
-                bp_label = "Kiritildi ✓" if vitals_status == "recorded" else "Kutilmoqda"
-                step_mark = "Maqsad bajarildi ✓" if steps_count >= step_goal else "Jarayonda"
-                lines = [f"Bugungi holat · {patient_name}"]
-                if med_title:
-                    lines.append(f"• Dori ({med_title}): {med_label}")
-                else:
-                    lines.append("• Reja hali biriktirilmagan.")
-                if vitals_status is not None:
-                    lines.append(f"• Qon bosimi: {bp_label}")
-                lines.append(f"• Qadamlar: {steps_count} / {step_goal} ({step_mark})")
-                if ex_movement:
-                    lines.append(f"• Mashq: {ex_movement} ({ex_reps} takror)")
-                if latest_reply:
-                    lines.append(f"• Shifokor javobi: {latest_reply}")
-                pending_id = med_task_id if med_status == "pending" else None
-                return TodaySummary(role="patient", text="\n".join(lines), pending_med_task_id=pending_id)
-
             dcur = await connection.execute(
                 """
                 WITH today AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date AS d)
@@ -397,76 +327,8 @@ class TelegramStore:
                     f"• Ochiq murojaatlar (dori/bosim): {open_flags}",
                     f"• Bugungi qadamlar: {steps_count} / {step_goal} ({step_mark})",
                 ]
-                return TodaySummary(role="doctor", text="\n".join(lines), pending_med_task_id=None)
+                return TodaySummary(role="doctor", text="\n".join(lines))
             return None
-
-    async def record_medication_action(
-        self,
-        chat_id: int,
-        task_id: str,
-        action: Literal["taken", "supply"],
-    ) -> Literal["saved_taken", "saved_supply", "already_saved", "not_found"]:
-        if not telegram_chat_id_valid(chat_id):
-            return "not_found"
-        try:
-            task_uuid = UUID(task_id)
-        except ValueError:
-            return "not_found"
-
-        status = "taken" if action == "taken" else "missed"
-        payload_json = '{"kind":"medication","status":"taken"}' if action == "taken" else '{"kind":"medication","status":"missed","reason":"out_of_supply"}'
-        async with self._pool.connection() as connection:
-            cur = await connection.execute(
-                """
-                WITH scoped AS (
-                  SELECT task.workspace_id, task.id AS task_id, task.status AS current_status,
-                         link.patient_id, plan.supply_follow_up
-                  FROM public.telegram_patient_links AS link
-                  JOIN public.plans AS plan
-                    ON plan.workspace_id = link.workspace_id AND plan.patient_id = link.patient_id
-                  JOIN public.plan_items AS item
-                    ON item.workspace_id = plan.workspace_id AND item.plan_id = plan.id AND item.type = 'medication'
-                  JOIN public.task_instances AS task
-                    ON task.workspace_id = item.workspace_id AND task.plan_item_id = item.id
-                  WHERE link.chat_id = %s
-                    AND task.id = %s
-                    AND task.scheduled_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent')::date
-                ), added AS (
-                  INSERT INTO public.evidence_logs (workspace_id, task_instance_id, level, source, ai_mode, payload)
-                  SELECT workspace_id, task_id, 0, 'self_report', 'none', %s::jsonb
-                  FROM scoped
-                  ON CONFLICT (workspace_id, task_instance_id, entry_kind) DO NOTHING
-                  RETURNING workspace_id, id, task_instance_id
-                ), updated AS (
-                  UPDATE public.task_instances AS task
-                  SET status = %s
-                  FROM added
-                  WHERE task.workspace_id = added.workspace_id AND task.id = added.task_instance_id
-                ), flagged AS (
-                  INSERT INTO public.flags (workspace_id, evidence_log_id, color, rule_key, detail)
-                  SELECT added.workspace_id, added.id, 'yellow', 'medication_out_of_supply', '{}'::jsonb
-                  FROM added CROSS JOIN scoped
-                  WHERE %s = 'supply' AND scoped.supply_follow_up
-                ), audited AS (
-                  INSERT INTO public.audit_events (workspace_id, evidence_log_id, actor_id, action)
-                  SELECT added.workspace_id, added.id, scoped.patient_id, 'record_evidence'
-                  FROM added CROSS JOIN scoped
-                )
-                SELECT CASE
-                  WHEN EXISTS (SELECT 1 FROM added) THEN 'saved'
-                  WHEN EXISTS (SELECT 1 FROM scoped) THEN 'already_saved'
-                  ELSE 'not_found'
-                END
-                """,
-                (chat_id, task_uuid, payload_json, status, action),
-            )
-            row = await cur.fetchone()
-            outcome = row[0] if row else "not_found"
-            if outcome == "saved":
-                return "saved_taken" if action == "taken" else "saved_supply"
-            if outcome == "already_saved":
-                return "already_saved"
-            return "not_found"
 
     async def claim_pending(self, *, chat_id: int | None = None) -> Notice | None:
         if chat_id is not None and not telegram_chat_id_valid(chat_id):
@@ -526,15 +388,17 @@ class TelegramStore:
                 (seconds, notice.workspace_id, notice.doctor_id, notice.link_id, notice.flag_id),
             )
 
-    async def claim_pending_text_notice(self) -> TextNotice | None:
+    async def claim_pending_text_notice(self, *, chat_id: int | None = None) -> TextNotice | None:
         async with self._pool.connection() as connection:
             pcur = await connection.execute(
                 """
                 WITH eligible AS (
-                  SELECT notice.id, link.chat_id, notice.message_text
+                  SELECT notice.id, link.chat_id,
+                         CASE WHEN link.details_enabled THEN notice.message_text ELSE 'Yangi xabar bor.' END AS message_text
                   FROM public.telegram_patient_notices AS notice
                   JOIN public.telegram_patient_links AS link USING (workspace_id, patient_id, link_id)
                   WHERE notice.delivery_status = 'pending'
+                    AND (%s::bigint IS NULL OR link.chat_id = %s)
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
                     AND notice.next_attempt_at <= CURRENT_TIMESTAMP
                   ORDER BY notice.created_at, notice.id
@@ -544,12 +408,13 @@ class TelegramStore:
                 UPDATE public.telegram_patient_notices AS notice
                 SET delivery_status = 'unknown', attempted_at = CURRENT_TIMESTAMP
                 FROM eligible WHERE notice.id = eligible.id
-                RETURNING notice.id, eligible.chat_id, eligible.message_text
-                """
+                RETURNING notice.id, eligible.chat_id, eligible.message_text, notice.kind, notice.ref_id
+                """,
+                (chat_id, chat_id),
             )
             prow = await pcur.fetchone()
             if prow is not None:
-                return TextNotice("patient_notice", prow[0], prow[1], prow[2], "patient")
+                return TextNotice("patient_notice", prow[0], prow[1], prow[2], "patient", prow[3], str(prow[4]))
 
             dcur = await connection.execute(
                 """
@@ -558,6 +423,7 @@ class TelegramStore:
                   FROM public.telegram_doctor_events AS notice
                   JOIN public.telegram_doctor_links AS link USING (workspace_id, doctor_id, link_id)
                   WHERE notice.delivery_status = 'pending'
+                    AND (%s::bigint IS NULL OR link.chat_id = %s)
                     AND notice.created_at > CURRENT_TIMESTAMP - interval '1 hour'
                     AND notice.next_attempt_at <= CURRENT_TIMESTAMP
                   ORDER BY notice.created_at, notice.id
@@ -568,7 +434,8 @@ class TelegramStore:
                 SET delivery_status = 'unknown', attempted_at = CURRENT_TIMESTAMP
                 FROM eligible WHERE notice.id = eligible.id
                 RETURNING notice.id, eligible.chat_id, eligible.message_text
-                """
+                """,
+                (chat_id, chat_id),
             )
             drow = await dcur.fetchone()
             if drow is not None:

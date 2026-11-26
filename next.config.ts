@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Content-Security-Policy', value: "connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co" }],
       },
       {
+        source: '/tg',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
+      {
         source: '/caregiver/:path*',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store, max-age=0' },

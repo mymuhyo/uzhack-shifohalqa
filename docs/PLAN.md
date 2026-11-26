@@ -13,7 +13,7 @@
 | M1 | Close the 5 P0 security, schema, Storage, and environment-isolation patches | [x] |
 | M2 | Story 1 & Story 2 shared backend: multi-drug, low+high BP, steps, supervised AI, signed video | [x] |
 | M3 | High-craft Web UI (`shadcn/ui` + `Motion` + `Lucide`), Doctor queue, Patient flows, 3 exercises | [x] |
-| M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [ ] |
+| M4 | Android patient polish: multi-drug, BP/steps, 3 exercises, `Full`/`Heavy` setting, Dark Mode | [~] |
 | M5 | Telegram Mini App (Bearer auth), opt-in privacy chat, new API-backed bot actions | [ ] |
 | M6 | Isolated `final` preview deploy, real-device/Telegram smoke, benchmarks, and judge handover | [ ] |
 
@@ -85,16 +85,16 @@ Iterate freely on [DESIGN](DESIGN.md) to deliver judge-ready visual craft, tacti
 
 Evolve existing `android/` Kotlin Compose code incrementally.
 
-- [ ] **M4.1 Theme, Auth & Daily workflows.**
+- [x] **M4.1 Theme, Auth & Daily workflows.**
   - Add Dark Mode color scheme parity to `ShifoTheme.kt`.
   - Support existing 1-time demo pairing code AND pre-seeded Supabase Bearer login (reusing `resolveMobilePatientActor`).
   - Upgrade `MobileApi.kt` & patient screens for multi-medication daily doses, manual BP (high + low zone feedback), dual-source steps (`Telefon sensori` + `Qo‘lda`) with 7-day trend, DoriMos, and 7-day report/doctor replies.
-- [ ] **M4.2 Three movements, `Full`/`Heavy` selector & consented video upload.**
+- [x] **M4.2 Three movements, `Full`/`Heavy` selector & consented video upload.**
   - Wire `chair_stand`, `elbow_bend`, and `seated_knee_ext` to prepared samples (downloaded/cached on demand to keep APK lean), live camera, and file picker.
   - Default on-device MediaPipe Pose to **`Full`** everywhere, and add a clear settings toggle (**«Aniqlik rejimi: Tezkor (Full) / Yuqori aniqlik (Heavy)»**) for recorded video analysis.
   - Display flagged-cycle AI observations and wire explicit patient consent (`Shu urinish videosini shifokorga yuborish`) to the signed Storage URL upload + finalize flow (with progress, cancel, and offline message).
 
-**M4 Checks.** `cd android && ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest`, inspect changed Compose `@Preview`s, and test Story 1 + Story 2 (including `Full` vs `Heavy` timing) on a physical Android phone.
+**M4 Checks.** Verified `cd android && ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest`, `npm run verify`, and all 9 Light/Dark/Large-Text Compose `@Preview` renders via `compose-preview`. Remaining before closing M4 Gate: physical Android phone real-device smoke for Story 1 + Story 2 (including `Full` vs `Heavy` timing).
 
 ---
 

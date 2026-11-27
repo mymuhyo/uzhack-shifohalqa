@@ -230,3 +230,20 @@ This append-only log coordinates handoffs across **Codex**, **OpenCode**, and **
   - Physical wireless Android phone real-device smoke (Story 1 + Story 2, camera `Full` vs `Heavy` timing) intentionally deferred per owner request (`M6.2`).
   - External Vercel preview (`final` + `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_SERVICE_SECRET`) and separate Railway preview bot worker (`services/telegram_bot`, with `TELEGRAM_API_BASE_URL` & updated `store.py`) need redeployment/env sync, and optional live `SHIFO_E2E_LIVE_DORIMOS=1` check against real AI keys (`M6.1`).
 - **Next Concrete Task**: Redeploy Vercel Preview (`final`) & Railway preview bot worker with `TELEGRAM_BOT_SERVICE_SECRET`, then run physical Android + live Telegram client judge smoke via `docs/GRAND_FINAL_HANDOFF.md`.
+
+## 2026-11-27 — Vercel Production (`shifohalqa-final.vercel.app`) Deploy + Live HTTP Smoke & Real-Device `SM_S928B` `Full`/`Heavy` Hardware Benchmark
+
+- **Branch / Commit**: `final` — live deploy of `261eab8` (`main` untouched at `bc27a09`).
+- **Completed**:
+  - **Vercel Production Secrets & Deploy (`shifohalqa-final`)**: Synced real production secrets from `.env.local` (`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `DEMO_ANDROID_ENABLED`, `TELEGRAM_BOT_USERNAME`, `SHIFO_ENV_ID=final-preview`, `AUTH_SIGNUP_ENABLED=false`, `AI_COMPLETION_PROVIDER=auto`, plus freshly generated 64-hex `TELEGRAM_BOT_SERVICE_SECRET`), pushed `final`, and redeployed via `vercel redeploy ... --environment production` aliased to `https://shifohalqa-final.vercel.app`.
+  - **Physical Android (`SM_S928B`, Android 17) Hardware Benchmark**: Installed Debug + AndroidTest APKs (`cd android && ./gradlew :app:installDebug :app:installDebugAndroidTest` -> `BUILD SUCCESSFUL`) and executed `ExerciseRecordedVideoTest` directly on Samsung Galaxy S24 Ultra (`SM_S928B`).
+- **Verification**:
+  - Live `https://shifohalqa-final.vercel.app` HTTP smoke -> exit `0`: `GET / -> 200`, `GET /tg -> 200`, `GET /api/auth/session -> 200`, `POST /api/telegram/auth` (demo) -> `tgm1` scoped Bearer token -> `GET /api/clinical/view -> 200`, `POST /api/mobile/v1/login` (`anvar@demo.shifohalqa.uz`) -> `GET /api/mobile/v1/today -> 200` (`isDemo=false`, `tasks: 1`, zero internal `doctor_note`/`acknowledged_note` leakage).
+  - Railway `https://telegram-worker-production-9a286c7e.up.railway.app/healthz -> {"ok": true}`, `@muhyo_uzhackbot` `get_webhook_info() -> pending: 0, err: None`, and frozen Task 2 prod `https://shifohalqa.vercel.app -> 200`.
+  - Real `SM_S928B` `adb shell am instrument -w -e class uz.shifohalqa.android.ExerciseRecordedVideoTest uz.shifohalqa.android.demo.test/androidx.test.runner.AndroidJUnitRunner` -> `OK (2 tests)` (`34.621s`):
+    - `PoseModelMode.Full`: **`16549 ms`**, `validReps=2`, `shallowReps=0`, `minAngle=88.20°` (`cycles`: `88.20°`, `90.32°`), `confidence=0.930`, `analyzedFrames=88`, `avgCycleSeconds=2.9375`, `trunkLeanMaxDeg=20.3°`.
+    - `PoseModelMode.Heavy`: **`17940 ms`**, `validReps=2`, `shallowReps=0`, `minAngle=93.12°` (`cycles`: `95.51°`, `93.12°`), `confidence=0.946`, `analyzedFrames=88`, `avgCycleSeconds=3.25`, `trunkLeanMaxDeg=22.9°`.
+- **Caveats / Paused & Remaining External Steps**:
+  - Interactive `SM_S928B` Story 1 (`Demo kodi`) + Story 2 (`Klinika hisobi` Dark Mode) UI walkthrough was paused mid-dialog per user request (`"hozircha android tekshirishni toxtatib tur"`).
+  - Separate Railway bot service (`telegram-worker-production-9a286c7e.up.railway.app`) still needs matching `TELEGRAM_BOT_SERVICE_SECRET` + `TELEGRAM_API_BASE_URL=https://shifohalqa-final.vercel.app` + updated `services/telegram_bot` redeploy so live `/bugun`/`/bosim`/`/qadam` bridge commands talk to Vercel Production, followed by live `@muhyo_uzhackbot` Telegram client verification and optional `SHIFO_E2E_LIVE_DORIMOS=1`.
+- **Next Concrete Task**: Sync `TELEGRAM_BOT_SERVICE_SECRET` + `TELEGRAM_API_BASE_URL` on Railway, then resume physical `SM_S928B` Story 1 + Story 2 UI walkthrough and live `@muhyo_uzhackbot` Telegram client tap when ready.
